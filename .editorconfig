@@ -1,0 +1,120 @@
+﻿root = true
+
+# 参考: https://qiita.com/isshi777/items/4f689e9a54217283fc55 
+
+
+# 外部のプラグインやライブラリに対し、ルールは適応しない
+[*.cs]
+dotnet_analyzer_diagnostic.severity = silent
+
+# 自作コードに対してはルールの適応をする
+[Assets/_Project/Scripts/**/*.cs]
+
+dotnet_analyzer_diagnostic.severity = default
+
+indent_style = tab                       # インデントにタブ文字を使用する
+indent_size = 4                          # インデントの段下げ幅を4桁相当として扱う
+tab_width = 4                            # タブ文字の見かけ上の幅を4桁にする
+end_of_line = lf                         # 改行コードを LF（Unix形式）に統一する
+charset = utf-8-bom                      # 保存時の文字エンコードを UTF-8（BOM付き）にする
+insert_final_newline = true              # ファイル末尾に必ず改行を入れる
+trim_trailing_whitespace = true          # 各行末の余計な空白を自動で削除する
+csharp_new_line_before_open_brace = all  # 型/メソッド/制御構文すべてで '{' を改行して配置する
+
+csharp_indent_block_contents = true             # ブロック '{ ... }' 内の行を1段インデントする
+csharp_indent_case_contents = true              # switch の case/default の直下を1段インデントする
+csharp_indent_case_contents_when_block = true   # case 内にさらにブロックがある場合、その中身をもう1段インデントする
+csharp_indent_switch_labels = true              # switch の case/default ラベル自体を1段インデントする
+csharp_indent_labels = flush_left               # 通常のラベル（Label:）は左端に揃える
+
+csharp_space_after_keywords_in_control_flow_statements = true   # if/for/while などのキーワードの後にスペースを入れる（例: if (x)）
+csharp_space_after_cast = false                                 # キャスト直後にスペースを入れない（例: (int)x）
+csharp_space_around_binary_operators = before_and_after         # 二項演算子の前後にスペースを入れる（例: a + b）
+
+csharp_space_between_method_declaration_parameter_list_parentheses = false         # メソッド宣言の () 内側にスペースを入れない
+csharp_space_between_method_call_parameter_list_parentheses = false                # メソッド呼び出しの () 内側にスペースを入れない
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false   # 引数なし宣言の () を詰める（例: void M()）
+csharp_space_between_method_call_empty_parameter_list_parentheses = false          # 引数なし呼び出しの () を詰める（例: M()）
+
+
+# dotnet_style_qualification_for_field = true:error    # インスタンス フィールド参照に this. を必須（エラー扱い）dotnet_style_qualification_for_property = true:error # インスタンス プロパティ参照に this. を必須（エラー扱い）
+# dotnet_style_qualification_for_method = true:error   # インスタンス メソッド呼び出しに this. を必須（エラー扱い）
+# dotnet_style_qualification_for_event = true:error    # インスタンス イベント参照に this. を必須（エラー扱い）
+# dotnet_diagnostic.IDE0003.severity = none            # 'this.' を外す提案（IDE0003）を無効化（競合防止）
+# dotnet_diagnostic.IDE0009.severity = error           # 'this.' が無い参照（IDE0009）をエラーに
+
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:error # すべての型/メンバーでアクセス修飾子を必須（interface 内は除外）
+dotnet_diagnostic.IDE0040.severity = error                                     # アクセス修飾子未指定（IDE0040）をエラー扱いに
+
+
+############################################
+# いろいろ命名規則
+############################################
+#スタイル
+dotnet_naming_style.pascal.capitalization = pascal_case          # PascalCase を指定（例: ClassName）
+dotnet_naming_style.camel.capitalization = camel_case            # camelCase を指定（例: parameterName）
+dotnet_naming_style.interfaceI.required_prefix = I               # インターフェース名の接頭辞として 'I' を要求（例: IFoo）
+dotnet_naming_style.interfaceI.capitalization = pascal_case      # 'I' の後は PascalCase（例: IFooService）
+dotnet_naming_style.abstractA.required_prefix = A                # 抽象クラス名の接頭辞として 'A' を要求（例: ABase）
+dotnet_naming_style.abstractA.capitalization = pascal_case       # 'A' の後は PascalCase（例: AEnemyController）
+dotnet_naming_style.enumE.required_prefix = E                    # 列挙型名の接頭辞として 'E' を要求（例: EState）
+dotnet_naming_style.enumE.capitalization = pascal_case           # 'E' の後は PascalCase（例: EPlayerStatus）
+dotnet_naming_style.m_field.required_prefix = m_                 # フィールド名の接頭辞として 'm_' を要求（例: m_health）
+dotnet_naming_style.m_field.capitalization = pascal_case         # 'm_' の後は PascalCase（例: m_HealthPoints）
+
+# シンボルセット
+dotnet_naming_symbols.interfaces.applicable_kinds = interface        # 対象をインターフェースに限定
+dotnet_naming_symbols.abstract_classes.applicable_kinds = class      # 対象はクラス
+dotnet_naming_symbols.abstract_classes.required_modifiers = abstract # かつ abstract 修飾子が必須
+dotnet_naming_symbols.enums.applicable_kinds = enum                  # 対象を列挙型に限定
+dotnet_naming_symbols.classes.applicable_kinds = class               # 対象をクラスに限定
+dotnet_naming_symbols.methods.applicable_kinds = method              # 対象をメソッドに限定
+dotnet_naming_symbols.properties.applicable_kinds = property         # 対象をプロパティに限定
+dotnet_naming_symbols.parameters.applicable_kinds = parameter        # 対象をメソッド引数（パラメータ）に限定
+dotnet_naming_symbols.fields.applicable_kinds = field                # 対象をフィールドに限定（メンバ変数）
+dotnet_naming_symbols.enum_members.applicable_kinds = enum_member    # 対象を列挙“メンバー”に限定
+
+# Enum（型名）
+dotnet_naming_rule.enums_must_start_with_E.symbols = enums          # 適用対象（enums）を指定
+dotnet_naming_rule.enums_must_start_with_E.style = enumE            # 適用スタイル（E + PascalCase）を指定
+dotnet_naming_rule.enums_must_start_with_E.severity = error         # 違反時はエラー扱い
+
+# Enum（メンバー）
+dotnet_naming_rule.enum_members_must_be_pascal.symbols = enum_members   # 適用対象（enum_members）を指定
+dotnet_naming_rule.enum_members_must_be_pascal.style = pascal           # 適用スタイル（PascalCase）を指定
+dotnet_naming_rule.enum_members_must_be_pascal.severity = error         # 違反時はエラー扱い
+
+# インターフェース
+dotnet_naming_rule.interfaces_must_start_with_I.symbols = interfaces   # 適用対象（interfaces シンボルセット）を指定
+dotnet_naming_rule.interfaces_must_start_with_I.style = interfaceI     # 適用スタイル（I + PascalCase）を指定
+dotnet_naming_rule.interfaces_must_start_with_I.severity = error       # 違反時はエラー扱い
+
+# クラス
+dotnet_naming_rule.classes_must_be_pascal.symbols = classes         # 適用対象（classes）を指定
+dotnet_naming_rule.classes_must_be_pascal.style = pascal            # 適用スタイル（PascalCase）を指定
+dotnet_naming_rule.classes_must_be_pascal.severity = error          # 違反時はエラー扱い
+
+# 抽象クラス
+dotnet_naming_rule.abstract_classes_must_start_with_A.symbols = abstract_classes # 適用対象（abstract_classes）を指定
+dotnet_naming_rule.abstract_classes_must_start_with_A.style = abstractA          # 適用スタイル（A + PascalCase）を指定
+dotnet_naming_rule.abstract_classes_must_start_with_A.severity = error           # 違反時はエラー扱い
+
+# フィールド
+dotnet_naming_rule.fields_must_m_field.symbols = fields             # 適用対象（fields シンボルセット）を指定
+dotnet_naming_rule.fields_must_m_field.style = m_field             # 適用スタイル（PascalCase）を指定
+dotnet_naming_rule.fields_must_m_field.severity = error             # 違反時はエラー扱い
+
+# メソッド
+dotnet_naming_rule.methods_must_be_pascal.symbols = methods         # 適用対象（methods）を指定
+dotnet_naming_rule.methods_must_be_pascal.style = pascal            # 適用スタイル（PascalCase）を指定
+dotnet_naming_rule.methods_must_be_pascal.severity = error          # 違反時はエラー扱い
+
+# プロパティ
+dotnet_naming_rule.properties_must_be_pascal.symbols = properties   # 適用対象（properties）を指定
+dotnet_naming_rule.properties_must_be_pascal.style = pascal         # 適用スタイル（PascalCase）を指定
+dotnet_naming_rule.properties_must_be_pascal.severity = error       # 違反時はエラー扱い
+
+# 引数
+dotnet_naming_rule.parameters_must_be_camel.symbols = parameters    # 適用対象（parameters）を指定
+dotnet_naming_rule.parameters_must_be_camel.style = camel           # 適用スタイル（camelCase）を指定
+dotnet_naming_rule.parameters_must_be_camel.severity = error        # 違反時はエラー扱い
