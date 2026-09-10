@@ -1,0 +1,21 @@
+﻿name: Notify Review Changes Requested
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  notify:
+    if: github.event.review.state == 'changes_requested'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Notification to Discord
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          title: "🚨 PRに修正要求(Changes requested)が出されました"
+          # レビューコメント本文（空ならデフォルト文字列）
+          description: ${{ github.event.review.body || '(レビューコメントはありません)' }}
+          color: 0xff4d4d # 赤色
+          url: ${{ github.event.pull_request.html_url }}
+          nofail: true

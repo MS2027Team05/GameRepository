@@ -1,0 +1,78 @@
+name: Check UTF-8 BOM Encoding
+
+on:
+  pull_request:
+
+jobs:
+  check-bom:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check non-UTF-8 BOM in changed .cs files
+        shell: pwsh
+        run: |
+          $targetBranch = "origin/${{ github.base_ref }}"
+          $changedFiles = git diff --name-only --diff-filter=d $targetBranch HEAD -- "*.cs"
+
+          if ([string]::IsNullOrWhiteSpace($changedFiles)) {
+              Write-Host "変更された .cs ファイルはありません。チェックをスキップします。"
+              exit 0
+          }
+
+          $fileList = $changedFiles -split "`n"
+          $nonBomFiles = @()
+
+          foreach ($filePath in $fileList) {
+              $filePath = $filePath.Trim()
+              if (-not (Test-Path $filePath)) { continue }
+
+              $bytes = Get-Content -AsByteStream -ReadCount 3 -TotalCount 3 -Path $filePath
+
+              if ($null -eq $bytes -or $bytes.Length -lt 3 -or -not ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) {
+                  $nonBomFiles += $filePath
+              }
+          }
+
+          if ($nonBomFiles.Count -gt 0) {
+              # 1. GitHubのPR画面(Files changed)に直接赤いエラーボックスを表示させる
+              foreach ($file in $nonBomFiles) {
+                  Write-Host "::error file=$file::このファイルは UTF-8 (BOM付き) で保存されていません。"
+              }
+
+              # 2. Discord通知用にファイル名一覧を整形して環境変数(GITHUB_ENV)に保存
+              # (ファイル数が多すぎる場合に備えて最大10件まで表示)
+              $displayFiles = $nonBomFiles | Select-Object -First 10 | ForEach-Object { "• ``$_``" }
+              $fileListText = $displayFiles -join "`n"
+              if ($nonBomFiles.Count -gt 10) {
+                  $remaining = $nonBomFiles.Count - 10
+                  $fileListText += "`n• ...他 $remaining 件"
+              }
+
+              "NON_BOM_FILES<<EOF`n$fileListText`nEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+              exit 1
+          } else {
+              Write-Host "変更されたすべての .cs ファイルが UTF-8 (BOM付き) です。"
+          }
+
+      # ─────────────────────────────────────────────────────────────
+      # 失敗時のみDiscordへ通知(ファイル一覧をdescriptionに差し込み)
+      # ─────────────────────────────────────────────────────────────
+      - name: Notify Failure to Discord
+        uses: sarisia/actions-status-discord@v1
+        if: failure()
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: failure
+          title: "⚠️ PRのBOMチェックに失敗しました"
+          # 環境変数からファイル一覧を読み込んで本文に表示
+          description: |
+            以下のファイルが UTF-8 (BOM付き) ではありません。保存し直してください。
+
+            **【対象ファイル】**
+            ${{ env.NON_BOM_FILES }}
+          nofail: true
