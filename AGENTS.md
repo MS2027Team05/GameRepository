@@ -11,13 +11,13 @@ Unity 6000.3.24.f1
 - VisualStudioCode
 
 # 使用しているライブラリ(Package)
-- DoTween
-- Netcode for GameObjects
-- Multiplayer Tools
-- Multiplayer Play Mode
-- Cinemachine
-- ShaderGraph
-- InputSystem
+- DoTween(v1.2.825)
+- Netcode for GameObjects(v2.13.3)
+- Multiplayer Tools(2.2.12)
+- Multiplayer Play Mode(2.0.2)
+- Cinemachine(3.1.7)
+- ShaderGraph(17.3.0)
+- InputSystem(1.20.0)
 
 # 注意事項
 - 回答及びコメントアウトは日本語で実装すること。
@@ -62,5 +62,5 @@ Unity 6000.3.24.f1
 - `List<T>`の要素数が多い場合は探索コストが(O(n))になるため、`Dictionary`や`HashSet`を用いて探索コストを(1(n))にすること。
 - 単に距離の大小を比較する場合はsqrt(distance)ではなくsqrMagnitudeを用いること。
 - データ・イベント・設定値の管理にはScriptableObjectを使うこと。ただし汎用的な処理や参照箇所が多くなるものに限る。
-- クリック判定が不要なUI要素はRaycastTargetをオフにすること。
+- クリック判定が不要なUI要素はRaycastTargetをオフにすること。ユーザー側にObjectを作成して貰う場合は該当するObjectの作成時にその旨を記載すること。
 - 入力検知にはInputSystemを使うこと。デバッグ時はキーボード+マウスをメインに想定しているが、最終的にゲームをプレイする際はゲームパッドでのプレイを想定している。
