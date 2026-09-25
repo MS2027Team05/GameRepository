@@ -15,6 +15,12 @@
 /[Uu]ser[Ss]ettings/
 *.log
 
+
+# 追加分
+
+# vscodeの設定ファイルを除外
+.vscode/
+
 # By default unity supports Blender asset imports, *.blend1 blender files do not need to be commited to version control.
 *.blend1
 *.blend1.meta
