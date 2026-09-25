@@ -1,0 +1,2 @@
+﻿# githubの使い方
+チームでgithub運用する時の使い方(organizationで作って諸々の設定)
