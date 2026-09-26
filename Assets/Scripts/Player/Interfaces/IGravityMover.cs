@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 重力落下・ホバリング・物理移動を担当するモジュールのインターフェース。

@@ -1,4 +1,4 @@
-// サンプル用
+﻿// サンプル用
 // 参考元: https://anogame.net/netcode-for-gameobjects-tutorial/
 
 // NetworkのTransform周りはここを参照: https://synamon.hatenablog.com/entry/ngo-introduce-networktransform
@@ -22,4 +22,4 @@ public class NetworkManagerUI : MonoBehaviour
             NetworkManager.Singleton.StartClient();
         });
     }
-}   
+}

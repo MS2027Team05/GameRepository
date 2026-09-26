@@ -1,4 +1,4 @@
-using Unity.Netcode.Components;
+﻿using Unity.Netcode.Components;
 using UnityEngine;
 
 /// <summary>

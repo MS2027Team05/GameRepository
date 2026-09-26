@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// ボール所持・パス・シュート・ドロップを担当するモジュールのインターフェース。
 /// </summary>
 public interface IBallCarrier

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// プレイヤー操作に伴うカメラシェイクやFOV演出を担当するクラス(担当Bモジュールの骨組みスタブ)。

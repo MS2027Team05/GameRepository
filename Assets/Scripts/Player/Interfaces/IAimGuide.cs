@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// エイムモード時のレティクル表示・軌道予測線描画を担当するモジュールのインターフェース。
