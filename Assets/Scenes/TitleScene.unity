@@ -2903,7 +2903,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -3219,7 +3219,6 @@ MonoBehaviour:
   hostPlayerButton: {fileID: 104055139}
   clientButton: {fileID: 647854289}
   ipInputField: {fileID: 492791908}
-  localIpText: {fileID: 1021459398}
   statusText: {fileID: 1841345834}
   defaultPort: 7777
   lobbySceneName: LobbyScene
@@ -3274,7 +3273,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:

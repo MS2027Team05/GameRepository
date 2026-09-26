@@ -1,5 +1,3 @@
-﻿using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -26,7 +24,6 @@ public class NetworkConnectManager : MonoBehaviour
     [SerializeField] private Button hostPlayerButton;
     [SerializeField] private Button clientButton;
     [SerializeField] private TMP_InputField ipInputField;
-    [SerializeField] private TextMeshProUGUI localIpText;
     [SerializeField] private TextMeshProUGUI statusText;
 
     [Header("接続設定")]
@@ -45,7 +42,6 @@ public class NetworkConnectManager : MonoBehaviour
     {
         InitializeTransport();
         SetupUIListeners();
-        DisplayLocalIPAddress();
     }
 
     private void Start()
@@ -143,6 +139,13 @@ public class NetworkConnectManager : MonoBehaviour
         IsPlayerHost = asPlayer;
         SetStatusMessage(asPlayer ? "Host(Player兼任)起動中..." : "Host(観戦専用)起動中...");
 
+        ushort port = defaultPort > 0 ? defaultPort : (ushort)7777;
+        if (unityTransport != null)
+        {
+            // "0.0.0.0" をリッスンアドレスに指定し、LAN(192.168.x.x)や別PCからの接続を待ち受け可能にする
+            unityTransport.SetConnectionData("127.0.0.1", port, "0.0.0.0");
+        }
+
         bool started = NetworkManager.Singleton.StartHost();
         if (started)
         {
@@ -198,34 +201,6 @@ public class NetworkConnectManager : MonoBehaviour
         return "127.0.0.1";
     }
 
-    private void DisplayLocalIPAddress()
-    {
-        if (localIpText == null) return;
-
-        string localIp = GetLocalIPv4Address();
-        localIpText.text = $"自機IP: {localIp}";
-    }
-
-    private string GetLocalIPv4Address()
-    {
-        try
-        {
-            IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (IPAddress ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    return ip.ToString();
-                }
-            }
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogWarning($"[NetworkConnectManager] ローカルIP取得エラー: {ex.Message}");
-        }
-
-        return "127.0.0.1";
-    }
 
     private void HandleClientDisconnect(ulong clientId)
     {

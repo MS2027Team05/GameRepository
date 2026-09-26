@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -17,6 +19,7 @@ public class LobbyManager : NetworkBehaviour
     [SerializeField] private TextMeshProUGUI playerCountText;
     [SerializeField] private TextMeshProUGUI memberListText;
     [SerializeField] private TextMeshProUGUI lobbyStatusText;
+    [SerializeField] private TextMeshProUGUI hostIpText;
 
     [Header("デバッグ用UI(画面操作用)")]
     [SerializeField] private GameObject debugPanel;
@@ -57,6 +60,7 @@ public class LobbyManager : NetworkBehaviour
         // クライアント側でサーバーが切断された場合の検知
         NetworkManager.Singleton.OnClientDisconnectCallback += HandleServerDisconnect;
 
+        SetupDebugUI();
         UpdateUI();
     }
 
@@ -93,11 +97,14 @@ public class LobbyManager : NetworkBehaviour
 
     private void SetupDebugUI()
     {
-        // エディタ実行時またはデバッグビルド時のみデバッグUIを表示
-        bool isDebug = Application.isEditor || Debug.isDebugBuild;
+        // プレイヤー兼任ホスト(デバッグ用)かつエディタ/デバッグビルド時のみデバッグUIを表示
+        bool isDebugHost = NetworkConnectManager.IsPlayerHost;
+        bool isDebugBuild = Application.isEditor || Debug.isDebugBuild;
+        bool shouldShowDebugUI = IsServer && isDebugHost && isDebugBuild;
+
         if (debugPanel != null)
         {
-            debugPanel.SetActive(isDebug && IsServer);
+            debugPanel.SetActive(shouldShowDebugUI);
         }
 
         UpdateDebugMinPlayersText();
@@ -170,6 +177,45 @@ public class LobbyManager : NetworkBehaviour
                     : $"待機中: あと {currentRequiredPlayers - connectedCount} 台の接続が必要です";
             }
         }
+
+        UpdateHostIpDisplay();
+    }
+
+    private void UpdateHostIpDisplay()
+    {
+        if (hostIpText == null) return;
+
+        if (IsServer)
+        {
+            string ip = GetLocalIPv4Address();
+            hostIpText.text = $"接続先IP: {ip}";
+            hostIpText.gameObject.SetActive(true);
+        }
+        else
+        {
+            hostIpText.gameObject.SetActive(false);
+        }
+    }
+
+    private string GetLocalIPv4Address()
+    {
+        try
+        {
+            IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (IPAddress ip in host.AddressList)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    return ip.ToString();
+                }
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[LobbyManager] ローカルIP取得エラー: {ex.Message}");
+        }
+
+        return "127.0.0.1";
     }
 
     /// <summary>
