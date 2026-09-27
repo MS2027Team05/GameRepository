@@ -58,7 +58,7 @@ jobs:
               <NoWarn>CS0103;CS0246</NoWarn>
             </PropertyGroup>
             <ItemGroup>
-              <PackageReference Include="UnityEngine.Modules" Version="2022.3.0" />
+              <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
             </ItemGroup>
             <ItemGroup>
               <Compile Include="Assets/Scripts/**/*.cs" />
