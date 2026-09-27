@@ -1,10 +1,10 @@
-name: Check UTF-8 BOM Encoding
+name: Check Code Format and Encoding
 
 on:
   pull_request:
 
 jobs:
-  check-bom:
+  check-format:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -12,7 +12,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check non-UTF-8 BOM in changed .cs files
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.312' # 利用している.NETバージョンに合わせて変更可(一旦家のdesktopのものに合わせる)
+
+      - name: Run BOM and .editorconfig Checks
         shell: pwsh
         run: |
           $targetBranch = "origin/${{ github.base_ref }}"
@@ -23,13 +28,16 @@ jobs:
               exit 0
           }
 
-          $fileList = $changedFiles -split "`n"
+          $fileList = ($changedFiles -split "`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
           $nonBomFiles = @()
+          $formatFiles = @()
 
+          # ─────────────────────────────────────────────────────────────
+          # 1. BOM チェック
+          # ─────────────────────────────────────────────────────────────
+          Write-Host "=== 1. UTF-8 BOM チェック実行中 ==="
           foreach ($filePath in $fileList) {
-              $filePath = $filePath.Trim()
               if (-not (Test-Path $filePath)) { continue }
-
               $bytes = Get-Content -AsByteStream -ReadCount 3 -TotalCount 3 -Path $filePath
 
               if ($null -eq $bytes -or $bytes.Length -lt 3 -or -not ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) {
@@ -37,30 +45,88 @@ jobs:
               }
           }
 
+          # ─────────────────────────────────────────────────────────────
+          # 2. .editorconfig (dotnet format) チェック
+          # ─────────────────────────────────────────────────────────────
+          Write-Host "=== 2. .editorconfig 構文・命名規則チェック実行中 ==="
+          # 即席のダミーcsprojを作成
+          @"
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>netstandard2.1</TargetFramework>
+              <Nullable>enable</Nullable>
+              <NoWarn>CS0103;CS0246</NoWarn>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="UnityEngine.Modules" Version="2022.3.0" />
+            </ItemGroup>
+            <ItemGroup>
+              <Compile Include="Assets/Scripts/**/*.cs" />
+            </ItemGroup>
+          </Project>
+          "@ | Out-File -FilePath "DummyProject.csproj" -Encoding utf8
+
+          dotnet restore DummyProject.csproj
+
+          # dotnet format を実行し、修正が必要なファイルを検知
+          dotnet format DummyProject.csproj style --severity info
+          # 変更差分が出た（フォーマット違反があった）ファイルを取得
+          $formattedChanges = git diff --name-only -- "Assets/**/*.cs"
+          if (-not [string]::IsNullOrWhiteSpace($formattedChanges)) {
+              $formatFiles = ($formattedChanges -split "`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+              # ワーキングツリーの変更を元に戻す
+              git checkout -- .
+          }
+
+          # ─────────────────────────────────────────────────────────────
+          # 3. エラーの集約・PR画面表示・Discord通知準備
+          # ─────────────────────────────────────────────────────────────
+          $hasError = $false
+          $discordDescription = ""
+          $summaryContent = "# 🔍 コードチェック結果`n`n"
+
+          # --- BOM エラー処理 ---
           if ($nonBomFiles.Count -gt 0) {
-              # 1. GitHubのPR画面(Files changed)に直接赤いエラーボックスを表示させる
+              $hasError = $true
+              $summaryContent += "### ❌ UTF-8 (BOM付き) 違反`n以下のファイルが BOM付き で保存されていません:`n"
+              $discordDescription += "**【UTF-8 (BOM) 違反ファイル】**`n"
+
               foreach ($file in $nonBomFiles) {
-                  Write-Host "::error file=$file::このファイルは UTF-8 (BOM付き) で保存されていません。"
+                  # line=1 を指定することでPRの「Files changed」差分の先頭に赤枠アノテーションを表示
+                  Write-Host "::error file=$file,line=1,title=BOM Encoding Error::UTF-8 (BOM付き) で保存されていません。"
+                  $summaryContent += "- ``$file```n"
+                  $discordDescription += "• ``$file```n"
               }
+              $discordDescription += "`n"
+          }
 
-              # 2. Discord通知用にファイル名一覧を整形して環境変数(GITHUB_ENV)に保存
-              # (ファイル数が多すぎる場合に備えて最大10件まで表示)
-              $displayFiles = $nonBomFiles | Select-Object -First 10 | ForEach-Object { "• ``$_``" }
-              $fileListText = $displayFiles -join "`n"
-              if ($nonBomFiles.Count -gt 10) {
-                  $remaining = $nonBomFiles.Count - 10
-                  $fileListText += "`n• ...他 $remaining 件"
+          # --- Format エラー処理 ---
+          if ($formatFiles.Count -gt 0) {
+              $hasError = $true
+              $summaryContent += "### ❌ .editorconfig 規約・書式違反`n以下のファイルが命名規則またはフォーマット規約に違反しています:`n"
+              $discordDescription += "**【.editorconfig 書式・命名規則違反】**`n"
+
+              foreach ($file in $formatFiles) {
+                  Write-Host "::error file=$file,line=1,title=Format/Naming Rule Violation::.editorconfig の規約に違反しています。"
+                  $summaryContent += "- ``$file```n"
+                  $discordDescription += "• ``$file```n"
               }
+          }
 
-              "NON_BOM_FILES<<EOF`n$fileListText`nEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # GitHub の PR画面（Job Summary）に結果を出力
+          $summaryContent | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
+          # Discord通知用の環境変数を保存
+          if ($hasError) {
+              "CHECK_ERROR_DETAILS<<EOF`n$discordDescription`nEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              Write-Error "コードチェックで違反が検知されました。"
               exit 1
           } else {
-              Write-Host "変更されたすべての .cs ファイルが UTF-8 (BOM付き) です。"
+              Write-Host "すべてのチェックに合格しました！"
           }
 
       # ─────────────────────────────────────────────────────────────
-      # 失敗時のみDiscordへ通知(ファイル一覧をdescriptionに差し込み)
+      # 失敗時のみDiscordへ通知（BOMとFormat両方の違反ファイルを掲載）
       # ─────────────────────────────────────────────────────────────
       - name: Notify Failure to Discord
         uses: sarisia/actions-status-discord@v1
@@ -68,11 +134,9 @@ jobs:
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
           status: failure
-          title: "⚠️ PRのBOMチェックに失敗しました"
-          # 環境変数からファイル一覧を読み込んで本文に表示
+          title: "⚠️ PRのコードチェックに失敗しました"
           description: |
-            以下のファイルが UTF-8 (BOM付き) ではありません。保存し直してください。
+            以下のファイルに規約違反があります。修正して再度プッシュしてください。
 
-            **【対象ファイル】**
-            ${{ env.NON_BOM_FILES }}
+            ${{ env.CHECK_ERROR_DETAILS }}
           nofail: true
