@@ -13,259 +13,259 @@ using UnityEngine.UI;
 /// </summary>
 public class LobbyManager : NetworkBehaviour
 {
-    [Header("UI参照(ボタン・情報表示)")]
-    [SerializeField] private Button startGameButton;
-    [SerializeField] private Button leaveLobbyButton;
-    [SerializeField] private TextMeshProUGUI playerCountText;
-    [SerializeField] private TextMeshProUGUI memberListText;
-    [SerializeField] private TextMeshProUGUI lobbyStatusText;
-    [SerializeField] private TextMeshProUGUI hostIpText;
+	[Header("UI参照(ボタン・情報表示)")]
+	[SerializeField] private Button startGameButton;
+	[SerializeField] private Button leaveLobbyButton;
+	[SerializeField] private TextMeshProUGUI playerCountText;
+	[SerializeField] private TextMeshProUGUI memberListText;
+	[SerializeField] private TextMeshProUGUI lobbyStatusText;
+	[SerializeField] private TextMeshProUGUI hostIpText;
 
-    [Header("デバッグ用UI(画面操作用)")]
-    [SerializeField] private GameObject debugPanel;
-    [SerializeField] private Button debugCycleMinPlayersButton;
-    [SerializeField] private TextMeshProUGUI debugMinPlayersText;
+	[Header("デバッグ用UI(画面操作用)")]
+	[SerializeField] private GameObject debugPanel;
+	[SerializeField] private Button debugCycleMinPlayersButton;
+	[SerializeField] private TextMeshProUGUI debugMinPlayersText;
 
-    [Header("シーン設定")]
-    [SerializeField] private string gameSceneName;
-    [SerializeField] private string titleSceneName;
+	[Header("シーン設定")]
+	[SerializeField] private string gameSceneName;
+	[SerializeField] private string titleSceneName;
 
-    [Header("人数設定")]
-    [SerializeField] private int defaultRequiredPlayers;
+	[Header("人数設定")]
+	[SerializeField] private int defaultRequiredPlayers;
 
-    // 現在の必要開始人数(デバッグトグルで変更可能)
-    private int currentRequiredPlayers;
-    private readonly StringBuilder infoStringBuilder = new StringBuilder();
+	// 現在の必要開始人数(デバッグトグルで変更可能)
+	private int currentRequiredPlayers;
+	private readonly StringBuilder infoStringBuilder = new StringBuilder();
 
-    private void Awake()
-    {
-        SetupUIListeners();
-    }
+	private void Awake()
+	{
+		SetupUIListeners();
+	}
 
-    private void Start()
-    {
-        currentRequiredPlayers = defaultRequiredPlayers > 0 ? defaultRequiredPlayers : 4;
-        SetupDebugUI();
-        UpdateUI();
-    }
+	private void Start()
+	{
+		currentRequiredPlayers = defaultRequiredPlayers > 0 ? defaultRequiredPlayers : 4;
+		SetupDebugUI();
+		UpdateUI();
+	}
 
-    public override void OnNetworkSpawn()
-    {
-        if (IsServer)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
-            NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
-        }
+	public override void OnNetworkSpawn()
+	{
+		if (IsServer)
+		{
+			NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
+			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
+		}
 
-        // クライアント側でサーバーが切断された場合の検知
-        NetworkManager.Singleton.OnClientDisconnectCallback += HandleServerDisconnect;
+		// クライアント側でサーバーが切断された場合の検知
+		NetworkManager.Singleton.OnClientDisconnectCallback += HandleServerDisconnect;
 
-        SetupDebugUI();
-        UpdateUI();
-    }
+		SetupDebugUI();
+		UpdateUI();
+	}
 
-    public override void OnNetworkDespawn()
-    {
-        if (NetworkManager.Singleton != null)
-        {
-            if (IsServer)
-            {
-                NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
-                NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
-            }
-            NetworkManager.Singleton.OnClientDisconnectCallback -= HandleServerDisconnect;
-        }
-    }
+	public override void OnNetworkDespawn()
+	{
+		if (NetworkManager.Singleton != null)
+		{
+			if (IsServer)
+			{
+				NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
+				NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
+			}
+			NetworkManager.Singleton.OnClientDisconnectCallback -= HandleServerDisconnect;
+		}
+	}
 
-    private void SetupUIListeners()
-    {
-        if (startGameButton != null)
-        {
-            startGameButton.onClick.AddListener(OnStartGameButtonClicked);
-        }
+	private void SetupUIListeners()
+	{
+		if (startGameButton != null)
+		{
+			startGameButton.onClick.AddListener(OnStartGameButtonClicked);
+		}
 
-        if (leaveLobbyButton != null)
-        {
-            leaveLobbyButton.onClick.AddListener(OnLeaveLobbyButtonClicked);
-        }
+		if (leaveLobbyButton != null)
+		{
+			leaveLobbyButton.onClick.AddListener(OnLeaveLobbyButtonClicked);
+		}
 
-        if (debugCycleMinPlayersButton != null)
-        {
-            debugCycleMinPlayersButton.onClick.AddListener(CycleMinPlayersDebug);
-        }
-    }
+		if (debugCycleMinPlayersButton != null)
+		{
+			debugCycleMinPlayersButton.onClick.AddListener(CycleMinPlayersDebug);
+		}
+	}
 
-    private void SetupDebugUI()
-    {
-        // プレイヤー兼任ホスト(デバッグ用)かつエディタ/デバッグビルド時のみデバッグUIを表示
-        bool isDebugHost = NetworkConnectManager.IsPlayerHost;
-        bool isDebugBuild = Application.isEditor || Debug.isDebugBuild;
-        bool shouldShowDebugUI = IsServer && isDebugHost && isDebugBuild;
+	private void SetupDebugUI()
+	{
+		// プレイヤー兼任ホスト(デバッグ用)かつエディタ/デバッグビルド時のみデバッグUIを表示
+		bool isDebugHost = NetworkConnectManager.IsPlayerHost;
+		bool isDebugBuild = Application.isEditor || Debug.isDebugBuild;
+		bool shouldShowDebugUI = IsServer && isDebugHost && isDebugBuild;
 
-        if (debugPanel != null)
-        {
-            debugPanel.SetActive(shouldShowDebugUI);
-        }
+		if (debugPanel != null)
+		{
+			debugPanel.SetActive(shouldShowDebugUI);
+		}
 
-        UpdateDebugMinPlayersText();
-    }
+		UpdateDebugMinPlayersText();
+	}
 
-    private void HandleClientConnected(ulong clientId)
-    {
-        UpdateUI();
-    }
+	private void HandleClientConnected(ulong clientId)
+	{
+		UpdateUI();
+	}
 
-    private void HandleClientDisconnected(ulong clientId)
-    {
-        UpdateUI();
-    }
+	private void HandleClientDisconnected(ulong clientId)
+	{
+		UpdateUI();
+	}
 
-    private void HandleServerDisconnect(ulong clientId)
-    {
-        if (!IsServer && clientId == NetworkManager.Singleton.LocalClientId)
-        {
-            // 自身が切断された場合、タイトルへ戻る
-            ReturnToTitleScene();
-        }
-    }
+	private void HandleServerDisconnect(ulong clientId)
+	{
+		if (!IsServer && clientId == NetworkManager.Singleton.LocalClientId)
+		{
+			// 自身が切断された場合、タイトルへ戻る
+			ReturnToTitleScene();
+		}
+	}
 
-    private void UpdateUI()
-    {
-        if (NetworkManager.Singleton == null) return;
+	private void UpdateUI()
+	{
+		if (NetworkManager.Singleton == null) return;
 
-        int connectedCount = NetworkManager.Singleton.ConnectedClients.Count;
+		int connectedCount = NetworkManager.Singleton.ConnectedClients.Count;
 
-        // 参加人数テキストの更新
-        if (playerCountText != null)
-        {
-            infoStringBuilder.Clear();
-            infoStringBuilder.Append("参加人数: ").Append(connectedCount).Append(" / ").Append(currentRequiredPlayers);
-            playerCountText.text = infoStringBuilder.ToString();
-        }
+		// 参加人数テキストの更新
+		if (playerCountText != null)
+		{
+			infoStringBuilder.Clear();
+			infoStringBuilder.Append("参加人数: ").Append(connectedCount).Append(" / ").Append(currentRequiredPlayers);
+			playerCountText.text = infoStringBuilder.ToString();
+		}
 
-        // メンバーリストの更新
-        if (memberListText != null)
-        {
-            infoStringBuilder.Clear();
-            infoStringBuilder.AppendLine("【接続端末一覧】");
-            foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
-            {
-                string hostTag = client.ClientId == NetworkManager.ServerClientId ? " (Host)" : "";
-                infoStringBuilder.Append("- ClientId: ").Append(client.ClientId).Append(hostTag).AppendLine();
-            }
-            memberListText.text = infoStringBuilder.ToString();
-        }
+		// メンバーリストの更新
+		if (memberListText != null)
+		{
+			infoStringBuilder.Clear();
+			infoStringBuilder.AppendLine("【接続端末一覧】");
+			foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+			{
+				string hostTag = client.ClientId == NetworkManager.ServerClientId ? " (Host)" : "";
+				infoStringBuilder.Append("- ClientId: ").Append(client.ClientId).Append(hostTag).AppendLine();
+			}
+			memberListText.text = infoStringBuilder.ToString();
+		}
 
-        // 開始ボタンの有効化判定(Hostのみ、かつ必要人数を満たしているか)
-        if (startGameButton != null)
-        {
-            bool canStart = IsServer && (connectedCount >= currentRequiredPlayers);
-            startGameButton.interactable = canStart;
-            startGameButton.gameObject.SetActive(IsServer);
-        }
+		// 開始ボタンの有効化判定(Hostのみ、かつ必要人数を満たしているか)
+		if (startGameButton != null)
+		{
+			bool canStart = IsServer && (connectedCount >= currentRequiredPlayers);
+			startGameButton.interactable = canStart;
+			startGameButton.gameObject.SetActive(IsServer);
+		}
 
-        if (lobbyStatusText != null)
-        {
-            if (!IsServer)
-            {
-                lobbyStatusText.text = "ホストのゲーム開始を待機しています...";
-            }
-            else
-            {
-                lobbyStatusText.text = connectedCount >= currentRequiredPlayers
-                    ? "開始準備完了: ゲーム開始ボタンを押してください"
-                    : $"待機中: あと {currentRequiredPlayers - connectedCount} 台の接続が必要です";
-            }
-        }
+		if (lobbyStatusText != null)
+		{
+			if (!IsServer)
+			{
+				lobbyStatusText.text = "ホストのゲーム開始を待機しています...";
+			}
+			else
+			{
+				lobbyStatusText.text = connectedCount >= currentRequiredPlayers
+					? "開始準備完了: ゲーム開始ボタンを押してください"
+					: $"待機中: あと {currentRequiredPlayers - connectedCount} 台の接続が必要です";
+			}
+		}
 
-        UpdateHostIpDisplay();
-    }
+		UpdateHostIpDisplay();
+	}
 
-    private void UpdateHostIpDisplay()
-    {
-        if (hostIpText == null) return;
+	private void UpdateHostIpDisplay()
+	{
+		if (hostIpText == null) return;
 
-        if (IsServer)
-        {
-            string ip = GetLocalIPv4Address();
-            hostIpText.text = $"接続先IP: {ip}";
-            hostIpText.gameObject.SetActive(true);
-        }
-        else
-        {
-            hostIpText.gameObject.SetActive(false);
-        }
-    }
+		if (IsServer)
+		{
+			string ip = GetLocalIPv4Address();
+			hostIpText.text = $"接続先IP: {ip}";
+			hostIpText.gameObject.SetActive(true);
+		}
+		else
+		{
+			hostIpText.gameObject.SetActive(false);
+		}
+	}
 
-    private string GetLocalIPv4Address()
-    {
-        try
-        {
-            IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (IPAddress ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    return ip.ToString();
-                }
-            }
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogWarning($"[LobbyManager] ローカルIP取得エラー: {ex.Message}");
-        }
+	private string GetLocalIPv4Address()
+	{
+		try
+		{
+			IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+			foreach (IPAddress ip in host.AddressList)
+			{
+				if (ip.AddressFamily == AddressFamily.InterNetwork)
+				{
+					return ip.ToString();
+				}
+			}
+		}
+		catch (System.Exception ex)
+		{
+			Debug.LogWarning($"[LobbyManager] ローカルIP取得エラー: {ex.Message}");
+		}
 
-        return "127.0.0.1";
-    }
+		return "127.0.0.1";
+	}
 
-    /// <summary>
-    /// デバッグ用: 必要人数を 4人 -> 2人 -> 1人 -> 4人 とトグル切り替えします。
-    /// </summary>
-    private void CycleMinPlayersDebug()
-    {
-        if (!IsServer) return;
+	/// <summary>
+	/// デバッグ用: 必要人数を 4人 -> 2人 -> 1人 -> 4人 とトグル切り替えします。
+	/// </summary>
+	private void CycleMinPlayersDebug()
+	{
+		if (!IsServer) return;
 
-        if (currentRequiredPlayers == 4) currentRequiredPlayers = 2;
-        else if (currentRequiredPlayers == 2) currentRequiredPlayers = 1;
-        else currentRequiredPlayers = 4;
+		if (currentRequiredPlayers == 4) currentRequiredPlayers = 2;
+		else if (currentRequiredPlayers == 2) currentRequiredPlayers = 1;
+		else currentRequiredPlayers = 4;
 
-        UpdateDebugMinPlayersText();
-        UpdateUI();
-    }
+		UpdateDebugMinPlayersText();
+		UpdateUI();
+	}
 
-    private void UpdateDebugMinPlayersText()
-    {
-        if (debugMinPlayersText != null)
-        {
-            debugMinPlayersText.text = $"[Debug] 開始人数: {currentRequiredPlayers}人";
-        }
-    }
+	private void UpdateDebugMinPlayersText()
+	{
+		if (debugMinPlayersText != null)
+		{
+			debugMinPlayersText.text = $"[Debug] 開始人数: {currentRequiredPlayers}人";
+		}
+	}
 
-    private void OnStartGameButtonClicked()
-    {
-        if (!IsServer) return;
+	private void OnStartGameButtonClicked()
+	{
+		if (!IsServer) return;
 
-        if (!string.IsNullOrEmpty(gameSceneName))
-        {
-            NetworkManager.Singleton.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
-        }
-    }
+		if (!string.IsNullOrEmpty(gameSceneName))
+		{
+			NetworkManager.Singleton.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
+		}
+	}
 
-    private void OnLeaveLobbyButtonClicked()
-    {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.Shutdown();
-        }
+	private void OnLeaveLobbyButtonClicked()
+	{
+		if (NetworkManager.Singleton != null)
+		{
+			NetworkManager.Singleton.Shutdown();
+		}
 
-        ReturnToTitleScene();
-    }
+		ReturnToTitleScene();
+	}
 
-    private void ReturnToTitleScene()
-    {
-        if (!string.IsNullOrEmpty(titleSceneName))
-        {
-            SceneManager.LoadScene(titleSceneName);
-        }
-    }
+	private void ReturnToTitleScene()
+	{
+		if (!string.IsNullOrEmpty(titleSceneName))
+		{
+			SceneManager.LoadScene(titleSceneName);
+		}
+	}
 }

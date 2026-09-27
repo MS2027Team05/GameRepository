@@ -8,13 +8,13 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class ClientNetworkTransform : NetworkTransform
 {
-    /// <summary>
-    /// サーバー主権とするかどうかを指定します。
-    /// false を返却することで、Owner(クライアント)権限での同期が有効になります。
-    /// </summary>
-    /// <returns>常にfalse(クライアント主権)</returns>
-    protected override bool OnIsServerAuthoritative()
-    {
-        return false;
-    }
+	/// <summary>
+	/// サーバー主権とするかどうかを指定します。
+	/// false を返却することで、Owner(クライアント)権限での同期が有効になります。
+	/// </summary>
+	/// <returns>常にfalse(クライアント主権)</returns>
+	protected override bool OnIsServerAuthoritative()
+	{
+		return false;
+	}
 }
