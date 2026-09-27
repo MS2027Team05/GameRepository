@@ -71,7 +71,7 @@ jobs:
           # dotnet format を実行し、修正が必要なファイルを検知
           dotnet format DummyProject.csproj style --severity info
           # 変更差分が出た（フォーマット違反があった）ファイルを取得
-          $formattedChanges = git diff --name-only -- "Assets/**/*.cs"
+          $formattedChanges = git diff --name-only -- "Assets/Scripts/**/*.cs"
           if (-not [string]::IsNullOrWhiteSpace($formattedChanges)) {
               $formatFiles = ($formattedChanges -split "`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
               # ワーキングツリーの変更を元に戻す
