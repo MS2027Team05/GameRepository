@@ -1,45 +1,31 @@
 # ディレクトリ構造 (STRUCTURE.md)
 
-本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。新規機能やスクリプト追加時に随時更新します。
+本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
 
 ```text
 GameRepository/
-├── .agents/
-│   └── skills/                  # Unity公式AIエージェントSkills (Unity-Technologies/skills)
-│       ├── 2d-pixel-perfect/
-│       ├── physics-3d-collision/
-│       ├── setup-multiplayer-services/
-│       ├── unity-cli/
-│       ├── unity-package-management/
-│       └── ... (全32種類のUnityスキル)
+├── .agents/                     # AIエージェント設定およびカスタムスキル格納
+│   └── skills/                  # Unity公式AIエージェントSkills
 ├── Assets/
-│   ├── Prefabs/
-│   │   ├── Player.prefab        # プレイヤー用Prefab (NetworkObject, Rigidbody等)
-│   │   └── NetworkManager.prefab# ネットワーク管理用Prefab (DontDestroyOnLoad)
-│   ├── Scenes/
-│   │   ├── TitleScene.unity     # タイトル・接続画面 (Host/Client選択、IP入力)
-│   │   ├── LobbyScene.unity     # ロビー画面 (参加者一覧、チーム分け、ゲーム開始)
-│   │   └── GameScene.unity      # 試合画面 (対戦フィールド)
-│   ├── Scripts/
-│   │   ├── Network/             # 通信・ネットワーク関連スクリプト
-│   │   │   ├── ClientNetworkTransform.cs    # クライアント主権の移動同期
-│   │   │   ├── NetworkConnectManager.cs     # タイトル接続制御 (IP動的設定、Host/Client起動)
-│   │   │   ├── LobbyManager.cs              # ロビー管理 (参加人数同期、デバッグ人数切替、ゲーム開始)
-│   │   │   ├── SpectatorDisplayManager.cs   # 観戦カメラ・Display 2マルチスクリーン制御
-│   │   │   ├── PlayerSpawner.cs             # GameSceneでのプレイヤー自動配置・生成管理
-│   │   │   └── NetworkConnectSample.cs      # (旧サンプル用コード)
-│   │   └── Player/              # プレイヤー制御関連スクリプト
-│   │       ├── Interfaces/      # 各担当モジュール用インターフェース
-│   │       │   ├── IGravityMover.cs         # 物理・重力落下インターフェース (担当A)
-│   │       │   ├── IAimGuide.cs             # エイム・予測線インターフェース (担当B)
-│   │       │   └── IBallCarrier.cs          # ボール所持・操作インターフェース (担当C)
-│   │       ├── PlayerController.cs          # プレイヤー全体の状態管理・調停役 (コア設計)
-│   │       ├── PlayerInputReceiver.cs       # InputSystem入力検知・イベント発火
-│   │       └── PlayerCameraEffect.cs        # カメラ演出用骨組みスタブ (担当B)
-│   ├── Audios/                  # (AI学習対象外)
-│   ├── Models/                  # (AI学習対象外)
-│   ├── Textures/                # (AI学習対象外)
-│   └── ...
+│   ├── Audios/                  # 音声リソース格納 (AI学習対象外)
+│   ├── Fonts/                   # フォントリソース格納 (AI学習対象外)
+│   ├── Materials/               # マテリアル・シェーダー関連格納
+│   ├── Models/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
+│   ├── Plugins/                 # 外部プラグインライブラリ格納 (DOTween等)
+│   ├── Prefabs/                 # ゲーム内プレハブ格納
+│   ├── Resources/               # 動的読み込み用アセット格納
+│   ├── Scenes/                  # 各画面・遷移用シーン格納
+│   ├── Scripts/                 # プロジェクト固有のC#スクリプト
+│   │   ├── Network/             # 通信接続・同期制御
+│   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
+│   │   │   └── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
+│   │   └── Player/              # プレイヤー制御・挙動ロジック
+│   │       ├── Interfaces/      # 各サブモジュール用インターフェース
+│   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
+│   ├── Settings/                # プロジェクト設定・URP描画設定
+│   ├── TextMesh Pro/            # TextMesh Pro関連リソース
+│   └── Textures/                # テクスチャ・スプライト格納 (AI学習対象外)
+├── docs/                        # 企画書・仕様書等の設計ドキュメント格納
 ├── AGENTS.md                    # AI用ルール・規約定義
 ├── player_structure.md          # プレイヤーモジュール仕様・連携手順書
 └── STRUCTURE.md                 # 本ドキュメント
