@@ -1,5 +1,6 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// ホストPC専用の観戦カメラおよびマルチディスプレイ(Display 2への全画面投影)を管理するクラス。
@@ -8,11 +9,14 @@ using UnityEngine;
 public class SpectatorDisplayManager : MonoBehaviour
 {
 	[Header("観戦カメラ参照")]
-	[SerializeField] private Camera spectatorCamera;
-	[SerializeField] private GameObject spectatorUIRoot;
+	[FormerlySerializedAs("spectatorCamera")]
+	[SerializeField] private Camera m_SpectatorCamera;
+	[FormerlySerializedAs("spectatorUIRoot")]
+	[SerializeField] private GameObject m_SpectatorUIRoot;
 
 	[Header("動作設定")]
-	[SerializeField] private bool forceEnableInEditor;
+	[FormerlySerializedAs("forceEnableInEditor")]
+	[SerializeField] private bool m_ForceEnableInEditor;
 
 	private void Start()
 	{
@@ -25,13 +29,13 @@ public class SpectatorDisplayManager : MonoBehaviour
 		bool isSpectatorMode = !NetworkConnectManager.IsPlayerHost;
 
 		// エディタデバッグ強制有効化フラグ、または「ホストかつ観戦専用モード」の場合に観戦機能を有効化
-		bool shouldActivateSpectator = (isServer && isSpectatorMode) || (Application.isEditor && forceEnableInEditor);
+		bool shouldActivateSpectator = (isServer && isSpectatorMode) || (Application.isEditor && m_ForceEnableInEditor);
 
 		if (!shouldActivateSpectator)
 		{
 			// クライアントまたはプレイヤー兼任ホストの場合は観戦カメラを無効化
-			if (spectatorCamera != null) spectatorCamera.gameObject.SetActive(false);
-			if (spectatorUIRoot != null) spectatorUIRoot.SetActive(false);
+			if (m_SpectatorCamera != null) m_SpectatorCamera.gameObject.SetActive(false);
+			if (m_SpectatorUIRoot != null) m_SpectatorUIRoot.SetActive(false);
 			return;
 		}
 
@@ -41,25 +45,25 @@ public class SpectatorDisplayManager : MonoBehaviour
 			// 2枚目のディスプレイ(Display 2)をアクティブ化
 			Display.displays[1].Activate();
 
-			if (spectatorCamera != null)
+			if (m_SpectatorCamera != null)
 			{
-				spectatorCamera.targetDisplay = 1; // Display 2へ出力
-				spectatorCamera.gameObject.SetActive(true);
+				m_SpectatorCamera.targetDisplay = 1; // Display 2へ出力
+				m_SpectatorCamera.gameObject.SetActive(true);
 			}
 		}
 		else
 		{
 			// 外部モニターがない環境(ノートPC単体やデバッグ環境)へのフォールバック
-			if (spectatorCamera != null)
+			if (m_SpectatorCamera != null)
 			{
-				spectatorCamera.targetDisplay = 0; // Display 1(メイン画面)へ出力
-				spectatorCamera.gameObject.SetActive(true);
+				m_SpectatorCamera.targetDisplay = 0; // Display 1(メイン画面)へ出力
+				m_SpectatorCamera.gameObject.SetActive(true);
 			}
 		}
 
-		if (spectatorUIRoot != null)
+		if (m_SpectatorUIRoot != null)
 		{
-			spectatorUIRoot.SetActive(true);
+			m_SpectatorUIRoot.SetActive(true);
 		}
 	}
 }

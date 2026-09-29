@@ -1,6 +1,7 @@
-﻿using System.Collections;
+using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// プレイヤー全体の「状態管理(ステート)」と「各専門モジュールへの命令ルーティング」を担当するクラス。
@@ -9,32 +10,34 @@ using UnityEngine;
 public class PlayerController : NetworkBehaviour
 {
 	[Header("自端末専用オブジェクト")]
-	[SerializeField] private GameObject playerCameraObject;
-	[SerializeField] private PlayerInputReceiver inputReceiver;
+	[FormerlySerializedAs("playerCameraObject")]
+	[SerializeField] private GameObject m_PlayerCameraObject;
+	[FormerlySerializedAs("inputReceiver")]
+	[SerializeField] private PlayerInputReceiver m_InputReceiver;
 
 	// 各担当者が実装するインターフェース・コンポーネント参照
-	private IGravityMover gravityMover;
-	private IAimGuide aimGuide;
-	private IBallCarrier ballCarrier;
-	private PlayerCameraEffect cameraEffect;
+	private IGravityMover m_GravityMover;
+	private IAimGuide m_AimGuide;
+	private IBallCarrier m_BallCarrier;
+	private PlayerCameraEffect m_CameraEffect;
 
 	// プレイヤーの内部状態
-	public enum PlayerState { Idle, Aiming, Falling, Stunned }
-	public PlayerState CurrentState { get; private set; } = PlayerState.Idle;
+	public enum EPlayerState { Idle, Aiming, Falling, Stunned }
+	public EPlayerState CurrentState { get; private set; } = EPlayerState.Idle;
 
-	private Coroutine stunCoroutine;
+	private Coroutine m_StunCoroutine;
 
 	private void Awake()
 	{
 		// 各インターフェースおよび演出コンポーネントの取得
-		gravityMover = GetComponent<IGravityMover>();
-		aimGuide = GetComponent<IAimGuide>();
-		ballCarrier = GetComponent<IBallCarrier>();
-		cameraEffect = GetComponent<PlayerCameraEffect>();
+		m_GravityMover = GetComponent<IGravityMover>();
+		m_AimGuide = GetComponent<IAimGuide>();
+		m_BallCarrier = GetComponent<IBallCarrier>();
+		m_CameraEffect = GetComponent<PlayerCameraEffect>();
 
-		if (inputReceiver == null)
+		if (m_InputReceiver == null)
 		{
-			inputReceiver = GetComponent<PlayerInputReceiver>();
+			m_InputReceiver = GetComponent<PlayerInputReceiver>();
 		}
 	}
 
@@ -43,33 +46,33 @@ public class PlayerController : NetworkBehaviour
 		// 他人の画面なら、自機カメラ・入力を切って処理を終える
 		if (!IsOwner)
 		{
-			if (playerCameraObject != null) playerCameraObject.SetActive(false);
-			if (inputReceiver != null) inputReceiver.enabled = false;
-			aimGuide?.ShowAimGuide(false);
+			if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(false);
+			if (m_InputReceiver != null) m_InputReceiver.enabled = false;
+			m_AimGuide?.ShowAimGuide(false);
 			return;
 		}
 
 		// 自分のキャラならカメラを有効化し、入力をバインドする
-		if (playerCameraObject != null) playerCameraObject.SetActive(true);
+		if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(true);
 		BindInputEvents();
 	}
 
 	private void BindInputEvents()
 	{
-		if (inputReceiver == null) return;
+		if (m_InputReceiver == null) return;
 
-		inputReceiver.OnAimTogglePressed += HandleAimToggle;
-		inputReceiver.OnConfirmPressed += HandleConfirm;
-		inputReceiver.OnBrakePressed += HandleBrake;
+		m_InputReceiver.OnAimTogglePressed += HandleAimToggle;
+		m_InputReceiver.OnConfirmPressed += HandleConfirm;
+		m_InputReceiver.OnBrakePressed += HandleBrake;
 	}
 
 	private void UnbindInputEvents()
 	{
-		if (inputReceiver == null) return;
+		if (m_InputReceiver == null) return;
 
-		inputReceiver.OnAimTogglePressed -= HandleAimToggle;
-		inputReceiver.OnConfirmPressed -= HandleConfirm;
-		inputReceiver.OnBrakePressed -= HandleBrake;
+		m_InputReceiver.OnAimTogglePressed -= HandleAimToggle;
+		m_InputReceiver.OnConfirmPressed -= HandleConfirm;
+		m_InputReceiver.OnBrakePressed -= HandleBrake;
 	}
 
 	private void Update()
@@ -77,13 +80,13 @@ public class PlayerController : NetworkBehaviour
 		if (!IsOwner) return;
 
 		// エイム中のみ、毎フレームカメラの正面ベクトルを照準・予測線へ渡す
-		if (CurrentState == PlayerState.Aiming && aimGuide != null)
+		if (CurrentState == EPlayerState.Aiming && m_AimGuide != null)
 		{
-			Vector3 aimDirection = playerCameraObject != null
-				? playerCameraObject.transform.forward
+			Vector3 aimDirection = m_PlayerCameraObject != null
+				? m_PlayerCameraObject.transform.forward
 				: transform.forward;
 
-			aimGuide.UpdateAimDirection(aimDirection);
+			m_AimGuide.UpdateAimDirection(aimDirection);
 		}
 	}
 
@@ -91,42 +94,42 @@ public class PlayerController : NetworkBehaviour
 
 	private void HandleAimToggle()
 	{
-		if (CurrentState == PlayerState.Stunned) return;
+		if (CurrentState == EPlayerState.Stunned) return;
 
-		if (CurrentState != PlayerState.Aiming)
+		if (CurrentState != EPlayerState.Aiming)
 		{
-			CurrentState = PlayerState.Aiming;
-			gravityMover?.StopFalling();
-			aimGuide?.ShowAimGuide(true);
+			CurrentState = EPlayerState.Aiming;
+			m_GravityMover?.StopFalling();
+			m_AimGuide?.ShowAimGuide(true);
 		}
 		else
 		{
-			CurrentState = PlayerState.Idle;
-			aimGuide?.ShowAimGuide(false);
+			CurrentState = EPlayerState.Idle;
+			m_AimGuide?.ShowAimGuide(false);
 		}
 	}
 
 	private void HandleConfirm()
 	{
-		if (CurrentState != PlayerState.Aiming) return;
+		if (CurrentState != EPlayerState.Aiming) return;
 
-		CurrentState = PlayerState.Falling;
-		aimGuide?.ShowAimGuide(false);
+		CurrentState = EPlayerState.Falling;
+		m_AimGuide?.ShowAimGuide(false);
 
-		Vector3 direction = playerCameraObject != null
-			? playerCameraObject.transform.forward
+		Vector3 direction = m_PlayerCameraObject != null
+			? m_PlayerCameraObject.transform.forward
 			: transform.forward;
 
-		cameraEffect?.PlayFallEffect();
-		gravityMover?.StartFalling(direction);
+		m_CameraEffect?.PlayFallEffect();
+		m_GravityMover?.StartFalling(direction);
 	}
 
 	private void HandleBrake()
 	{
-		if (CurrentState != PlayerState.Falling) return;
+		if (CurrentState != EPlayerState.Falling) return;
 
-		CurrentState = PlayerState.Idle;
-		gravityMover?.StopFalling();
+		CurrentState = EPlayerState.Idle;
+		m_GravityMover?.StopFalling();
 	}
 
 	// --- 外部モジュール連携用メソッド ---
@@ -138,7 +141,7 @@ public class PlayerController : NetworkBehaviour
 	public void NotifyBallStateChanged(bool hasBall)
 	{
 		float speedMultiplier = hasBall ? 0.7f : 1.0f;
-		gravityMover?.SetSpeedMultiplier(speedMultiplier);
+		m_GravityMover?.SetSpeedMultiplier(speedMultiplier);
 	}
 
 	/// <summary>
@@ -147,23 +150,23 @@ public class PlayerController : NetworkBehaviour
 	/// <param name="duration">スタン持続時間(秒)</param>
 	public void ApplyStun(float duration)
 	{
-		if (stunCoroutine != null)
+		if (m_StunCoroutine != null)
 		{
-			StopCoroutine(stunCoroutine);
+			StopCoroutine(m_StunCoroutine);
 		}
-		stunCoroutine = StartCoroutine(StunRoutine(duration));
+		m_StunCoroutine = StartCoroutine(StunRoutine(duration));
 	}
 
 	private IEnumerator StunRoutine(float duration)
 	{
-		CurrentState = PlayerState.Stunned;
-		aimGuide?.ShowAimGuide(false);
-		gravityMover?.StopFalling();
+		CurrentState = EPlayerState.Stunned;
+		m_AimGuide?.ShowAimGuide(false);
+		m_GravityMover?.StopFalling();
 
 		yield return new WaitForSeconds(duration);
 
-		CurrentState = PlayerState.Idle;
-		stunCoroutine = null;
+		CurrentState = EPlayerState.Idle;
+		m_StunCoroutine = null;
 	}
 
 	public override void OnNetworkDespawn()

@@ -1,10 +1,11 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -14,28 +15,40 @@ using UnityEngine.UI;
 public class LobbyManager : NetworkBehaviour
 {
 	[Header("UI参照(ボタン・情報表示)")]
-	[SerializeField] private Button startGameButton;
-	[SerializeField] private Button leaveLobbyButton;
-	[SerializeField] private TextMeshProUGUI playerCountText;
-	[SerializeField] private TextMeshProUGUI memberListText;
-	[SerializeField] private TextMeshProUGUI lobbyStatusText;
-	[SerializeField] private TextMeshProUGUI hostIpText;
+	[FormerlySerializedAs("startGameButton")]
+	[SerializeField] private Button m_StartGameButton;
+	[FormerlySerializedAs("leaveLobbyButton")]
+	[SerializeField] private Button m_LeaveLobbyButton;
+	[FormerlySerializedAs("playerCountText")]
+	[SerializeField] private TextMeshProUGUI m_PlayerCountText;
+	[FormerlySerializedAs("memberListText")]
+	[SerializeField] private TextMeshProUGUI m_MemberListText;
+	[FormerlySerializedAs("lobbyStatusText")]
+	[SerializeField] private TextMeshProUGUI m_LobbyStatusText;
+	[FormerlySerializedAs("hostIpText")]
+	[SerializeField] private TextMeshProUGUI m_HostIpText;
 
 	[Header("デバッグ用UI(画面操作用)")]
-	[SerializeField] private GameObject debugPanel;
-	[SerializeField] private Button debugCycleMinPlayersButton;
-	[SerializeField] private TextMeshProUGUI debugMinPlayersText;
+	[FormerlySerializedAs("debugPanel")]
+	[SerializeField] private GameObject m_DebugPanel;
+	[FormerlySerializedAs("debugCycleMinPlayersButton")]
+	[SerializeField] private Button m_DebugCycleMinPlayersButton;
+	[FormerlySerializedAs("debugMinPlayersText")]
+	[SerializeField] private TextMeshProUGUI m_DebugMinPlayersText;
 
 	[Header("シーン設定")]
-	[SerializeField] private string gameSceneName;
-	[SerializeField] private string titleSceneName;
+	[FormerlySerializedAs("gameSceneName")]
+	[SerializeField] private string m_GameSceneName;
+	[FormerlySerializedAs("titleSceneName")]
+	[SerializeField] private string m_TitleSceneName;
 
 	[Header("人数設定")]
-	[SerializeField] private int defaultRequiredPlayers;
+	[FormerlySerializedAs("defaultRequiredPlayers")]
+	[SerializeField] private int m_DefaultRequiredPlayers;
 
 	// 現在の必要開始人数(デバッグトグルで変更可能)
-	private int currentRequiredPlayers;
-	private readonly StringBuilder infoStringBuilder = new StringBuilder();
+	private int m_CurrentRequiredPlayers;
+	private readonly StringBuilder m_InfoStringBuilder = new StringBuilder();
 
 	private void Awake()
 	{
@@ -44,7 +57,7 @@ public class LobbyManager : NetworkBehaviour
 
 	private void Start()
 	{
-		currentRequiredPlayers = defaultRequiredPlayers > 0 ? defaultRequiredPlayers : 4;
+		m_CurrentRequiredPlayers = m_DefaultRequiredPlayers > 0 ? m_DefaultRequiredPlayers : 4;
 		SetupDebugUI();
 		UpdateUI();
 	}
@@ -79,19 +92,19 @@ public class LobbyManager : NetworkBehaviour
 
 	private void SetupUIListeners()
 	{
-		if (startGameButton != null)
+		if (m_StartGameButton != null)
 		{
-			startGameButton.onClick.AddListener(OnStartGameButtonClicked);
+			m_StartGameButton.onClick.AddListener(OnStartGameButtonClicked);
 		}
 
-		if (leaveLobbyButton != null)
+		if (m_LeaveLobbyButton != null)
 		{
-			leaveLobbyButton.onClick.AddListener(OnLeaveLobbyButtonClicked);
+			m_LeaveLobbyButton.onClick.AddListener(OnLeaveLobbyButtonClicked);
 		}
 
-		if (debugCycleMinPlayersButton != null)
+		if (m_DebugCycleMinPlayersButton != null)
 		{
-			debugCycleMinPlayersButton.onClick.AddListener(CycleMinPlayersDebug);
+			m_DebugCycleMinPlayersButton.onClick.AddListener(CycleMinPlayersDebug);
 		}
 	}
 
@@ -102,9 +115,9 @@ public class LobbyManager : NetworkBehaviour
 		bool isDebugBuild = Application.isEditor || Debug.isDebugBuild;
 		bool shouldShowDebugUI = IsServer && isDebugHost && isDebugBuild;
 
-		if (debugPanel != null)
+		if (m_DebugPanel != null)
 		{
-			debugPanel.SetActive(shouldShowDebugUI);
+			m_DebugPanel.SetActive(shouldShowDebugUI);
 		}
 
 		UpdateDebugMinPlayersText();
@@ -136,45 +149,45 @@ public class LobbyManager : NetworkBehaviour
 		int connectedCount = NetworkManager.Singleton.ConnectedClients.Count;
 
 		// 参加人数テキストの更新
-		if (playerCountText != null)
+		if (m_PlayerCountText != null)
 		{
-			infoStringBuilder.Clear();
-			infoStringBuilder.Append("参加人数: ").Append(connectedCount).Append(" / ").Append(currentRequiredPlayers);
-			playerCountText.text = infoStringBuilder.ToString();
+			m_InfoStringBuilder.Clear();
+			m_InfoStringBuilder.Append("参加人数: ").Append(connectedCount).Append(" / ").Append(m_CurrentRequiredPlayers);
+			m_PlayerCountText.text = m_InfoStringBuilder.ToString();
 		}
 
 		// メンバーリストの更新
-		if (memberListText != null)
+		if (m_MemberListText != null)
 		{
-			infoStringBuilder.Clear();
-			infoStringBuilder.AppendLine("【接続端末一覧】");
+			m_InfoStringBuilder.Clear();
+			m_InfoStringBuilder.AppendLine("【接続端末一覧】");
 			foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
 			{
 				string hostTag = client.ClientId == NetworkManager.ServerClientId ? " (Host)" : "";
-				infoStringBuilder.Append("- ClientId: ").Append(client.ClientId).Append(hostTag).AppendLine();
+				m_InfoStringBuilder.Append("- ClientId: ").Append(client.ClientId).Append(hostTag).AppendLine();
 			}
-			memberListText.text = infoStringBuilder.ToString();
+			m_MemberListText.text = m_InfoStringBuilder.ToString();
 		}
 
 		// 開始ボタンの有効化判定(Hostのみ、かつ必要人数を満たしているか)
-		if (startGameButton != null)
+		if (m_StartGameButton != null)
 		{
-			bool canStart = IsServer && (connectedCount >= currentRequiredPlayers);
-			startGameButton.interactable = canStart;
-			startGameButton.gameObject.SetActive(IsServer);
+			bool canStart = IsServer && (connectedCount >= m_CurrentRequiredPlayers);
+			m_StartGameButton.interactable = canStart;
+			m_StartGameButton.gameObject.SetActive(IsServer);
 		}
 
-		if (lobbyStatusText != null)
+		if (m_LobbyStatusText != null)
 		{
 			if (!IsServer)
 			{
-				lobbyStatusText.text = "ホストのゲーム開始を待機しています...";
+				m_LobbyStatusText.text = "ホストのゲーム開始を待機しています...";
 			}
 			else
 			{
-				lobbyStatusText.text = connectedCount >= currentRequiredPlayers
+				m_LobbyStatusText.text = connectedCount >= m_CurrentRequiredPlayers
 					? "開始準備完了: ゲーム開始ボタンを押してください"
-					: $"待機中: あと {currentRequiredPlayers - connectedCount} 台の接続が必要です";
+					: $"待機中: あと {m_CurrentRequiredPlayers - connectedCount} 台の接続が必要です";
 			}
 		}
 
@@ -183,17 +196,17 @@ public class LobbyManager : NetworkBehaviour
 
 	private void UpdateHostIpDisplay()
 	{
-		if (hostIpText == null) return;
+		if (m_HostIpText == null) return;
 
 		if (IsServer)
 		{
 			string ip = GetLocalIPv4Address();
-			hostIpText.text = $"接続先IP: {ip}";
-			hostIpText.gameObject.SetActive(true);
+			m_HostIpText.text = $"接続先IP: {ip}";
+			m_HostIpText.gameObject.SetActive(true);
 		}
 		else
 		{
-			hostIpText.gameObject.SetActive(false);
+			m_HostIpText.gameObject.SetActive(false);
 		}
 	}
 
@@ -225,9 +238,9 @@ public class LobbyManager : NetworkBehaviour
 	{
 		if (!IsServer) return;
 
-		if (currentRequiredPlayers == 4) currentRequiredPlayers = 2;
-		else if (currentRequiredPlayers == 2) currentRequiredPlayers = 1;
-		else currentRequiredPlayers = 4;
+		if (m_CurrentRequiredPlayers == 4) m_CurrentRequiredPlayers = 2;
+		else if (m_CurrentRequiredPlayers == 2) m_CurrentRequiredPlayers = 1;
+		else m_CurrentRequiredPlayers = 4;
 
 		UpdateDebugMinPlayersText();
 		UpdateUI();
@@ -235,9 +248,9 @@ public class LobbyManager : NetworkBehaviour
 
 	private void UpdateDebugMinPlayersText()
 	{
-		if (debugMinPlayersText != null)
+		if (m_DebugMinPlayersText != null)
 		{
-			debugMinPlayersText.text = $"[Debug] 開始人数: {currentRequiredPlayers}人";
+			m_DebugMinPlayersText.text = $"[Debug] 開始人数: {m_CurrentRequiredPlayers}人";
 		}
 	}
 
@@ -245,9 +258,9 @@ public class LobbyManager : NetworkBehaviour
 	{
 		if (!IsServer) return;
 
-		if (!string.IsNullOrEmpty(gameSceneName))
+		if (!string.IsNullOrEmpty(m_GameSceneName))
 		{
-			NetworkManager.Singleton.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
+			NetworkManager.Singleton.SceneManager.LoadScene(m_GameSceneName, LoadSceneMode.Single);
 		}
 	}
 
@@ -263,9 +276,10 @@ public class LobbyManager : NetworkBehaviour
 
 	private void ReturnToTitleScene()
 	{
-		if (!string.IsNullOrEmpty(titleSceneName))
+		if (!string.IsNullOrEmpty(m_TitleSceneName))
 		{
-			SceneManager.LoadScene(titleSceneName);
+			SceneManager.LoadScene(m_TitleSceneName);
 		}
 	}
 }
+

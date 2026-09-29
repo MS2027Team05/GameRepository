@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// InputSystemからの入力を検知し、PlayerControllerが購読するC#イベントを発火するクラス。
@@ -9,9 +10,12 @@ using UnityEngine.InputSystem;
 public class PlayerInputReceiver : MonoBehaviour
 {
 	[Header("Input Actions(任意設定: 未設定時はデフォルトキーが動作)")]
-	[SerializeField] private InputActionReference aimToggleAction;
-	[SerializeField] private InputActionReference confirmAction;
-	[SerializeField] private InputActionReference brakeAction;
+	[FormerlySerializedAs("aimToggleAction")]
+	[SerializeField] private InputActionReference m_AimToggleAction;
+	[FormerlySerializedAs("confirmAction")]
+	[SerializeField] private InputActionReference m_ConfirmAction;
+	[FormerlySerializedAs("brakeAction")]
+	[SerializeField] private InputActionReference m_BrakeAction;
 
 	/// <summary>エイムモードの開始・解除ボタン押下イベント</summary>
 	public event Action OnAimTogglePressed;
@@ -24,16 +28,16 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private void OnEnable()
 	{
-		BindAction(aimToggleAction, HandleAimToggle);
-		BindAction(confirmAction, HandleConfirm);
-		BindAction(brakeAction, HandleBrake);
+		BindAction(m_AimToggleAction, HandleAimToggle);
+		BindAction(m_ConfirmAction, HandleConfirm);
+		BindAction(m_BrakeAction, HandleBrake);
 	}
 
 	private void OnDisable()
 	{
-		UnbindAction(aimToggleAction, HandleAimToggle);
-		UnbindAction(confirmAction, HandleConfirm);
-		UnbindAction(brakeAction, HandleBrake);
+		UnbindAction(m_AimToggleAction, HandleAimToggle);
+		UnbindAction(m_ConfirmAction, HandleConfirm);
+		UnbindAction(m_BrakeAction, HandleBrake);
 	}
 
 	private void Update()
@@ -80,7 +84,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		if (Keyboard.current == null && Gamepad.current == null) return;
 
 		// エイム切り替え: Shiftキー または マウス右クリック または ゲームパッドL2/LB
-		if (aimToggleAction == null)
+		if (m_AimToggleAction == null)
 		{
 			bool aimPressed = (Keyboard.current != null && (Keyboard.current.leftShiftKey.wasPressedThisFrame || Keyboard.current.rightShiftKey.wasPressedThisFrame))
 				|| (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
@@ -93,7 +97,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		}
 
 		// 決定(落下開始): Spaceキー または マウス左クリック または ゲームパッドAボタン
-		if (confirmAction == null)
+		if (m_ConfirmAction == null)
 		{
 			bool confirmPressed = (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
 				|| (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
@@ -106,7 +110,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		}
 
 		// ブレーキ(停止): Fキー または Sキー または ゲームパッドBボタン
-		if (brakeAction == null)
+		if (m_BrakeAction == null)
 		{
 			bool brakePressed = (Keyboard.current != null && (Keyboard.current.fKey.wasPressedThisFrame || Keyboard.current.sKey.wasPressedThisFrame))
 				|| (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame);

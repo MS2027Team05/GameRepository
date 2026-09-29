@@ -1,6 +1,7 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// GameScene開始時に各プレイヤーキャラクターを適切な陣営(Red/Blue)にスポーンさせるクラス。
@@ -9,13 +10,16 @@ using UnityEngine;
 public class PlayerSpawner : NetworkBehaviour
 {
 	[Header("プレイヤーPrefab")]
-	[SerializeField] private GameObject playerPrefab;
+	[FormerlySerializedAs("playerPrefab")]
+	[SerializeField] private GameObject m_PlayerPrefab;
 
 	[Header("スポーン地点(Red陣営 / Blue陣営)")]
-	[SerializeField] private Transform[] redSpawnPoints;
-	[SerializeField] private Transform[] blueSpawnPoints;
+	[FormerlySerializedAs("redSpawnPoints")]
+	[SerializeField] private Transform[] m_RedSpawnPoints;
+	[FormerlySerializedAs("blueSpawnPoints")]
+	[SerializeField] private Transform[] m_BlueSpawnPoints;
 
-	private readonly List<GameObject> spawnedPlayerObjects = new List<GameObject>();
+	private readonly List<GameObject> m_SpawnedPlayerObjects = new List<GameObject>();
 
 	public override void OnNetworkSpawn()
 	{
@@ -30,7 +34,7 @@ public class PlayerSpawner : NetworkBehaviour
 	/// </summary>
 	private void SpawnAllPlayers()
 	{
-		if (playerPrefab == null)
+		if (m_PlayerPrefab == null)
 		{
 			Debug.LogError("[PlayerSpawner] playerPrefab が設定されていません。");
 			return;
@@ -52,14 +56,14 @@ public class PlayerSpawner : NetworkBehaviour
 			// スポーン位置と回転の決定(Red陣営とBlue陣営に交互に振り分け)
 			GetSpawnTransform(playerIndex, out Vector3 spawnPosition, out Quaternion spawnRotation);
 
-			GameObject playerInstance = Instantiate(playerPrefab, spawnPosition, spawnRotation);
+			GameObject playerInstance = Instantiate(m_PlayerPrefab, spawnPosition, spawnRotation);
 			NetworkObject networkObject = playerInstance.GetComponent<NetworkObject>();
 
 			if (networkObject != null)
 			{
 				// 各クライアントに所有権(Ownership)を付与してネットワーク生成
 				networkObject.SpawnWithOwnership(clientId);
-				spawnedPlayerObjects.Add(playerInstance);
+				m_SpawnedPlayerObjects.Add(playerInstance);
 			}
 
 			playerIndex++;
@@ -70,7 +74,7 @@ public class PlayerSpawner : NetworkBehaviour
 	{
 		// 偶数インデックスはRed陣営、奇数インデックスはBlue陣営
 		bool isRedTeam = (index % 2 == 0);
-		Transform[] targetPoints = isRedTeam ? redSpawnPoints : blueSpawnPoints;
+		Transform[] targetPoints = isRedTeam ? m_RedSpawnPoints : m_BlueSpawnPoints;
 		int pointIndex = (index / 2);
 
 		if (targetPoints != null && targetPoints.Length > 0)
@@ -94,14 +98,14 @@ public class PlayerSpawner : NetworkBehaviour
 		if (IsServer)
 		{
 			// シーン終了時のクリーンアップ
-			foreach (var player in spawnedPlayerObjects)
+			foreach (var player in m_SpawnedPlayerObjects)
 			{
 				if (player != null)
 				{
 					Destroy(player);
 				}
 			}
-			spawnedPlayerObjects.Clear();
+			m_SpawnedPlayerObjects.Clear();
 		}
 	}
 }

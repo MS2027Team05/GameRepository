@@ -1,9 +1,10 @@
-﻿using System.Text;
+using System.Text;
 using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -14,29 +15,40 @@ using UnityEngine.UI;
 public class NetworkConnectManager : MonoBehaviour
 {
 	[Header("パネル・メニューUI参照")]
-	[SerializeField] private GameObject titleMenuRoot;
-	[SerializeField] private GameObject joinPanel;
-	[SerializeField] private Button startButton;
-	[SerializeField] private Button cancelButton;
+	[FormerlySerializedAs("titleMenuRoot")]
+	[SerializeField] private GameObject m_TitleMenuRoot;
+	[FormerlySerializedAs("joinPanel")]
+	[SerializeField] private GameObject m_JoinPanel;
+	[FormerlySerializedAs("startButton")]
+	[SerializeField] private Button m_StartButton;
+	[FormerlySerializedAs("cancelButton")]
+	[SerializeField] private Button m_CancelButton;
 
 	[Header("接続UI参照(ボタン・入力)")]
-	[SerializeField] private Button hostSpectatorButton;
-	[SerializeField] private Button hostPlayerButton;
-	[SerializeField] private Button clientButton;
-	[SerializeField] private TMP_InputField ipInputField;
-	[SerializeField] private TextMeshProUGUI statusText;
+	[FormerlySerializedAs("hostSpectatorButton")]
+	[SerializeField] private Button m_HostSpectatorButton;
+	[FormerlySerializedAs("hostPlayerButton")]
+	[SerializeField] private Button m_HostPlayerButton;
+	[FormerlySerializedAs("clientButton")]
+	[SerializeField] private Button m_ClientButton;
+	[FormerlySerializedAs("ipInputField")]
+	[SerializeField] private TMP_InputField m_IpInputField;
+	[FormerlySerializedAs("statusText")]
+	[SerializeField] private TextMeshProUGUI m_StatusText;
 
 	[Header("接続設定")]
-	[SerializeField] private ushort defaultPort;
+	[FormerlySerializedAs("defaultPort")]
+	[SerializeField] private ushort m_DefaultPort;
 
 	[Header("シーン遷移先")]
-	[SerializeField] private string lobbySceneName;
+	[FormerlySerializedAs("lobbySceneName")]
+	[SerializeField] private string m_LobbySceneName;
 
 	// デバッグ用兼任ホストかどうかの共有フラグ
 	public static bool IsPlayerHost { get; private set; }
 
-	private UnityTransport unityTransport;
-	private readonly StringBuilder statusStringBuilder = new StringBuilder();
+	private UnityTransport m_UnityTransport;
+	private readonly StringBuilder m_StatusStringBuilder = new StringBuilder();
 
 	private void Awake()
 	{
@@ -68,37 +80,37 @@ public class NetworkConnectManager : MonoBehaviour
 	{
 		if (NetworkManager.Singleton != null)
 		{
-			unityTransport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+			m_UnityTransport = NetworkManager.Singleton.GetComponent<UnityTransport>();
 		}
 	}
 
 	private void SetupUIListeners()
 	{
 		// タイトル画面と接続パネルの切り替え
-		if (startButton != null)
+		if (m_StartButton != null)
 		{
-			startButton.onClick.AddListener(() => SetJoinPanelActive(true));
+			m_StartButton.onClick.AddListener(() => SetJoinPanelActive(true));
 		}
 
-		if (cancelButton != null)
+		if (m_CancelButton != null)
 		{
-			cancelButton.onClick.AddListener(() => SetJoinPanelActive(false));
+			m_CancelButton.onClick.AddListener(() => SetJoinPanelActive(false));
 		}
 
 		// 接続ボタン
-		if (hostSpectatorButton != null)
+		if (m_HostSpectatorButton != null)
 		{
-			hostSpectatorButton.onClick.AddListener(() => StartAsHost(false));
+			m_HostSpectatorButton.onClick.AddListener(() => StartAsHost(false));
 		}
 
-		if (hostPlayerButton != null)
+		if (m_HostPlayerButton != null)
 		{
-			hostPlayerButton.onClick.AddListener(() => StartAsHost(true));
+			m_HostPlayerButton.onClick.AddListener(() => StartAsHost(true));
 		}
 
-		if (clientButton != null)
+		if (m_ClientButton != null)
 		{
-			clientButton.onClick.AddListener(StartAsClient);
+			m_ClientButton.onClick.AddListener(StartAsClient);
 		}
 	}
 
@@ -108,14 +120,14 @@ public class NetworkConnectManager : MonoBehaviour
 	/// <param name="isActive">trueの場合はJoinPanelを表示しメインメニューを非表示</param>
 	public void SetJoinPanelActive(bool isActive)
 	{
-		if (joinPanel != null)
+		if (m_JoinPanel != null)
 		{
-			joinPanel.SetActive(isActive);
+			m_JoinPanel.SetActive(isActive);
 		}
 
-		if (titleMenuRoot != null)
+		if (m_TitleMenuRoot != null)
 		{
-			titleMenuRoot.SetActive(!isActive);
+			m_TitleMenuRoot.SetActive(!isActive);
 		}
 
 		if (!isActive)
@@ -139,20 +151,20 @@ public class NetworkConnectManager : MonoBehaviour
 		IsPlayerHost = asPlayer;
 		SetStatusMessage(asPlayer ? "Host(Player兼任)起動中..." : "Host(観戦専用)起動中...");
 
-		ushort port = defaultPort > 0 ? defaultPort : (ushort)7777;
-		if (unityTransport != null)
+		ushort port = m_DefaultPort > 0 ? m_DefaultPort : (ushort)7777;
+		if (m_UnityTransport != null)
 		{
 			// "0.0.0.0" をリッスンアドレスに指定し、LAN(192.168.x.x)や別PCからの接続を待ち受け可能にする
-			unityTransport.SetConnectionData("127.0.0.1", port, "0.0.0.0");
+			m_UnityTransport.SetConnectionData("127.0.0.1", port, "0.0.0.0");
 		}
 
 		bool started = NetworkManager.Singleton.StartHost();
 		if (started)
 		{
 			SetStatusMessage("Host起動成功。LobbySceneへ遷移します");
-			if (!string.IsNullOrEmpty(lobbySceneName))
+			if (!string.IsNullOrEmpty(m_LobbySceneName))
 			{
-				NetworkManager.Singleton.SceneManager.LoadScene(lobbySceneName, LoadSceneMode.Single);
+				NetworkManager.Singleton.SceneManager.LoadScene(m_LobbySceneName, LoadSceneMode.Single);
 			}
 		}
 		else
@@ -175,11 +187,11 @@ public class NetworkConnectManager : MonoBehaviour
 		IsPlayerHost = false;
 
 		string targetIp = GetTargetIpAddress();
-		ushort port = defaultPort > 0 ? defaultPort : (ushort)7777;
+		ushort port = m_DefaultPort > 0 ? m_DefaultPort : (ushort)7777;
 
-		if (unityTransport != null)
+		if (m_UnityTransport != null)
 		{
-			unityTransport.SetConnectionData(targetIp, port);
+			m_UnityTransport.SetConnectionData(targetIp, port);
 		}
 
 		SetStatusMessage($"接続試行中: {targetIp}:{port} ...");
@@ -192,9 +204,9 @@ public class NetworkConnectManager : MonoBehaviour
 
 	private string GetTargetIpAddress()
 	{
-		if (ipInputField != null && !string.IsNullOrWhiteSpace(ipInputField.text))
+		if (m_IpInputField != null && !string.IsNullOrWhiteSpace(m_IpInputField.text))
 		{
-			return ipInputField.text.Trim();
+			return m_IpInputField.text.Trim();
 		}
 
 		// 入力が空の場合はローカルホスト(デバッグ用)をデフォルトとする
@@ -213,10 +225,10 @@ public class NetworkConnectManager : MonoBehaviour
 
 	private void SetStatusMessage(string message)
 	{
-		if (statusText == null) return;
+		if (m_StatusText == null) return;
 
-		statusStringBuilder.Clear();
-		statusStringBuilder.Append(message);
-		statusText.text = statusStringBuilder.ToString();
+		m_StatusStringBuilder.Clear();
+		m_StatusStringBuilder.Append(message);
+		m_StatusText.text = m_StatusStringBuilder.ToString();
 	}
 }
