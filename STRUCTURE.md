@@ -21,6 +21,7 @@ GameRepository/
 │   │   │   └── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
+│   │       ├── GravityMover.cs          # 物理移動・重力落下・ホバリング制御
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
 │   ├── Settings/                # プロジェクト設定・URP描画設定
 │   ├── TextMesh Pro/            # TextMesh Pro関連リソース
