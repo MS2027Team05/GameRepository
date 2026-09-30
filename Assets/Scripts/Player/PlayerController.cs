@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -87,6 +87,20 @@ public class PlayerController : NetworkBehaviour
 				: transform.forward;
 
 			m_AimGuide.UpdateAimDirection(aimDirection);
+		}
+
+		// 地上移動入力のルーティング(スタン中やエイム中でない場合に伝達)
+		if (m_GravityMover != null && m_InputReceiver != null)
+		{
+			Vector2 moveInput = (CurrentState == EPlayerState.Aiming || CurrentState == EPlayerState.Stunned)
+				? Vector2.zero
+				: m_InputReceiver.MoveInput;
+
+			Transform camTransform = m_PlayerCameraObject != null
+				? m_PlayerCameraObject.transform
+				: transform;
+
+			m_GravityMover.SetMoveInput(moveInput, camTransform);
 		}
 	}
 
