@@ -567,10 +567,10 @@ MonoBehaviour:
   maxActiveBoltCount: 5
   segmentCount: 5
   displacement: 0.5
-  coreMaterial: {fileID: 0}
-  glowMaterial: {fileID: 0}
-  coreWidth: 0.01
-  glowWidth: 0.05
+  coreMaterial: {fileID: 2100000, guid: 4a1b1b60ed625a94cb60ef678d192fb5, type: 2}
+  glowMaterial: {fileID: 2100000, guid: 602ee0b63f2c1da4f8428fe746db83ce, type: 2}
+  coreWidth: 0.015
+  glowWidth: 0.06
   refreshInterval: 0.01
   lifetime: 0.03
   spawnInterval: 0.5
