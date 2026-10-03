@@ -71,6 +71,7 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 				m_AimTargetLayers,
 				QueryTriggerInteraction.Ignore))
 		{
+			// プレイヤーから着地点まで予測線を描画します。
 			UpdateAimLine(transform.position, hit.point);
 
 			// 着地点にマーカーを表示します。
@@ -78,13 +79,9 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		}
 		else
 		{
-			// 何にも当たらない場合は最大射程まで描画します。
-			Vector3 endPoint =
-				rayOrigin + normalizedDirection * m_MaxAimDistance;
-
-			UpdateAimLine(transform.position, endPoint);
-
-			HideLandingMarker();
+			// 何にも当たらない場合は、
+			// 予測線と着地マーカーを非表示にします。
+			ClearAimLine();
 		}
 	}
 
@@ -106,7 +103,9 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		}
 	}
 
-	private void UpdateAimLine(Vector3 startPoint, Vector3 endPoint)
+	private void UpdateAimLine(
+		Vector3 startPoint,
+		Vector3 endPoint)
 	{
 		if (m_AimLine == null)
 		{
@@ -118,14 +117,17 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		m_AimLine.SetPosition(1, endPoint);
 	}
 
-	private void UpdateLandingMarker(Vector3 position, Vector3 normal)
+	private void UpdateLandingMarker(
+		Vector3 position,
+		Vector3 normal)
 	{
 		if (m_LandingMarker == null)
 		{
 			return;
 		}
 
-		// 地面に完全に重ならないよう、法線方向へ少し浮かせる
+		// 地面に完全に重ならないよう、
+		// 法線方向へ少し浮かせる。
 		const float markerOffset = 0.06f;
 
 		m_LandingMarker.SetActive(true);
@@ -133,9 +135,12 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		m_LandingMarker.transform.position =
 			position + normal * markerOffset;
 
-		// マーカーの上方向を、接地面の法線方向へ合わせる
+		// マーカーの上方向を、
+		// 接地面の法線方向へ合わせる。
 		m_LandingMarker.transform.rotation =
-			Quaternion.FromToRotation(Vector3.up, normal);
+			Quaternion.FromToRotation(
+				Vector3.up,
+				normal);
 	}
 
 	private void HideLandingMarker()
