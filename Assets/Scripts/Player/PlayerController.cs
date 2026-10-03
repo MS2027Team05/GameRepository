@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -19,7 +19,7 @@ public class PlayerController : NetworkBehaviour
 	private IGravityMover m_GravityMover;
 	private IAimGuide m_AimGuide;
 	private IBallCarrier m_BallCarrier;
-	private PlayerCameraEffect m_CameraEffect;
+	private ICameraEffect m_CameraEffect;
 
 	// プレイヤーの内部状態
 	public enum EPlayerState { Idle, Aiming, Falling, Stunned }
@@ -33,7 +33,7 @@ public class PlayerController : NetworkBehaviour
 		m_GravityMover = GetComponent<IGravityMover>();
 		m_AimGuide = GetComponent<IAimGuide>();
 		m_BallCarrier = GetComponent<IBallCarrier>();
-		m_CameraEffect = GetComponent<PlayerCameraEffect>();
+		m_CameraEffect = GetComponent<ICameraEffect>();
 
 		if (m_InputReceiver == null)
 		{
@@ -79,17 +79,24 @@ public class PlayerController : NetworkBehaviour
 	{
 		if (!IsOwner) return;
 
-		// エイム中のみ、毎フレームカメラの正面ベクトルを照準・予測線へ渡す
+		// エイム中のみ、実際に画面を描画しているカメラの
+		// 正面ベクトルを照準・予測線へ渡します。
 		if (CurrentState == EPlayerState.Aiming && m_AimGuide != null)
 		{
-			Vector3 aimDirection = m_PlayerCameraObject != null
-				? m_PlayerCameraObject.transform.forward
-				: transform.forward;
+			Vector3 aimDirection;
+
+			if (Camera.main != null)
+			{
+				aimDirection = Camera.main.transform.forward;
+			}
+			else
+			{
+				aimDirection = transform.forward;
+			}
 
 			m_AimGuide.UpdateAimDirection(aimDirection);
 		}
 	}
-
 	// --- 状態遷移ロジック ---
 
 	private void HandleAimToggle()
