@@ -16,20 +16,20 @@ public class BallPhysicsController : NetworkBehaviour
 		"フリー状態のボールが1秒間にどれだけ減速するかを表します。" +
 		"単位はおおよそm/s²です。0にすると減速補正を行いません。")]
 	[Min(0.0f)]
-	[SerializeField] private float m_FreeBallDeceleration = 3.0f;
+	[SerializeField] private float m_FreeBallDeceleration;
 
 	[Tooltip(
 		"フリー状態のボールの最高速度です。" +
 		"0にすると最高速度の制限を行いません。" +
 		"BallControllerのShoot Powerと同程度を推奨します。")]
 	[Min(0.0f)]
-	[SerializeField] private float m_MaxFreeBallSpeed = 20.0f;
+	[SerializeField] private float m_MaxFreeBallSpeed;
 
 	[Tooltip(
 		"ボールの回転速度を1秒間にどれだけ減衰させるかを表します。" +
 		"大きいほど回転が早く収まります。0にすると回転補正を行いません。")]
 	[Min(0.0f)]
-	[SerializeField] private float m_AngularDeceleration = 8.0f;
+	[SerializeField] private float m_AngularDeceleration;
 
 	[Header("シュート中の重力調整")]
 
@@ -37,7 +37,7 @@ public class BallPhysicsController : NetworkBehaviour
 		"シュートしてから最初に何かへ衝突するまでの重力倍率です。" +
 		"0で重力なし、0.5で通常の半分、1で通常の重力になります。")]
 	[Range(0.0f, 1.0f)]
-	[SerializeField] private float m_ShotGravityMultiplier = 0.4f;
+	[SerializeField] private float m_ShotGravityMultiplier;
 
 	[Header("衝突時の調整")]
 
@@ -45,7 +45,7 @@ public class BallPhysicsController : NetworkBehaviour
 		"地面や壁などへ衝突した直後に残す速度の割合です。" +
 		"0で完全停止、0.7で衝突前の70%、1で速度を減らしません。")]
 	[Range(0.0f, 1.0f)]
-	[SerializeField] private float m_CollisionSpeedMultiplier = 0.7f;
+	[SerializeField] private float m_CollisionSpeedMultiplier;
 
 	private Rigidbody m_Rigidbody;
 	private BallController m_BallController;

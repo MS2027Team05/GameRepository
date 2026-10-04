@@ -14,10 +14,10 @@ public class BallController : NetworkBehaviour
 	[SerializeField] private Collider m_SensorCollider;
 
 	[Header("シュート設定")]
-	[SerializeField] private float m_ShootPower = 20.0f;
+	[SerializeField] private float m_ShootPower;
 
 	[Header("再キャッチ防止")]
-	[SerializeField] private float m_RepickupDelay = 0.2f;
+	[SerializeField] private float m_RepickupDelay;
 
 	private readonly NetworkVariable<ulong> m_CurrentHolderId =
 		new NetworkVariable<ulong>();
