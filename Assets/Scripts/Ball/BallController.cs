@@ -12,13 +12,15 @@ public class BallController : NetworkBehaviour
 	/// <summary>
 	/// 現在ボールを持っているプレイヤーのClientId。
 	/// </summary>
-	private readonly NetworkVariable<ulong> m_CurrentHolderId = new NetworkVariable<ulong>();
+	private readonly NetworkVariable<ulong> m_CurrentHolderId =
+		new NetworkVariable<ulong>();
 
 	/// <summary>
 	/// 現在ボールが誰かに所持されているか。
 	/// ClientId = 0のHostプレイヤーと「未所持」を区別するために使用します。
 	/// </summary>
-	private readonly NetworkVariable<bool> m_HasHolder = new NetworkVariable<bool>();
+	private readonly NetworkVariable<bool> m_HasHolder =
+		new NetworkVariable<bool>();
 
 	private Rigidbody m_Rigidbody;
 
@@ -35,10 +37,20 @@ public class BallController : NetworkBehaviour
 	private void Awake()
 	{
 		m_Rigidbody = GetComponent<Rigidbody>();
+
+		Debug.Log(
+			$"[BallController] Awake: " +
+			$"Rigidbody={(m_Rigidbody != null ? "取得成功" : "取得失敗")}");
 	}
 
 	public override void OnNetworkSpawn()
 	{
+		Debug.Log(
+			$"[BallController] OnNetworkSpawn: " +
+			$"NetworkObjectId={NetworkObjectId}, " +
+			$"IsServer={IsServer}, " +
+			$"IsOwner={IsOwner}");
+
 		m_HasHolder.OnValueChanged += HandleHolderStateChanged;
 
 		// 途中参加などでも現在の状態を反映できるようにします。
@@ -54,64 +66,99 @@ public class BallController : NetworkBehaviour
 	/// 指定されたプレイヤーをボール所持者に設定します。
 	/// Host(サーバー)のみ実行できます。
 	/// </summary>
-	/// <param name="holderClientId">ボールを取得したプレイヤーのClientId</param>
-	/// <returns>取得に成功した場合はtrue</returns>
 	public bool TrySetHolder(ulong holderClientId)
 	{
+		Debug.Log(
+			$"[BallController] TrySetHolder開始: " +
+			$"holderClientId={holderClientId}, " +
+			$"IsServer={IsServer}, " +
+			$"HasHolder={m_HasHolder.Value}");
+
 		if (!IsServer)
 		{
+			Debug.LogWarning(
+				"[BallController] TrySetHolder失敗: " +
+				"サーバーではありません。");
+
 			return false;
 		}
 
-		// 既に誰かが持っている場合は取得できません。
 		if (m_HasHolder.Value)
 		{
+			Debug.Log(
+				$"[BallController] TrySetHolder失敗: " +
+				$"既にClientId={m_CurrentHolderId.Value}が所持しています。");
+
 			return false;
 		}
 
 		m_CurrentHolderId.Value = holderClientId;
+
+		Debug.Log(
+			$"[BallController] currentHolderIdを更新: " +
+			$"{m_CurrentHolderId.Value}");
+
 		m_HasHolder.Value = true;
+
+		Debug.Log(
+			$"[BallController] ボール所持確定: " +
+			$"ClientId={m_CurrentHolderId.Value}");
 
 		return true;
 	}
 
 	/// <summary>
 	/// 現在の所持者からボールを解放します。
-	/// Host(サーバー)のみ実行できます。
 	/// </summary>
 	public void ReleaseBall()
 	{
+		Debug.Log(
+			$"[BallController] ReleaseBall開始: " +
+			$"IsServer={IsServer}, " +
+			$"HasHolder={m_HasHolder.Value}, " +
+			$"CurrentHolderId={m_CurrentHolderId.Value}");
+
 		if (!IsServer)
 		{
+			Debug.LogWarning(
+				"[BallController] ReleaseBall中断: サーバーではありません。");
+
 			return;
 		}
 
 		if (!m_HasHolder.Value)
 		{
+			Debug.Log(
+				"[BallController] ReleaseBall中断: " +
+				"現在誰もボールを持っていません。");
+
 			return;
 		}
 
-		// falseへの変更通知時点ではCurrentHolderIdを残しておきます。
-		// これにより元所持者の状態を解除できます。
 		m_HasHolder.Value = false;
-
-		// 仕様書に合わせ、未所持時は0へ戻します。
 		m_CurrentHolderId.Value = 0;
+
+		Debug.Log("[BallController] ボールをフリー状態に戻しました。");
 	}
 
-	/// <summary>
-	/// NetworkVariableによって所持状態が変化した時に呼ばれます。
-	/// </summary>
-	private void HandleHolderStateChanged(bool previousValue, bool newValue)
+	private void HandleHolderStateChanged(
+		bool previousValue,
+		bool newValue)
 	{
+		Debug.Log(
+			$"[BallController] 所持状態変更: " +
+			$"{previousValue} -> {newValue}, " +
+			$"CurrentHolderId={m_CurrentHolderId.Value}");
+
 		ApplyHolderState(newValue);
 	}
 
-	/// <summary>
-	/// 所持状態をボールの見た目と物理状態へ反映します。
-	/// </summary>
 	private void ApplyHolderState(bool hasHolder)
 	{
+		Debug.Log(
+			$"[BallController] ApplyHolderState: " +
+			$"hasHolder={hasHolder}");
+
 		if (hasHolder)
 		{
 			AttachToHolder();
@@ -124,37 +171,59 @@ public class BallController : NetworkBehaviour
 		UpdatePlayerBallStates(hasHolder);
 	}
 
-	/// <summary>
-	/// ボールを現在の所持者の手元へ移動します。
-	/// </summary>
 	private void AttachToHolder()
 	{
-		PlayerBallCarrier holder = FindPlayerBallCarrier(m_CurrentHolderId.Value);
+		Debug.Log(
+			$"[BallController] 所持者検索開始: " +
+			$"ClientId={m_CurrentHolderId.Value}");
 
-		if (holder == null || holder.BallHoldPoint == null)
+		PlayerBallCarrier holder =
+			FindPlayerBallCarrier(m_CurrentHolderId.Value);
+
+		if (holder == null)
 		{
+			Debug.LogError(
+				$"[BallController] Attach失敗: " +
+				$"ClientId={m_CurrentHolderId.Value}のPlayerBallCarrierが見つかりません。");
+
 			return;
 		}
 
-		// 所持中は物理演算を停止します。
+		if (holder.BallHoldPoint == null)
+		{
+			Debug.LogError(
+				$"[BallController] Attach失敗: " +
+				$"ClientId={m_CurrentHolderId.Value}のBallHoldPointが未設定です。");
+
+			return;
+		}
+
+		Debug.Log(
+			$"[BallController] 所持者取得成功: " +
+			$"Player={holder.gameObject.name}, " +
+			$"BallHoldPoint={holder.BallHoldPoint.name}");
+
 		m_Rigidbody.linearVelocity = Vector3.zero;
 		m_Rigidbody.angularVelocity = Vector3.zero;
 		m_Rigidbody.isKinematic = true;
 
-		// 仕様書通り、所持者の手元へ親子付けします。
 		transform.SetParent(holder.BallHoldPoint);
 		transform.localPosition = Vector3.zero;
 		transform.localRotation = Quaternion.identity;
+
+		Debug.Log(
+			$"[BallController] AttachToHolder成功: " +
+			$"ClientId={m_CurrentHolderId.Value}");
 	}
 
-	/// <summary>
-	/// ボールを所持者から切り離します。
-	/// </summary>
 	private void DetachFromHolder()
 	{
+		Debug.Log(
+			$"[BallController] DetachFromHolder: " +
+			$"IsServer={IsServer}");
+
 		transform.SetParent(null);
 
-		// 物理演算はHostだけが担当します。
 		if (IsServer)
 		{
 			m_Rigidbody.isKinematic = false;
@@ -165,12 +234,11 @@ public class BallController : NetworkBehaviour
 		}
 	}
 
-	/// <summary>
-	/// currentHolderIdに対応するPlayerBallCarrierを取得します。
-	/// </summary>
-	private PlayerBallCarrier FindPlayerBallCarrier(ulong holderClientId)
+	private PlayerBallCarrier FindPlayerBallCarrier(
+		ulong holderClientId)
 	{
-		foreach (NetworkObject networkObject in NetworkManager.SpawnManager.SpawnedObjectsList)
+		foreach (NetworkObject networkObject in
+			NetworkManager.SpawnManager.SpawnedObjectsList)
 		{
 			if (!networkObject.IsPlayerObject)
 			{
@@ -182,35 +250,63 @@ public class BallController : NetworkBehaviour
 				continue;
 			}
 
-			return networkObject.GetComponent<PlayerBallCarrier>();
+			PlayerBallCarrier carrier =
+				networkObject.GetComponent<PlayerBallCarrier>();
+
+			if (carrier != null)
+			{
+				Debug.Log(
+					$"[BallController] PlayerBallCarrier発見: " +
+					$"ClientId={holderClientId}, " +
+					$"NetworkObjectId={networkObject.NetworkObjectId}");
+			}
+
+			return carrier;
 		}
+
+		Debug.LogError(
+			$"[BallController] PlayerBallCarrier検索失敗: " +
+			$"ClientId={holderClientId}");
 
 		return null;
 	}
 
-	/// <summary>
-	/// 全プレイヤーのボール所持状態を更新します。
-	/// 実際の速度変更通知は所持者本人の端末のみで行われます。
-	/// </summary>
 	private void UpdatePlayerBallStates(bool hasHolder)
 	{
-		foreach (NetworkObject networkObject in NetworkManager.SpawnManager.SpawnedObjectsList)
+		Debug.Log(
+			$"[BallController] プレイヤー所持状態更新開始: " +
+			$"hasHolder={hasHolder}, " +
+			$"CurrentHolderId={m_CurrentHolderId.Value}");
+
+		foreach (NetworkObject networkObject in
+			NetworkManager.SpawnManager.SpawnedObjectsList)
 		{
 			if (!networkObject.IsPlayerObject)
 			{
 				continue;
 			}
 
-			PlayerBallCarrier carrier = networkObject.GetComponent<PlayerBallCarrier>();
+			PlayerBallCarrier carrier =
+				networkObject.GetComponent<PlayerBallCarrier>();
 
 			if (carrier == null)
 			{
+				Debug.LogWarning(
+					$"[BallController] PlayerBallCarrierなし: " +
+					$"NetworkObjectId={networkObject.NetworkObjectId}");
+
 				continue;
 			}
 
 			bool isHolder =
 				hasHolder &&
-				networkObject.OwnerClientId == m_CurrentHolderId.Value;
+				networkObject.OwnerClientId ==
+				m_CurrentHolderId.Value;
+
+			Debug.Log(
+				$"[BallController] SetBallState呼び出し: " +
+				$"ClientId={networkObject.OwnerClientId}, " +
+				$"isHolder={isHolder}");
 
 			carrier.SetBallState(isHolder);
 		}
