@@ -1,25 +1,25 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class LightningBolt : MonoBehaviour
 {
-    [Header("“dŒ‚ˆÊ’u‚Ìİ’è")]
+    [Header("é›»æ’ƒä½ç½®ã®è¨­å®š")]
     [SerializeField] private Transform m_CenterPoint;
     [SerializeField] private Transform m_StartPoint;
     [SerializeField] private Transform m_EndPoint;
 
-    [Header("“dŒ‚¶¬ƒ‚[ƒh")]
+    [Header("é›»æ’ƒç”Ÿæˆãƒ¢ãƒ¼ãƒ‰")]
     [SerializeField] private bool m_SphericalMode;
     [SerializeField] private bool m_UseStartPoint;
 
-    [Header("“dŒ‚–{”‚Ìİ’è")]
+    [Header("é›»æ’ƒæœ¬æ•°ã®è¨­å®š")]
     [SerializeField] private int m_BoltCount;
     [SerializeField] private int m_MaxActiveBoltCount;
 
-    [Header("“dŒ‚Œ`ó‚Ìİ’è")]
+    [Header("é›»æ’ƒå½¢çŠ¶ã®è¨­å®š")]
     [SerializeField] private int m_SegmentCount;
     [SerializeField] private float m_Displacement;
 
-    [Header("“dŒ‚‚ÌŒ©‚½–Úİ’è")]
+    [Header("é›»æ’ƒã®è¦‹ãŸç›®è¨­å®š")]
     [SerializeField] private Material m_CoreMaterial;
     [SerializeField] private Material m_GlowMaterial;
     [SerializeField] private float m_CoreWidth;
@@ -28,7 +28,7 @@ public class LightningBolt : MonoBehaviour
     [Range(0f, 1f)]
     [SerializeField] private float m_EndWidthRatio;
 
-    [Header("“dŒ‚ƒAƒjƒ[ƒVƒ‡ƒ“‚Ìİ’è")]
+    [Header("é›»æ’ƒã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³ã®è¨­å®š")]
     [SerializeField] private float m_RefreshInterval;
     [SerializeField] private float m_Lifetime;
     [SerializeField] private float m_SpawnInterval;
