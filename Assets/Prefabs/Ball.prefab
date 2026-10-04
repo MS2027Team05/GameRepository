@@ -337,4 +337,4 @@ MonoBehaviour:
   m_MaxFreeBallSpeed: 20
   m_AngularDeceleration: 8
   m_ShotGravityMultiplier: 0.4
-  m_CollisionSpeedMultiplier: 0
+  m_CollisionSpeedMultiplier: 1

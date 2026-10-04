@@ -11,15 +11,41 @@ using UnityEngine;
 public class BallPhysicsController : NetworkBehaviour
 {
 	[Header("フリー状態のボール調整")]
-	[SerializeField] private float m_FreeBallDeceleration;
-	[SerializeField] private float m_MaxFreeBallSpeed;
-	[SerializeField] private float m_AngularDeceleration;
+
+	[Tooltip(
+		"フリー状態のボールが1秒間にどれだけ減速するかを表します。" +
+		"単位はおおよそm/s²です。0にすると減速補正を行いません。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_FreeBallDeceleration = 3.0f;
+
+	[Tooltip(
+		"フリー状態のボールの最高速度です。" +
+		"0にすると最高速度の制限を行いません。" +
+		"BallControllerのShoot Powerと同程度を推奨します。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_MaxFreeBallSpeed = 20.0f;
+
+	[Tooltip(
+		"ボールの回転速度を1秒間にどれだけ減衰させるかを表します。" +
+		"大きいほど回転が早く収まります。0にすると回転補正を行いません。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_AngularDeceleration = 8.0f;
 
 	[Header("シュート中の重力調整")]
-	[SerializeField] private float m_ShotGravityMultiplier;
+
+	[Tooltip(
+		"シュートしてから最初に何かへ衝突するまでの重力倍率です。" +
+		"0で重力なし、0.5で通常の半分、1で通常の重力になります。")]
+	[Range(0.0f, 1.0f)]
+	[SerializeField] private float m_ShotGravityMultiplier = 0.4f;
 
 	[Header("衝突時の調整")]
-	[SerializeField] private float m_CollisionSpeedMultiplier;
+
+	[Tooltip(
+		"地面や壁などへ衝突した直後に残す速度の割合です。" +
+		"0で完全停止、0.7で衝突前の70%、1で速度を減らしません。")]
+	[Range(0.0f, 1.0f)]
+	[SerializeField] private float m_CollisionSpeedMultiplier = 0.7f;
 
 	private Rigidbody m_Rigidbody;
 	private BallController m_BallController;

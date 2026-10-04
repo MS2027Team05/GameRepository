@@ -1,17 +1,20 @@
 ﻿using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// デバッグ用にボールを初期位置へ戻します。
-/// HostのみRキーで実行できます。
+/// デバッグ用にHostからボールを初期位置へ戻します。
+/// Rキーでリスポーンします。
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
+[RequireComponent(typeof(NetworkTransform))]
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(BallController))]
 public class BallDebugRespawner : NetworkBehaviour
 {
 	private Rigidbody m_Rigidbody;
+	private NetworkTransform m_NetworkTransform;
 	private BallController m_BallController;
 
 	private Vector3 m_InitialPosition;
@@ -21,6 +24,9 @@ public class BallDebugRespawner : NetworkBehaviour
 	{
 		m_Rigidbody =
 			GetComponent<Rigidbody>();
+
+		m_NetworkTransform =
+			GetComponent<NetworkTransform>();
 
 		m_BallController =
 			GetComponent<BallController>();
@@ -33,7 +39,8 @@ public class BallDebugRespawner : NetworkBehaviour
 			return;
 		}
 
-		// ゲーム開始時の位置をリスポーン位置として保存します。
+		// リスポーン処理を行うHost側だけで
+		// 初期位置と初期回転を保存します。
 		m_InitialPosition =
 			transform.position;
 
@@ -43,7 +50,6 @@ public class BallDebugRespawner : NetworkBehaviour
 
 	private void Update()
 	{
-		// Host側だけ入力を受け付けます。
 		if (!IsServer)
 		{
 			return;
@@ -62,18 +68,25 @@ public class BallDebugRespawner : NetworkBehaviour
 		RespawnBall();
 	}
 
+	/// <summary>
+	/// ボールを初期位置へリスポーンさせます。
+	/// </summary>
 	private void RespawnBall()
 	{
-		Debug.Log(
-			"[BallDebugRespawner] ボールをリスポーンします。");
+		if (!IsServer)
+		{
+			return;
+		}
 
-		// 誰かが所持している場合は先に解放します。
-		if (m_BallController.HasHolder)
+		// 誰かが所持している場合は、
+		// 先に通常のボール解放処理を行います。
+		if (m_BallController != null &&
+			m_BallController.HasHolder)
 		{
 			m_BallController.ReleaseBall();
 		}
 
-		// 念のため親子関係が残っている場合は解除します。
+		// 念のため親が残っている場合は解除します。
 		if (transform.parent != null)
 		{
 			bool removeSucceeded =
@@ -81,7 +94,7 @@ public class BallDebugRespawner : NetworkBehaviour
 
 			if (!removeSucceeded)
 			{
-				Debug.LogError(
+				Debug.LogWarning(
 					"[BallDebugRespawner] " +
 					"ボールの親解除に失敗しました。");
 
@@ -89,7 +102,7 @@ public class BallDebugRespawner : NetworkBehaviour
 			}
 		}
 
-		// 移動を完全に止めます。
+		// リスポーン後に以前の速度が残らないようにします。
 		m_Rigidbody.linearVelocity =
 			Vector3.zero;
 
@@ -99,13 +112,17 @@ public class BallDebugRespawner : NetworkBehaviour
 		m_Rigidbody.isKinematic =
 			false;
 
-		// ゲーム開始時の位置へ戻します。
-		transform.SetPositionAndRotation(
+		// HostのTransformだけを書き換えるのではなく、
+		// NetworkTransformへ即時移動として通知します。
+		// これによりClient側の補間もリセットされます。
+		m_NetworkTransform.Teleport(
 			m_InitialPosition,
-			m_InitialRotation);
+			m_InitialRotation,
+			transform.localScale);
 
 		Debug.Log(
-			$"[BallDebugRespawner] リスポーン完了: " +
+			$"[BallDebugRespawner] " +
+			$"ボールをリスポーンしました。 " +
 			$"Position={m_InitialPosition}");
 	}
 }
