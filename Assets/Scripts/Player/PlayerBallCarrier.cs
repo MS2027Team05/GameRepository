@@ -15,7 +15,8 @@ public class PlayerBallCarrier :
 	private PlayerController m_PlayerController;
 	private bool m_HasBall;
 
-	public bool HasBall => m_HasBall;
+	public bool HasBall =>
+		m_HasBall;
 
 	public Transform BallHoldPoint =>
 		m_BallHoldPoint;
