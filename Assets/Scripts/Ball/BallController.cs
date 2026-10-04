@@ -1,4 +1,5 @@
-﻿using Unity.Netcode;
+﻿using System;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -13,10 +14,10 @@ public class BallController : NetworkBehaviour
 	[SerializeField] private Collider m_SensorCollider;
 
 	[Header("シュート設定")]
-	[SerializeField] private float m_ShootPower;
+	[SerializeField] private float m_ShootPower = 20.0f;
 
 	[Header("再キャッチ防止")]
-	[SerializeField] private float m_RepickupDelay;
+	[SerializeField] private float m_RepickupDelay = 0.2f;
 
 	private readonly NetworkVariable<ulong> m_CurrentHolderId =
 		new NetworkVariable<ulong>();
@@ -33,6 +34,11 @@ public class BallController : NetworkBehaviour
 	private bool m_HasRepickupLock;
 	private ulong m_LastHolderClientId;
 	private float m_RepickupUnlockTime;
+
+	/// <summary>
+	/// ボールがシュートされたときにHost側で通知します。
+	/// </summary>
+	public event Action OnShot;
 
 	public ulong CurrentHolderId =>
 		m_CurrentHolderId.Value;
@@ -196,6 +202,10 @@ public class BallController : NetworkBehaviour
 		m_Rigidbody.linearVelocity =
 			shootDirection * m_ShootPower;
 
+		// シュート中の追加物理処理へ通知します。
+		// 購読者がいない場合は何も起きません。
+		OnShot?.Invoke();
+
 		Debug.Log(
 			$"[BallController] シュート: " +
 			$"Direction={shootDirection}, " +
@@ -323,10 +333,16 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		transform.position =
-			holder.BallHoldPoint.position;
+		// Playerを基準にしたローカル座標へ変換します。
+		Transform holderTransform =
+			holderNetworkObject.transform;
 
-		transform.rotation =
+		transform.localPosition =
+			holderTransform.InverseTransformPoint(
+				holder.BallHoldPoint.position);
+
+		transform.localRotation =
+			Quaternion.Inverse(holderTransform.rotation) *
 			holder.BallHoldPoint.rotation;
 
 		return true;

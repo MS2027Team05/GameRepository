@@ -71,6 +71,7 @@ GameObject:
   - component: {fileID: 3558045125194342948}
   - component: {fileID: 7969707258151822165}
   - component: {fileID: 4631393730862146185}
+  - component: {fileID: 1323764943930010185}
   m_Layer: 0
   m_Name: Ball
   m_TagString: Untagged
@@ -190,7 +191,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1705466128
+  GlobalObjectIdHash: 455381987
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -220,7 +221,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_PhysicsCollider: {fileID: 7969707258151822165}
   m_SensorCollider: {fileID: 5519193905326050400}
-  m_ShootPower: 10
+  m_ShootPower: 20
   m_RepickupDelay: 0.2
 --- !u!114 &7810532941759177924
 MonoBehaviour:
@@ -247,7 +248,7 @@ MonoBehaviour:
   ScaleLerpSmoothing: 1
   ScaleMaxInterpolationTime: 0.1
   AuthorityMode: 0
-  TickSyncChildren: 0
+  TickSyncChildren: 1
   UseUnreliableDeltas: 0
   SyncPositionX: 1
   SyncPositionY: 1
@@ -265,7 +266,7 @@ MonoBehaviour:
   UseQuaternionCompression: 0
   UseHalfFloatPrecision: 0
   InLocalSpace: 0
-  SwitchTransformSpaceWhenParented: 0
+  SwitchTransformSpaceWhenParented: 1
   Interpolate: 1
   SlerpPosition: 0
 --- !u!114 &3558045125194342948
@@ -319,3 +320,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallDebugRespawner
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &1323764943930010185
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7223661482325723954}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 487c7f86bbb2f6645afc7ca7290321b8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BallPhysicsController
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_FreeBallDeceleration: 10
+  m_MaxFreeBallSpeed: 20
+  m_AngularDeceleration: 8
+  m_ShotGravityMultiplier: 0.4
+  m_CollisionSpeedMultiplier: 0

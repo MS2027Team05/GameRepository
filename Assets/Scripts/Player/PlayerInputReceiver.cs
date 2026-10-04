@@ -132,5 +132,18 @@ public class PlayerInputReceiver : MonoBehaviour
 				OnBrakePressed?.Invoke();
 			}
 		}
+
+		// シュート: Eキー
+		if (m_ShootAction == null)
+		{
+			bool shootPressed =
+				Keyboard.current != null &&
+				Keyboard.current.eKey.wasPressedThisFrame;
+
+			if (shootPressed)
+			{
+				OnShootPressed?.Invoke();
+			}
+		}
 	}
 }

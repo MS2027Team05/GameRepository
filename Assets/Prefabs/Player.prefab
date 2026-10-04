@@ -291,7 +291,7 @@ MonoBehaviour:
   m_AimToggleAction: {fileID: 0}
   m_ConfirmAction: {fileID: 0}
   m_BrakeAction: {fileID: 0}
-  m_ShootAction: {fileID: 41435168702994022, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_ShootAction: {fileID: 0}
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
