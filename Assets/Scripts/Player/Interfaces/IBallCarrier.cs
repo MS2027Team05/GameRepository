@@ -1,6 +1,9 @@
 ﻿/// <summary>
 /// ボール所持・パス・シュート・ドロップを担当するモジュールのインターフェース。
 /// </summary>
+
+using UnityEngine;
+
 public interface IBallCarrier
 {
 	/// <summary>
@@ -12,4 +15,9 @@ public interface IBallCarrier
 	/// 被タックル時などにボールを強制的にドロップ(手放す)させます。
 	/// </summary>
 	void ForceReleaseBall();
+
+	/// <summary>
+	/// シュート要求
+	/// </summary>
+	void Shoot(Vector3 direction);
 }

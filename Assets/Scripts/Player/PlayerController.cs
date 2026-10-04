@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -64,6 +64,7 @@ public class PlayerController : NetworkBehaviour
 		m_InputReceiver.OnAimTogglePressed += HandleAimToggle;
 		m_InputReceiver.OnConfirmPressed += HandleConfirm;
 		m_InputReceiver.OnBrakePressed += HandleBrake;
+		m_InputReceiver.OnShootPressed += HandleShoot;
 	}
 
 	private void UnbindInputEvents()
@@ -73,6 +74,7 @@ public class PlayerController : NetworkBehaviour
 		m_InputReceiver.OnAimTogglePressed -= HandleAimToggle;
 		m_InputReceiver.OnConfirmPressed -= HandleConfirm;
 		m_InputReceiver.OnBrakePressed -= HandleBrake;
+		m_InputReceiver.OnShootPressed -= HandleShoot;
 	}
 
 	private void Update()
@@ -130,6 +132,29 @@ public class PlayerController : NetworkBehaviour
 
 		CurrentState = EPlayerState.Idle;
 		m_GravityMover?.StopFalling();
+	}
+
+	/// <summary>
+	/// 所持中のボールをカメラ正面方向へ射出します。
+	/// </summary>
+	private void HandleShoot()
+	{
+		if (m_BallCarrier == null)
+		{
+			return;
+		}
+
+		if (!m_BallCarrier.HasBall)
+		{
+			return;
+		}
+
+		Vector3 shootDirection = m_PlayerCameraObject != null
+				? m_PlayerCameraObject.transform.forward
+				: transform.forward;
+
+		m_BallCarrier.Shoot(
+			shootDirection);
 	}
 
 	// --- 外部モジュール連携用メソッド ---

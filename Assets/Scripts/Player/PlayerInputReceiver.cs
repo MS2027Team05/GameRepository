@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
@@ -16,6 +16,8 @@ public class PlayerInputReceiver : MonoBehaviour
 	[SerializeField] private InputActionReference m_ConfirmAction;
 	[FormerlySerializedAs("brakeAction")]
 	[SerializeField] private InputActionReference m_BrakeAction;
+	[FormerlySerializedAs("shootAction")]
+	[SerializeField] private InputActionReference m_ShootAction;
 
 	/// <summary>エイムモードの開始・解除ボタン押下イベント</summary>
 	public event Action OnAimTogglePressed;
@@ -26,11 +28,15 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>ブレーキ(停止)ボタン押下イベント</summary>
 	public event Action OnBrakePressed;
 
+	/// <summary>シュートボタン押下イベント。</summary>
+	public event Action OnShootPressed;
+
 	private void OnEnable()
 	{
 		BindAction(m_AimToggleAction, HandleAimToggle);
 		BindAction(m_ConfirmAction, HandleConfirm);
 		BindAction(m_BrakeAction, HandleBrake);
+		BindAction(m_ShootAction,HandleShoot);
 	}
 
 	private void OnDisable()
@@ -38,6 +44,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		UnbindAction(m_AimToggleAction, HandleAimToggle);
 		UnbindAction(m_ConfirmAction, HandleConfirm);
 		UnbindAction(m_BrakeAction, HandleBrake);
+		UnbindAction(m_ShootAction, HandleShoot);
 	}
 
 	private void Update()
@@ -77,6 +84,11 @@ public class PlayerInputReceiver : MonoBehaviour
 	private void HandleBrake(InputAction.CallbackContext context)
 	{
 		OnBrakePressed?.Invoke();
+	}
+
+	private void HandleShoot(InputAction.CallbackContext context)
+	{
+		OnShootPressed?.Invoke();
 	}
 
 	private void HandleKeyboardFallback()
