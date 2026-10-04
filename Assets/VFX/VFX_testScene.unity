@@ -144,7 +144,7 @@ Transform:
   m_GameObject: {fileID: 141679866}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 5, y: 2, z: 0}
+  m_LocalPosition: {x: 3, y: 2, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -571,9 +571,10 @@ MonoBehaviour:
   glowMaterial: {fileID: 2100000, guid: 602ee0b63f2c1da4f8428fe746db83ce, type: 2}
   coreWidth: 0.015
   glowWidth: 0.06
+  endWidthRatio: 0.05
   refreshInterval: 0.01
   lifetime: 0.03
-  spawnInterval: 0.5
+  spawnInterval: 0.001
 --- !u!4 &1279334925
 Transform:
   m_ObjectHideFlags: 0

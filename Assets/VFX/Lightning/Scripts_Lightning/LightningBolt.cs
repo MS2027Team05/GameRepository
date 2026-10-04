@@ -25,6 +25,9 @@ public class LightningBolt : MonoBehaviour
     [SerializeField] private float coreWidth;
     [SerializeField] private float glowWidth;
 
+    [Range(0f, 1f)]
+    [SerializeField] private float endWidthRatio;
+
     [Header("電撃アニメーションの設定")]
     [SerializeField] private float refreshInterval;
     [SerializeField] private float lifetime;
@@ -131,7 +134,7 @@ public class LightningBolt : MonoBehaviour
 
         lineRenderer.positionCount = segmentCount + 1;
         lineRenderer.startWidth = lineWidth;
-        lineRenderer.endWidth = lineWidth;
+        lineRenderer.endWidth = lineWidth * endWidthRatio;
         lineRenderer.useWorldSpace = true;
         lineRenderer.enabled = false;
 
@@ -264,10 +267,12 @@ public class LightningBolt : MonoBehaviour
         }
 
         bolt.CoreLineRenderer.startWidth = coreWidth;
-        bolt.CoreLineRenderer.endWidth = coreWidth;
+        bolt.CoreLineRenderer.endWidth =
+            coreWidth * endWidthRatio;
 
         bolt.GlowLineRenderer.startWidth = glowWidth;
-        bolt.GlowLineRenderer.endWidth = glowWidth;
+        bolt.GlowLineRenderer.endWidth =
+            glowWidth * endWidthRatio;
     }
 
     private void SetBoltDirection(BoltData bolt)
