@@ -21,7 +21,10 @@ GameRepository/
 │   │   │   └── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
-│   │       ├── GravityMover.cs          # 物理移動・重力落下・ホバリング・地上移動制御
+│   │       │   └── ICameraEffect.cs     # カメラ演出制御用インターフェース
+│   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
+│   │       ├── PlayerAimGuide.cs        # レティクル表示・軌道予測線の描画およびエイム照準制御
+│   │       ├── PlayerCameraEffect.cs    # 高速移動時FOV変更・カメラシェイク等の演出制御
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
 │   ├── Settings/                # プロジェクト設定・URP描画設定
 │   ├── TextMesh Pro/            # TextMesh Pro関連リソース
