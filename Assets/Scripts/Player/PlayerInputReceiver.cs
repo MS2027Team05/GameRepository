@@ -18,6 +18,8 @@ public class PlayerInputReceiver : MonoBehaviour
 	[SerializeField] private InputActionReference m_ConfirmAction;
 	[FormerlySerializedAs("brakeAction")]
 	[SerializeField] private InputActionReference m_BrakeAction;
+	[FormerlySerializedAs("shootAction")]
+	[SerializeField] private InputActionReference m_ShootAction;
 
 	/// <summary>地上移動入力ベクトル(WASD/左スティック)</summary>
 	public Vector2 MoveInput { get; private set; }
@@ -31,12 +33,16 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>ブレーキ(停止)ボタン押下イベント</summary>
 	public event Action OnBrakePressed;
 
+	/// <summary>シュートボタン押下イベント。</summary>
+	public event Action OnShootPressed;
+
 	private void OnEnable()
 	{
 		EnableAction(m_MoveAction);
 		BindAction(m_AimToggleAction, HandleAimToggle);
 		BindAction(m_ConfirmAction, HandleConfirm);
 		BindAction(m_BrakeAction, HandleBrake);
+		BindAction(m_ShootAction,HandleShoot);
 	}
 
 	private void OnDisable()
@@ -45,6 +51,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		UnbindAction(m_AimToggleAction, HandleAimToggle);
 		UnbindAction(m_ConfirmAction, HandleConfirm);
 		UnbindAction(m_BrakeAction, HandleBrake);
+		UnbindAction(m_ShootAction, HandleShoot);
 	}
 
 	private void Update()
@@ -134,6 +141,11 @@ public class PlayerInputReceiver : MonoBehaviour
 		OnBrakePressed?.Invoke();
 	}
 
+	private void HandleShoot(InputAction.CallbackContext context)
+	{
+		OnShootPressed?.Invoke();
+	}
+
 	private void HandleKeyboardFallback()
 	{
 		if (Keyboard.current == null && Gamepad.current == null) return;
@@ -173,6 +185,19 @@ public class PlayerInputReceiver : MonoBehaviour
 			if (brakePressed)
 			{
 				OnBrakePressed?.Invoke();
+			}
+		}
+
+		// シュート: Eキー
+		if (m_ShootAction == null)
+		{
+			bool shootPressed =
+				Keyboard.current != null &&
+				Keyboard.current.eKey.wasPressedThisFrame;
+
+			if (shootPressed)
+			{
+				OnShootPressed?.Invoke();
 			}
 		}
 	}
