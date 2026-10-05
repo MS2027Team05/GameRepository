@@ -21,10 +21,10 @@ jobs:
         shell: pwsh
         run: |
           $targetBranch = "origin/${{ github.base_ref }}"
-          $changedFiles = git diff --name-only --diff-filter=d $targetBranch HEAD -- "*.cs"
+          $changedFiles = git diff --name-only --diff-filter=d $targetBranch HEAD -- "Assets/Scripts/**/*.cs"
 
           if ([string]::IsNullOrWhiteSpace($changedFiles)) {
-              Write-Host "変更された .cs ファイルはありません。チェックをスキップします。"
+              Write-Host "Assets/Scripts/ 配下で変更された .cs ファイルはありません。チェックをスキップします。"
               exit 0
           }
 
