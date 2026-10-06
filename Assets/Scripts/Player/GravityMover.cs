@@ -64,12 +64,14 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	private Transform m_CameraTransform;
 	private Vector3 m_CurrentGroundNormal = Vector3.up;
 	private Vector3 m_LastMoveDirection = Vector3.forward;
+	private Vector3 m_EdgePivotPoint = Vector3.zero;
 	private Vector3 m_EdgeStartForward = Vector3.forward;
 	private Vector3 m_EdgeTargetForward = Vector3.forward;
 	private Vector3 m_EdgeStartNormal = Vector3.up;
 	private Vector3 m_EdgeTargetNormal = Vector3.up;
-	private float m_EdgeTransitionDuration = 0.35f;
+	private float m_EdgeTransitionDuration = 0.25f;
 	private float m_EdgeTransitionTimer;
+	private float m_EdgeCooldownTimer;
 
 	/// <summary>
 	/// 現在等速直線移動(落下)中であるかを取得します。
@@ -191,19 +193,21 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	/// エッジ(角)回り込み遷移を開始します。
 	/// </summary>
 	/// <param name="targetNormal">移行先の新面の法線</param>
-	private void StartEdgeTransition(Vector3 targetNormal)
+	/// <param name="edgePoint">角の頂点座標</param>
+	private void StartEdgeTransition(Vector3 targetNormal, Vector3 edgePoint)
 	{
 		Quaternion edgeRot = Quaternion.FromToRotation(m_CurrentGroundNormal, targetNormal);
 		m_EdgeStartForward = transform.forward;
 		m_EdgeTargetForward = (edgeRot * transform.forward).normalized;
 		m_EdgeStartNormal = m_CurrentGroundNormal;
 		m_EdgeTargetNormal = targetNormal;
-		m_EdgeTransitionDuration = 0.35f;
+		m_EdgePivotPoint = edgePoint;
+		m_EdgeTransitionDuration = 0.25f;
 		m_EdgeTransitionTimer = m_EdgeTransitionDuration;
 	}
 
 	/// <summary>
-	/// マルチレイによる曲面・エッジ(凸角)・壁(凹角)の法線検知および円弧回り込み制御を行います。
+	/// 地面・エッジ・壁の法線検知および角の円弧回り込み制御を行います。
 	/// </summary>
 	private void UpdateGroundStatus()
 	{
@@ -212,19 +216,42 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			return;
 		}
 
-		// エッジ回り込み遷移中の処理
+		// エッジ回り込み遷移中の処理: 角の頂点を中心として外側に円弧を描いて位置・姿勢を滑らかに送り込む
 		if (m_EdgeTransitionTimer > 0f)
 		{
 			m_EdgeTransitionTimer -= Time.fixedDeltaTime;
+			if (m_EdgeTransitionTimer <= 0f)
+			{
+				// 遷移完了後、細いブロックでの連続遷移によるチャタリング・浮遊を防止するインターバル
+				m_EdgeCooldownTimer = 0.15f;
+			}
+
 			float t = Mathf.Clamp01(1.0f - (m_EdgeTransitionTimer / m_EdgeTransitionDuration));
 
-			// 法線を円弧補間(Slerp)して角への滑らかな吸着向心力を生成
+			// 法線と前進向きの円弧補間
 			m_CurrentGroundNormal = Vector3.Slerp(m_EdgeStartNormal, m_EdgeTargetNormal, t).normalized;
+			Vector3 forward = Vector3.Slerp(m_EdgeStartForward, m_EdgeTargetForward, t).normalized;
+
+			// 角の頂点(EdgePivot)を基準とし、カプセルの高さを考慮した外側円弧配置
+			float footOffset = GetFootOffset();
+			Vector3 targetPos = m_EdgePivotPoint + m_CurrentGroundNormal * (footOffset + 0.05f) + m_EdgeTargetForward * (0.25f * t);
+			Quaternion targetRot = Quaternion.LookRotation(forward, m_CurrentGroundNormal);
+
+			transform.rotation = targetRot;
+			m_Rigidbody.position = targetPos;
+			float speed = m_GroundMoveSpeed > 0f ? m_GroundMoveSpeed : 10.0f;
+			m_Rigidbody.linearVelocity = forward * (speed * m_SpeedMultiplier);
+
 			m_IsGrounded = true;
-			return;
+			return; // 遷移中は通常のRaycastと接地判定をバイパスして安定遷移を維持
+		}
+		else if (m_EdgeCooldownTimer > 0f)
+		{
+			m_EdgeCooldownTimer -= Time.fixedDeltaTime;
 		}
 
-		float checkDist = m_GroundCheckDistance > 0f ? m_GroundCheckDistance : 1.5f;
+		float footDist = GetFootOffset();
+		float checkDist = footDist + (m_GroundCheckDistance > 0f ? m_GroundCheckDistance : 0.4f);
 		int layerMask = m_GroundLayerMask.value == 0 ? ~0 : m_GroundLayerMask.value;
 
 		bool foundGround = false;
@@ -241,60 +268,50 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		{
 			Debug.DrawRay(wallCheckOrigin, currentMoveDir * 0.8f, isWallHit ? Color.white : Color.gray, 0f);
 		}
-		if (isWallHit && Vector3.Dot(wallHit.normal, m_CurrentGroundNormal) < 0.8f)
+		if (isWallHit && Vector3.Dot(wallHit.normal, m_CurrentGroundNormal) < 0.8f && m_EdgeCooldownTimer <= 0f)
 		{
 			foundGround = true;
 			detectedNormal = wallHit.normal;
-			StartEdgeTransition(wallHit.normal);
+			Vector3 currentFootPos = transform.position - transform.up * footDist;
+			Vector3 edgePoint = wallHit.point + Vector3.Project(currentFootPos - wallHit.point, m_CurrentGroundNormal);
+			StartEdgeTransition(wallHit.normal, edgePoint);
 		}
 
-		// 2. 凸角検知: 移動中に足元の面が途切れるエッジ(角の縁)に到達した場合の死角なし多方向検知
-		if (!foundGround && m_MoveInput.sqrMagnitude > 0.001f)
+		// 2. 凸角検知: 足元前方の床が途切れた(崖のエッジに達した)瞬間のみ厳密に検知(クールダウン中は抑制)
+		if (!foundGround && m_MoveInput.sqrMagnitude > 0.001f && m_EdgeCooldownTimer <= 0f)
 		{
-			float aheadDist = m_EdgeAheadDistance > 0f ? m_EdgeAheadDistance : 0.6f;
+			// 先読み距離をコンパクト(0.25m)に設定し、細い足場でも直前まで直進を維持
+			float aheadDist = m_EdgeAheadDistance > 0f ? m_EdgeAheadDistance : 0.25f;
 			float wrapDist = m_EdgeWrapCheckDistance > 0f ? m_EdgeWrapCheckDistance : 1.2f;
 
-			// A. 斜め前下(45度) Raycast: 角の頂点・側面の切り替わりを死角なく捕捉
-			Vector3 diagDir = (currentMoveDir - transform.up).normalized;
-			bool isDiagHit = Physics.Raycast(transform.position, diagDir, out RaycastHit diagHit, checkDist * 1.4f, layerMask, QueryTriggerInteraction.Ignore);
+			// 進行方向の足元直前をチェック(手前での誤発動を防止)
+			Vector3 aheadOrigin = transform.position + currentMoveDir * aheadDist;
+			bool hasAheadGround = Physics.Raycast(aheadOrigin, -transform.up, out RaycastHit _, checkDist, layerMask, QueryTriggerInteraction.Ignore);
 			if (m_EnableDebugDraw)
-		{
-				Debug.DrawRay(transform.position, diagDir * (checkDist * 1.4f), isDiagHit ? Color.magenta : Color.gray, 0f);
+			{
+				Debug.DrawRay(aheadOrigin, -transform.up * checkDist, hasAheadGround ? Color.cyan : Color.red, 0f);
 			}
 
-			if (isDiagHit && Vector3.Dot(diagHit.normal, m_CurrentGroundNormal) < 0.7f)
+			// 足元前方の地面が途切れた場合のみ、角の外側から折り返しRaycastを照射して側面を捉える
+			if (!hasAheadGround)
 			{
-				foundGround = true;
-				detectedNormal = diagHit.normal;
-				StartEdgeTransition(diagHit.normal);
-			}
-			else
-			{
-				// B. 先読みチェック
-				Vector3 aheadOrigin = transform.position + currentMoveDir * aheadDist;
-				bool hasAheadGround = Physics.Raycast(aheadOrigin, -transform.up, out RaycastHit _, checkDist, layerMask, QueryTriggerInteraction.Ignore);
+				Vector3 currentFootPos = transform.position - transform.up * footDist;
+				Vector3 wrapOrigin = currentFootPos + currentMoveDir * aheadDist - transform.up * 0.4f;
+				Vector3 wrapDirection = -currentMoveDir;
+
+				bool isWrapHit = Physics.Raycast(wrapOrigin, wrapDirection, out RaycastHit wrapHit, wrapDist, layerMask, QueryTriggerInteraction.Ignore);
 				if (m_EnableDebugDraw)
 				{
-					Debug.DrawRay(aheadOrigin, -transform.up * checkDist, hasAheadGround ? Color.cyan : Color.red, 0f);
+					Debug.DrawRay(wrapOrigin, wrapDirection * wrapDist, isWrapHit ? Color.yellow : Color.blue, 0f);
 				}
-
-				if (!hasAheadGround)
+				if (isWrapHit && Vector3.Dot(wrapHit.normal, m_CurrentGroundNormal) < 0.8f)
 				{
-					// 足元より確実に下(-transform.up * 1.2f)から内側へ折り返しRaycastを照射
-					Vector3 wrapOrigin = transform.position + currentMoveDir * aheadDist - transform.up * 1.2f;
-					Vector3 wrapDirection = -currentMoveDir;
+					foundGround = true;
+					detectedNormal = wrapHit.normal;
 
-					bool isWrapHit = Physics.Raycast(wrapOrigin, wrapDirection, out RaycastHit wrapHit, wrapDist, layerMask, QueryTriggerInteraction.Ignore);
-					if (m_EnableDebugDraw)
-					{
-						Debug.DrawRay(wrapOrigin, wrapDirection * wrapDist, isWrapHit ? Color.yellow : Color.blue, 0f);
-					}
-					if (isWrapHit && Vector3.Dot(wrapHit.normal, m_CurrentGroundNormal) < 0.8f)
-					{
-						foundGround = true;
-						detectedNormal = wrapHit.normal;
-						StartEdgeTransition(wrapHit.normal);
-					}
+					// 角の頂点(上面の床高と側面の壁面の交点)を幾何学的に特定
+					Vector3 edgePoint = wrapHit.point + Vector3.Project(currentFootPos - wrapHit.point, m_CurrentGroundNormal);
+					StartEdgeTransition(wrapHit.normal, edgePoint);
 				}
 			}
 		}
@@ -329,12 +346,9 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		}
 	}
 
-	/// <summary>
-	/// 接平面上の移動・吸着力・一本化された姿勢回転を適用します。
-	/// </summary>
 	private void HandleGroundMovement()
 	{
-		if (m_Rigidbody == null || !m_IsGrounded || m_IsFalling)
+		if (m_Rigidbody == null || !m_IsGrounded || m_IsFalling || m_EdgeTransitionTimer > 0f)
 		{
 			return;
 		}
@@ -342,17 +356,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		Vector3 targetVelocity = Vector3.zero;
 		Vector3 moveDir = Vector3.zero;
 
-		// エッジ通過中は円弧軌道で角の外側を包むように回り込む速度ベクトルを適用
-		if (m_EdgeTransitionTimer > 0f)
-		{
-			float t = Mathf.Clamp01(1.0f - (m_EdgeTransitionTimer / m_EdgeTransitionDuration));
-			moveDir = Vector3.Slerp(m_EdgeStartForward, m_EdgeTargetForward, t).normalized;
-			m_LastMoveDirection = moveDir;
-
-			float speed = m_GroundMoveSpeed > 0f ? m_GroundMoveSpeed : 10.0f;
-			targetVelocity = moveDir * (speed * m_SpeedMultiplier);
-		}
-		else if (m_MoveInput.sqrMagnitude > 0.001f && m_CameraTransform != null)
+		if (m_MoveInput.sqrMagnitude > 0.001f && m_CameraTransform != null)
 		{
 			// 通常歩行時: カメラ基準のTPS移動
 			Vector3 camForward = m_CameraTransform.forward;
@@ -423,31 +427,8 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		{
 			targetForward.Normalize();
 			Quaternion targetRotation = Quaternion.LookRotation(targetForward, m_CurrentGroundNormal);
-
-			// エッジ回り込み中は素早く旋回し、通常歩行中は自然に追従
-			float alignSpeed = (m_EdgeTransitionTimer > 0f)
-				? (m_EdgeAlignSpeed > 0f ? m_EdgeAlignSpeed : 25.0f)
-				: (m_SurfaceAlignSpeed > 0f ? m_SurfaceAlignSpeed : 10.0f);
-
-			Quaternion newRotation = Quaternion.Slerp(transform.rotation, targetRotation, alignSpeed * Time.fixedDeltaTime);
-
-			if (m_EdgeTransitionTimer > 0f && m_Rigidbody != null)
-			{
-				// 足元ピボット回転補正:
-				// コライダーの寸法(高さ)を考慮し、足元の接地点を中心に外側へ円弧を描いて腰を持ち上げる
-				// これにより、カプセル下部が角や床の内部へめり込んで物理衝突でロックされるのを完全に防止
-				float footOffset = GetFootOffset();
-				Vector3 currentFootPos = transform.position - transform.up * footOffset;
-				Vector3 newUp = newRotation * Vector3.up;
-				Vector3 adjustedCenterPos = currentFootPos + newUp * footOffset;
-
-				transform.rotation = newRotation;
-				m_Rigidbody.position = adjustedCenterPos;
-			}
-			else
-			{
-				transform.rotation = newRotation;
-			}
+			float alignSpeed = m_SurfaceAlignSpeed > 0f ? m_SurfaceAlignSpeed : 10.0f;
+			transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, alignSpeed * Time.fixedDeltaTime);
 		}
 	}
 
