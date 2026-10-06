@@ -32,5 +32,10 @@ public interface IGravityMover
 	/// </summary>
 	/// <param name="moveInput">入力ベクトル(WASD/スティック)</param>
 	/// <param name="cameraTransform">視点基準となるカメラのTransform</param>
+		/// <summary>
+	/// 現在の接地面法線ベクトルを取得します。
+	/// </summary>
+	Vector3 CurrentGroundNormal { get; }
+
 	void SetMoveInput(Vector2 moveInput, Transform cameraTransform);
 }

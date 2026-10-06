@@ -28,11 +28,12 @@ GameRepository/
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
 │   │       │   ├── ICameraEffect.cs     # カメラ演出制御用インターフェース
 │   │       │   └── IGravityMover.cs     # 物理移動制御用インターフェース
-│   │       ├── GravityMover.cs          # 物理移動・重力落下・ホバリング・地上移動制御
+│   │       ├── GravityMover.cs          # 物理移動・重力落下・ホバリング・曲面/エッジ回り込み地上移動制御
 │   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
 │   │       ├── PlayerAimGuide.cs        # レティクル表示・軌道予測線の描画およびエイム照準制御
 │   │       ├── PlayerBallCarrier.cs     # プレイヤーのボール所持・キャッチ・投擲(シュート)制御
-│   │       ├── PlayerCameraEffect.cs    # 高速移動時FOV変更・カメラシェイク等の演出制御
+│   │       ├── PlayerCameraEffect.cs    # 三人称視点カメラ旋回(接地面法線追従)・高速移動時FOV変更・カメラシェイク制御
+│   │       ├── PlayerInputReceiver.cs   # 入力検知・視点操作・カーソルロック管理
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
 │   ├── Settings/                # プロジェクト設定・URP描画設定
 │   ├── TextMesh Pro/            # TextMesh Pro関連リソース

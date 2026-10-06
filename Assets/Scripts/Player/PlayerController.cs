@@ -35,6 +35,15 @@ public class PlayerController : NetworkBehaviour
 		m_BallCarrier = GetComponent<IBallCarrier>();
 		m_CameraEffect = GetComponent<ICameraEffect>();
 
+		if (m_GravityMover == null)
+		{
+			Debug.LogError("[PlayerController] IGravityMover (GravityMover) が見つかりません。PlayerオブジェクトにGravityMoverをアタッチしてください。");
+		}
+		if (m_AimGuide == null)
+		{
+			Debug.LogWarning("[PlayerController] IAimGuide (PlayerAimGuide) が見つかりません。");
+		}
+
 		if (m_InputReceiver == null)
 		{
 			m_InputReceiver = GetComponent<PlayerInputReceiver>();
@@ -55,6 +64,7 @@ public class PlayerController : NetworkBehaviour
 		// 自分のキャラならカメラを有効化し、入力をバインドする
 		if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(true);
 		BindInputEvents();
+		PlayerInputReceiver.SetCursorLocked(true);
 	}
 
 	private void BindInputEvents()
@@ -85,17 +95,7 @@ public class PlayerController : NetworkBehaviour
 		// 正面ベクトルを照準・予測線へ渡します。
 		if (CurrentState == EPlayerState.Aiming && m_AimGuide != null)
 		{
-			Vector3 aimDirection;
-
-			if (Camera.main != null)
-			{
-				aimDirection = Camera.main.transform.forward;
-			}
-			else
-			{
-				aimDirection = transform.forward;
-			}
-
+			Vector3 aimDirection = GetAimDirection();
 			m_AimGuide.UpdateAimDirection(aimDirection);
 		}
 
@@ -106,13 +106,32 @@ public class PlayerController : NetworkBehaviour
 				? Vector2.zero
 				: m_InputReceiver.MoveInput;
 
-			Transform camTransform = m_PlayerCameraObject != null
-				? m_PlayerCameraObject.transform
-				: transform;
+			Transform camTransform = Camera.main != null
+				? Camera.main.transform
+				: (m_PlayerCameraObject != null ? m_PlayerCameraObject.transform : transform);
 
 			m_GravityMover.SetMoveInput(moveInput, camTransform);
 		}
 	}
+
+	/// <summary>
+	/// 照準・落下・シュートの基準となるカメラの正面向きを取得します。
+	/// </summary>
+	private Vector3 GetAimDirection()
+	{
+		if (Camera.main != null)
+		{
+			return Camera.main.transform.forward;
+		}
+
+		if (m_PlayerCameraObject != null)
+		{
+			return m_PlayerCameraObject.transform.forward;
+		}
+
+		return transform.forward;
+	}
+
 	// --- 状態遷移ロジック ---
 
 	private void HandleAimToggle()
@@ -139,9 +158,7 @@ public class PlayerController : NetworkBehaviour
 		CurrentState = EPlayerState.Falling;
 		m_AimGuide?.ShowAimGuide(false);
 
-		Vector3 direction = m_PlayerCameraObject != null
-			? m_PlayerCameraObject.transform.forward
-			: transform.forward;
+		Vector3 direction = GetAimDirection();
 
 		m_CameraEffect?.PlayFallEffect();
 		m_GravityMover?.StartFalling(direction);
@@ -170,12 +187,9 @@ public class PlayerController : NetworkBehaviour
 			return;
 		}
 
-		Vector3 shootDirection = m_PlayerCameraObject != null
-				? m_PlayerCameraObject.transform.forward
-				: transform.forward;
+		Vector3 shootDirection = GetAimDirection();
 
-		m_BallCarrier.Shoot(
-			shootDirection);
+		m_BallCarrier.Shoot(shootDirection);
 	}
 
 	// --- 外部モジュール連携用メソッド ---
@@ -220,6 +234,16 @@ public class PlayerController : NetworkBehaviour
 		if (IsOwner)
 		{
 			UnbindInputEvents();
+			PlayerInputReceiver.SetCursorLocked(false);
 		}
+	}
+
+	public override void OnDestroy()
+	{
+		if (IsOwner)
+		{
+			PlayerInputReceiver.SetCursorLocked(false);
+		}
+		base.OnDestroy();
 	}
 }

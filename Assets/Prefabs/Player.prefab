@@ -468,8 +468,9 @@ GameObject:
   - component: {fileID: 6191120882356557297}
   - component: {fileID: 60831561983994870}
   - component: {fileID: 8696501033850427894}
-  - component: {fileID: 6097049237247373300}
   - component: {fileID: 6506262699355711857}
+  - component: {fileID: 2874015679274306090}
+  - component: {fileID: 6097049237247373300}
   - component: {fileID: 1164154789786135184}
   - component: {fileID: -4640382079411939406}
   m_Layer: 6
@@ -537,7 +538,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: -4973734387028869240, guid: 1dbf28c1bb322474d981b2dc555e28b0, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -697,6 +698,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInputReceiver
   m_MoveAction: {fileID: 0}
+  m_LookAction: {fileID: 0}
   m_AimToggleAction: {fileID: 0}
   m_ConfirmAction: {fileID: 0}
   m_BrakeAction: {fileID: 0}
@@ -716,25 +718,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_PlayerCameraObject: {fileID: 6176978571518227029}
   m_InputReceiver: {fileID: 60831561983994870}
---- !u!114 &6097049237247373300
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2466233519835475451}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
-  m_AimReticle: {fileID: 5509881642956187267}
-  m_AimLine: {fileID: 7693887922062000978}
-  m_LandingMarker: {fileID: 7693067950226141477}
-  m_AimTargetLayers:
-    serializedVersion: 2
-    m_Bits: 128
-  m_MaxAimDistance: 100
 --- !u!114 &6506262699355711857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -788,6 +771,53 @@ MonoBehaviour:
     DissipationDistance: 100
     PropagationSpeed: 343
   DefaultVelocity: {x: 0, y: -1, z: 0}
+--- !u!114 &2874015679274306090
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff47b9be831fabc4d9c109233cb5a42e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GravityMover
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_BaseFallSpeed: 20
+  m_AlignDuration: 0.25
+  m_AlignEase: 2
+  m_GroundMoveSpeed: 10
+  m_GroundAcceleration: 15
+  m_GroundStickForce: 15
+  m_GroundCheckDistance: 1.5
+  m_SurfaceAlignSpeed: 10
+  m_EdgeAheadDistance: 0.6
+  m_EdgeWrapCheckDistance: 1.2
+  m_EdgeAlignSpeed: 25
+  m_EnableDebugDraw: 1
+  m_GroundLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+--- !u!114 &6097049237247373300
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
+  m_AimReticle: {fileID: 5509881642956187267}
+  m_AimLine: {fileID: 7693887922062000978}
+  m_LandingMarker: {fileID: 7693067950226141477}
+  m_AimTargetLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  m_MaxAimDistance: 100
 --- !u!114 &1164154789786135184
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -800,11 +830,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 72454944102d6bb42a49ee2c1d1e9132, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerCameraEffect
-  m_CinemachineCamera: {fileID: 0}
-  m_ImpulseSource: {fileID: 0}
+  m_CinemachineCamera: {fileID: 6637677870051114966}
+  m_CameraPivot: {fileID: 5063456265299468095}
+  m_ImpulseSource: {fileID: 6506262699355711857}
   m_NormalFOV: 60
   m_FallFOV: 70
   m_FOVChangeDuration: 0.25
+  m_MouseSensitivity: 0.15
+  m_MinPitchAngle: -30
+  m_MaxPitchAngle: 60
+  m_NormalAlignSpeed: 12
   m_FOVCurve:
     serializedVersion: 2
     m_Curve:
@@ -1245,16 +1280,16 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6444654873160416825}
-  m_LocalRotation: {x: 0, y: 0.9945219, z: -0.10452846, w: 0}
-  m_LocalPosition: {x: 0, y: 0, z: 10}
+  m_LocalRotation: {x: 0.10452846, y: 0, z: 0, w: 0.9945219}
+  m_LocalPosition: {x: 0, y: 0, z: -5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5063456265299468095}
-  m_LocalEulerAnglesHint: {x: 12, y: 180, z: 0}
+  m_LocalEulerAnglesHint: {x: 12, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 4}
+  m_AnchoredPosition: {x: 0, y: 2.5}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &6637677870051114966

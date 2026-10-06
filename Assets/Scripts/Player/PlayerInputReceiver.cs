@@ -12,6 +12,7 @@ public class PlayerInputReceiver : MonoBehaviour
 	[Header("Input Actions(任意設定: 未設定時はデフォルトキーが動作)")]
 	[FormerlySerializedAs("moveAction")]
 	[SerializeField] private InputActionReference m_MoveAction;
+	[SerializeField] private InputActionReference m_LookAction;
 	[FormerlySerializedAs("aimToggleAction")]
 	[SerializeField] private InputActionReference m_AimToggleAction;
 	[FormerlySerializedAs("confirmAction")]
@@ -23,6 +24,9 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	/// <summary>地上移動入力ベクトル(WASD/左スティック)</summary>
 	public Vector2 MoveInput { get; private set; }
+
+	/// <summary>視点操作入力ベクトル(マウスDelta/右スティック)</summary>
+	public Vector2 LookInput { get; private set; }
 
 	/// <summary>エイムモードの開始・解除ボタン押下イベント</summary>
 	public event Action OnAimTogglePressed;
@@ -36,18 +40,30 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>シュートボタン押下イベント。</summary>
 	public event Action OnShootPressed;
 
+	/// <summary>
+	/// マウスカーソルのロック状態・表示状態を設定します。
+	/// </summary>
+	/// <param name="locked">trueの場合、カーソルを画面中央にロックして非表示にします。</param>
+	public static void SetCursorLocked(bool locked)
+	{
+		Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+		Cursor.visible = !locked;
+	}
+
 	private void OnEnable()
 	{
 		EnableAction(m_MoveAction);
+		EnableAction(m_LookAction);
 		BindAction(m_AimToggleAction, HandleAimToggle);
 		BindAction(m_ConfirmAction, HandleConfirm);
 		BindAction(m_BrakeAction, HandleBrake);
-		BindAction(m_ShootAction,HandleShoot);
+		BindAction(m_ShootAction, HandleShoot);
 	}
 
 	private void OnDisable()
 	{
 		DisableAction(m_MoveAction);
+		DisableAction(m_LookAction);
 		UnbindAction(m_AimToggleAction, HandleAimToggle);
 		UnbindAction(m_ConfirmAction, HandleConfirm);
 		UnbindAction(m_BrakeAction, HandleBrake);
@@ -57,6 +73,8 @@ public class PlayerInputReceiver : MonoBehaviour
 	private void Update()
 	{
 		UpdateMoveInput();
+		UpdateLookInput();
+		HandleCursorToggle();
 		// InputActionReferenceが未設定の場合のキーボード/ゲームパッド標準フォールバック
 		HandleKeyboardFallback();
 	}
@@ -106,6 +124,50 @@ public class PlayerInputReceiver : MonoBehaviour
 		}
 
 		MoveInput = Vector2.ClampMagnitude(input, 1f);
+	}
+
+	private void UpdateLookInput()
+	{
+		if (m_LookAction != null && m_LookAction.action != null)
+		{
+			LookInput = m_LookAction.action.ReadValue<Vector2>();
+			return;
+		}
+
+		// 未設定時のフォールバック(マウス移動デルタ / 右スティック)
+		Vector2 input = Vector2.zero;
+
+		if (Cursor.lockState == CursorLockMode.Locked && Mouse.current != null)
+		{
+			input = Mouse.current.delta.ReadValue();
+		}
+
+		if (Gamepad.current != null)
+		{
+			Vector2 stick = Gamepad.current.rightStick.ReadValue();
+			if (stick.sqrMagnitude > input.sqrMagnitude)
+			{
+				input = stick;
+			}
+		}
+
+		LookInput = input;
+	}
+
+	/// <summary>
+	/// 開発・デバッグ用: Escapeキーでカーソルロックをトグル、画面クリックで再ロックします。
+	/// </summary>
+	private void HandleCursorToggle()
+	{
+		if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		{
+			bool isLocked = Cursor.lockState == CursorLockMode.Locked;
+			SetCursorLocked(!isLocked);
+		}
+		else if (Cursor.lockState != CursorLockMode.Locked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+		{
+			SetCursorLocked(true);
+		}
 	}
 
 	private void BindAction(InputActionReference actionRef, Action<InputAction.CallbackContext> callback)
