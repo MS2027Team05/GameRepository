@@ -597,7 +597,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4203264452
+  GlobalObjectIdHash: 4273467025
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -837,8 +837,8 @@ MonoBehaviour:
   m_FallFOV: 70
   m_FOVChangeDuration: 0.25
   m_MouseSensitivity: 0.15
-  m_MinPitchAngle: -30
-  m_MaxPitchAngle: 60
+  m_MinPitchAngle: -70
+  m_MaxPitchAngle: 70
   m_NormalAlignSpeed: 12
   m_FOVCurve:
     serializedVersion: 2
