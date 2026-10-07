@@ -18,26 +18,25 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	[SerializeField] private CinemachineImpulseSource m_ImpulseSource;
 
 	[Header("通常時FOV")]
-	[SerializeField] private float m_NormalFOV = 60.0f;
+	[SerializeField] private float m_NormalFOV;
 
 	[Header("高速移動時FOV")]
-	[SerializeField] private float m_FallFOV = 70.0f;
+	[SerializeField] private float m_FallFOV;
 
 	[Header("FOV変更時間")]
-	[SerializeField] private float m_FOVChangeDuration = 0.25f;
+	[SerializeField] private float m_FOVChangeDuration;
 
 	[Header("視点操作感度・角度制限")]
-	[SerializeField] private float m_MouseSensitivity = 0.15f;
-	[SerializeField] private float m_MinPitchAngle = -30.0f;
-	[SerializeField] private float m_MaxPitchAngle = 60.0f;
+	[SerializeField] private float m_MouseSensitivity;
+	[SerializeField] private float m_MinPitchAngle;
+	[SerializeField] private float m_MaxPitchAngle;
 
 	[Header("接地面法線への姿勢追従速度")]
-	[SerializeField] private float m_NormalAlignSpeed = 12.0f;
+	[SerializeField] private float m_NormalAlignSpeed;
 
 	[Header("FOV変更")]
 	[SerializeField]
-	private AnimationCurve m_FOVCurve =
-		AnimationCurve.EaseInOut(0.0f, 0.0f, 1.0f, 1.0f);
+	private AnimationCurve m_FOVCurve;
 
 	private Coroutine m_FOVCoroutine;
 	private PlayerInputReceiver m_InputReceiver;
