@@ -22,7 +22,8 @@ GameRepository/
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
 │   │   ├── Network/             # 通信接続・同期制御
 │   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
-│   │   │   └── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
+│   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
+│   │   │   └── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース

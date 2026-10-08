@@ -51,6 +51,9 @@ public class LobbyManager : NetworkBehaviour
 	private int m_CurrentRequiredPlayers;
 	private readonly StringBuilder m_InfoStringBuilder = new StringBuilder();
 
+	// 参加者情報のネットワーク同期リスト
+	private readonly NetworkList<LobbyPlayerData> m_LobbyPlayers = new NetworkList<LobbyPlayerData>();
+
 	private void Awake()
 	{
 		SetupUIListeners();
@@ -65,10 +68,15 @@ public class LobbyManager : NetworkBehaviour
 
 	public override void OnNetworkSpawn()
 	{
+		m_LobbyPlayers.OnListChanged += HandleLobbyPlayersChanged;
+
 		if (IsServer)
 		{
 			NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
 			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
+
+			// ホスト端末自身の情報を追加
+			AddPlayer(NetworkManager.Singleton.LocalClientId);
 		}
 
 		// クライアント側でサーバーが切断された場合の検知
@@ -80,6 +88,8 @@ public class LobbyManager : NetworkBehaviour
 
 	public override void OnNetworkDespawn()
 	{
+		m_LobbyPlayers.OnListChanged -= HandleLobbyPlayersChanged;
+
 		if (NetworkManager.Singleton != null)
 		{
 			if (IsServer)
@@ -124,14 +134,50 @@ public class LobbyManager : NetworkBehaviour
 		UpdateDebugMinPlayersText();
 	}
 
+	private void HandleLobbyPlayersChanged(NetworkListEvent<LobbyPlayerData> changeEvent)
+	{
+		UpdateUI();
+	}
+
 	private void HandleClientConnected(ulong clientId)
 	{
+		AddPlayer(clientId);
 		UpdateUI();
 	}
 
 	private void HandleClientDisconnected(ulong clientId)
 	{
+		RemovePlayer(clientId);
 		UpdateUI();
+	}
+
+	private void AddPlayer(ulong clientId)
+	{
+		if (!IsServer) return;
+
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				return;
+			}
+		}
+
+		m_LobbyPlayers.Add(new LobbyPlayerData(clientId));
+	}
+
+	private void RemovePlayer(ulong clientId)
+	{
+		if (!IsServer) return;
+
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				m_LobbyPlayers.RemoveAt(i);
+				break;
+			}
+		}
 	}
 
 	private void HandleServerDisconnect(ulong clientId)
@@ -145,9 +191,9 @@ public class LobbyManager : NetworkBehaviour
 
 	private void UpdateUI()
 	{
-		if (NetworkManager.Singleton == null) return;
+		if (NetworkManager.Singleton == null || !IsSpawned) return;
 
-		int connectedCount = NetworkManager.Singleton.ConnectedClients.Count;
+		int connectedCount = m_LobbyPlayers.Count;
 
 		// 参加人数テキストの更新
 		if (m_PlayerCountText != null)
@@ -162,10 +208,12 @@ public class LobbyManager : NetworkBehaviour
 		{
 			m_InfoStringBuilder.Clear();
 			m_InfoStringBuilder.AppendLine("【接続端末一覧】");
-			foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+			for (int i = 0; i < m_LobbyPlayers.Count; i++)
 			{
-				string hostTag = client.ClientId == NetworkManager.ServerClientId ? " (Host)" : "";
-				m_InfoStringBuilder.Append("- ClientId: ").Append(client.ClientId).Append(hostTag).AppendLine();
+				var player = m_LobbyPlayers[i];
+				string hostTag = player.ClientId == NetworkManager.ServerClientId ? " (Host)" : "";
+				string localTag = player.ClientId == NetworkManager.Singleton.LocalClientId ? " (You)" : "";
+				m_InfoStringBuilder.Append("- ClientId: ").Append(player.ClientId).Append(hostTag).Append(localTag).AppendLine();
 			}
 			m_MemberListText.text = m_InfoStringBuilder.ToString();
 		}
