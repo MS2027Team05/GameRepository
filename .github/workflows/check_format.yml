@@ -21,10 +21,10 @@ jobs:
         shell: pwsh
         run: |
           $targetBranch = "origin/${{ github.base_ref }}"
-          $changedFiles = git diff --name-only --diff-filter=d $targetBranch HEAD -- "*.cs"
+          $changedFiles = git diff --name-only --diff-filter=d $targetBranch HEAD -- "Assets/Scripts/**/*.cs"
 
           if ([string]::IsNullOrWhiteSpace($changedFiles)) {
-              Write-Host "変更された .cs ファイルはありません。チェックをスキップします。"
+              Write-Host "Assets/Scripts/ 配下で変更された .cs ファイルはありません。チェックをスキップします。"
               exit 0
           }
 
@@ -46,9 +46,9 @@ jobs:
           }
 
           # ─────────────────────────────────────────────────────────────
-          # 2. .editorconfig (dotnet format) チェック
+          # 2. .editorconfig (dotnet format) 書式チェック
           # ─────────────────────────────────────────────────────────────
-          Write-Host "=== 2. .editorconfig 構文・命名規則チェック実行中 ==="
+          Write-Host "=== 2. .editorconfig 基本書式(インデント・改行)チェック実行中 ==="
           # 即席のダミーcsprojを作成
           @"
           <Project Sdk="Microsoft.NET.Sdk">
@@ -79,7 +79,121 @@ jobs:
           }
 
           # ─────────────────────────────────────────────────────────────
-          # 3. エラーの集約・PR画面表示・Discord通知準備
+          # 3. .editorconfig 命名規則チェック (フィールド m_、Enum E、Interface I、抽象クラス A)
+          # ─────────────────────────────────────────────────────────────
+          Write-Host "=== 3. .editorconfig 命名規則構文チェック実行中 ==="
+          $namingErrors = @()
+
+          foreach ($filePath in $fileList) {
+              if (-not (Test-Path $filePath)) { continue }
+              $normalizedPath = $filePath -replace '\\', '/'
+              if ($normalizedPath -notmatch '^Assets/Scripts/') { continue }
+
+              $lines = Get-Content -Path $filePath -Encoding utf8
+              $inBlockComment = $false
+              $lineNo = 0
+              $pendingAttributes = @()
+
+              foreach ($rawLine in $lines) {
+                  $lineNo++
+                  $trimmed = $rawLine.Trim()
+
+                  # 複数行コメントのハンドリング
+                  if ($inBlockComment) {
+                      if ($trimmed -match '\*/') {
+                          $trimmed = $trimmed -replace '^.*?\*/', ''
+                          $inBlockComment = $false
+                      } else {
+                          continue
+                      }
+                  }
+                  if ($trimmed -match '/\*') {
+                      if ($trimmed -match '/\*.*?\*/') {
+                          $trimmed = $trimmed -replace '/\*.*?\*/', ''
+                      } else {
+                          $trimmed = $trimmed -replace '/\*.*$', ''
+                          $inBlockComment = $true
+                      }
+                  }
+
+                  # 単一行コメントの除去
+                  $codeLine = ($trimmed -replace '//.*$', '').Trim()
+                  if ([string]::IsNullOrWhiteSpace($codeLine)) { continue }
+
+                  # 属性行の検出 [SerializeField] など
+                  if ($codeLine -match '^\[.*\]$') {
+                      $pendingAttributes += $codeLine
+                      continue
+                  }
+
+                  # 1. 抽象クラス定義: abstract class A...
+                  if ($codeLine -match '\babstract\s+class\s+([A-Za-z0-9_]+)') {
+                      $className = $Matches[1]
+                      if ($className -notmatch '^A[A-Z][a-zA-Z0-9]*$') {
+                          $namingErrors += [PSCustomObject]@{
+                              File = $filePath
+                              Line = $lineNo
+                              Message = "抽象クラス名 '$className' は 'A' 接頭辞付きのPascalCaseである必要があります (例: A${className})"
+                          }
+                      }
+                  }
+                  # 2. インターフェース定義: interface I...
+                  elseif ($codeLine -match '\binterface\s+([A-Za-z0-9_]+)') {
+                      $ifName = $Matches[1]
+                      if ($ifName -notmatch '^I[A-Z][a-zA-Z0-9]*$') {
+                          $namingErrors += [PSCustomObject]@{
+                              File = $filePath
+                              Line = $lineNo
+                              Message = "インターフェース名 '$ifName' は 'I' 接頭辞付きのPascalCaseである必要があります (例: I${ifName})"
+                          }
+                      }
+                  }
+                  # 3. Enum型定義: enum E...
+                  elseif ($codeLine -match '\benum\s+([A-Za-z0-9_]+)') {
+                      $enumName = $Matches[1]
+                      if ($enumName -notmatch '^E[A-Z][a-zA-Z0-9]*$') {
+                          $namingErrors += [PSCustomObject]@{
+                              File = $filePath
+                              Line = $lineNo
+                              Message = "Enum型名 '$enumName' は 'E' 接頭辞付きのPascalCaseである必要があります (例: E${enumName})"
+                          }
+                      }
+                  }
+                  # 4. フィールド定義:
+                  else {
+                      $hasSerializeField = ($pendingAttributes -match 'SerializeField') -or ($codeLine -match '\[SerializeField\]')
+
+                      if ($codeLine -match ';\s*$' -or $codeLine -match '=\s*[^>].*;\s*$') {
+                          $isProperty = $codeLine -match '\{\s*(get|set|init)\b'
+                          $isStatement = $codeLine -match '^(using|return|throw|break|continue|yield|base|this)\b'
+                          $isConstant = $codeLine -match '\bconst\b'
+
+                          if (-not $isProperty -and -not $isStatement -and -not $isConstant) {
+                              if ($hasSerializeField -or ($codeLine -match '^\s*(private|protected|internal|public)\s+.*')) {
+                                  if ($codeLine -match '(?:\[.*?\]\s*)*(?:private|protected|internal|public)?(?:\s+(?:readonly|volatile|static))*\s+[A-Za-z0-9_<>,\[\]\?]+\s+([A-Za-z0-9_]+)\s*(?:=|;)') {
+                                      $varName = $Matches[1]
+                                      if ($codeLine -notmatch '\bevent\b') {
+                                          if ($varName -notmatch '^m_[A-Z][a-zA-Z0-9]*$') {
+                                              $namingErrors += [PSCustomObject]@{
+                                                  File = $filePath
+                                                  Line = $lineNo
+                                                  Message = "フィールド名 '$varName' は 'm_' 接頭辞付きのPascalCaseである必要があります (例: m_${varName})"
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  # 属性バッファのリセット
+                  $pendingAttributes = @()
+              }
+          }
+
+          # ─────────────────────────────────────────────────────────────
+          # 4. エラーの集約・PR画面表示・Discord通知準備
           # ─────────────────────────────────────────────────────────────
           $hasError = $false
           $discordDescription = ""
@@ -103,14 +217,29 @@ jobs:
           # --- Format エラー処理 ---
           if ($formatFiles.Count -gt 0) {
               $hasError = $true
-              $summaryContent += "### ❌ .editorconfig 規約・書式違反`n以下のファイルが命名規則またはフォーマット規約に違反しています:`n"
-              $discordDescription += "**【.editorconfig 書式・命名規則違反】**`n"
+              $summaryContent += "### ❌ .editorconfig 書式規約違反`n以下のファイルがインデントまたはフォーマット規約に違反しています:`n"
+              $discordDescription += "**【.editorconfig 書式規約違反】**`n"
 
               foreach ($file in $formatFiles) {
-                  Write-Host "::error file=$file,line=1,title=Format/Naming Rule Violation::.editorconfig の規約に違反しています。"
+                  Write-Host "::error file=$file,line=1,title=Format Rule Violation::.editorconfig の書式規約に違反しています。"
                   $summaryContent += "- ``$file```n"
                   $discordDescription += "• ``$file```n"
               }
+              $discordDescription += "`n"
+          }
+
+          # --- Naming エラー処理 ---
+          if ($namingErrors.Count -gt 0) {
+              $hasError = $true
+              $summaryContent += "### ❌ .editorconfig 命名規則違反`n以下の箇所が命名規則に違反しています:`n"
+              $discordDescription += "**【.editorconfig 命名規則違反】**`n"
+
+              foreach ($err in $namingErrors) {
+                  Write-Host "::error file=$($err.File),line=$($err.Line),title=Naming Rule Violation::$($err.Message)"
+                  $summaryContent += "- ``$($err.File):L$($err.Line)`` : $($err.Message)`n"
+                  $discordDescription += "• ``$($err.File):L$($err.Line)`` : $($err.Message)`n"
+              }
+              $discordDescription += "`n"
           }
 
           # GitHub の PR画面（Job Summary）に結果を出力
@@ -126,7 +255,7 @@ jobs:
           }
 
       # ─────────────────────────────────────────────────────────────
-      # 失敗時のみDiscordへ通知（BOMとFormat両方の違反ファイルを掲載）
+      # 失敗時のみDiscordへ通知（BOM・Format・Naming の違反を掲載）
       # ─────────────────────────────────────────────────────────────
       - name: Notify Failure to Discord
         uses: sarisia/actions-status-discord@v1

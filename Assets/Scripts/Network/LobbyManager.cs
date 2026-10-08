@@ -1,4 +1,5 @@
-using System.Net;
+﻿using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using TMPro;
@@ -214,6 +215,54 @@ public class LobbyManager : NetworkBehaviour
 	{
 		try
 		{
+			string fallbackIp = null;
+
+			// 稼働中のネットワークインターフェースを検索
+			foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+			{
+				// 有効(Up)かつループバックやトンネルでないものを対象
+				if (ni.OperationalStatus != OperationalStatus.Up ||
+					ni.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+					ni.NetworkInterfaceType == NetworkInterfaceType.Tunnel)
+				{
+					continue;
+				}
+
+				// 仮想アダプタ名（WSL, VirtualBox, vEthernet, Hyper-V, VMwareなど）を除外
+				string name = ni.Name.ToLower();
+				string desc = ni.Description.ToLower();
+				if (name.Contains("vethernet") || name.Contains("wsl") || name.Contains("virtual") ||
+					desc.Contains("virtual") || desc.Contains("hyper-v") || desc.Contains("vmware"))
+				{
+					continue;
+				}
+
+				IPInterfaceProperties props = ni.GetIPProperties();
+				foreach (UnicastIPAddressInformation addr in props.UnicastAddresses)
+				{
+					if (addr.Address.AddressFamily == AddressFamily.InterNetwork)
+					{
+						// 有線LAN(Ethernet)を最優先で返却
+						if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
+						{
+							return addr.Address.ToString();
+						}
+
+						// Wi-Fiなどの他の有効なアダプタは候補として保持
+						if (fallbackIp == null)
+						{
+							fallbackIp = addr.Address.ToString();
+						}
+					}
+				}
+			}
+
+			if (!string.IsNullOrEmpty(fallbackIp))
+			{
+				return fallbackIp;
+			}
+
+			// フォールバック: Dns.GetHostEntry で取得
 			IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
 			foreach (IPAddress ip in host.AddressList)
 			{

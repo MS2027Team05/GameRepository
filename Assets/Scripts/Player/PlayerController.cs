@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -19,7 +19,7 @@ public class PlayerController : NetworkBehaviour
 	private IGravityMover m_GravityMover;
 	private IAimGuide m_AimGuide;
 	private IBallCarrier m_BallCarrier;
-	private PlayerCameraEffect m_CameraEffect;
+	private ICameraEffect m_CameraEffect;
 
 	// プレイヤーの内部状態
 	public enum EPlayerState { Idle, Aiming, Falling, Stunned }
@@ -33,7 +33,16 @@ public class PlayerController : NetworkBehaviour
 		m_GravityMover = GetComponent<IGravityMover>();
 		m_AimGuide = GetComponent<IAimGuide>();
 		m_BallCarrier = GetComponent<IBallCarrier>();
-		m_CameraEffect = GetComponent<PlayerCameraEffect>();
+		m_CameraEffect = GetComponent<ICameraEffect>();
+
+		if (m_GravityMover == null)
+		{
+			Debug.LogError("[PlayerController] IGravityMover (GravityMover) が見つかりません。PlayerオブジェクトにGravityMoverをアタッチしてください。");
+		}
+		if (m_AimGuide == null)
+		{
+			Debug.LogWarning("[PlayerController] IAimGuide (PlayerAimGuide) が見つかりません。");
+		}
 
 		if (m_InputReceiver == null)
 		{
@@ -55,6 +64,7 @@ public class PlayerController : NetworkBehaviour
 		// 自分のキャラならカメラを有効化し、入力をバインドする
 		if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(true);
 		BindInputEvents();
+		PlayerInputReceiver.SetCursorLocked(true);
 	}
 
 	private void BindInputEvents()
@@ -64,6 +74,7 @@ public class PlayerController : NetworkBehaviour
 		m_InputReceiver.OnAimTogglePressed += HandleAimToggle;
 		m_InputReceiver.OnConfirmPressed += HandleConfirm;
 		m_InputReceiver.OnBrakePressed += HandleBrake;
+		m_InputReceiver.OnShootPressed += HandleShoot;
 	}
 
 	private void UnbindInputEvents()
@@ -73,21 +84,52 @@ public class PlayerController : NetworkBehaviour
 		m_InputReceiver.OnAimTogglePressed -= HandleAimToggle;
 		m_InputReceiver.OnConfirmPressed -= HandleConfirm;
 		m_InputReceiver.OnBrakePressed -= HandleBrake;
+		m_InputReceiver.OnShootPressed -= HandleShoot;
 	}
 
 	private void Update()
 	{
 		if (!IsOwner) return;
 
-		// エイム中のみ、毎フレームカメラの正面ベクトルを照準・予測線へ渡す
+		// エイム中のみ、実際に画面を描画しているカメラの
+		// 正面ベクトルを照準・予測線へ渡します。
 		if (CurrentState == EPlayerState.Aiming && m_AimGuide != null)
 		{
-			Vector3 aimDirection = m_PlayerCameraObject != null
-				? m_PlayerCameraObject.transform.forward
-				: transform.forward;
-
+			Vector3 aimDirection = GetAimDirection();
 			m_AimGuide.UpdateAimDirection(aimDirection);
 		}
+
+		// 地上移動入力のルーティング(スタン中やエイム中でない場合に伝達)
+		if (m_GravityMover != null && m_InputReceiver != null)
+		{
+			Vector2 moveInput = (CurrentState == EPlayerState.Aiming || CurrentState == EPlayerState.Stunned)
+				? Vector2.zero
+				: m_InputReceiver.MoveInput;
+
+			Transform camTransform = Camera.main != null
+				? Camera.main.transform
+				: (m_PlayerCameraObject != null ? m_PlayerCameraObject.transform : transform);
+
+			m_GravityMover.SetMoveInput(moveInput, camTransform);
+		}
+	}
+
+	/// <summary>
+	/// 照準・落下・シュートの基準となるカメラの正面向きを取得します。
+	/// </summary>
+	private Vector3 GetAimDirection()
+	{
+		if (Camera.main != null)
+		{
+			return Camera.main.transform.forward;
+		}
+
+		if (m_PlayerCameraObject != null)
+		{
+			return m_PlayerCameraObject.transform.forward;
+		}
+
+		return transform.forward;
 	}
 
 	// --- 状態遷移ロジック ---
@@ -116,9 +158,7 @@ public class PlayerController : NetworkBehaviour
 		CurrentState = EPlayerState.Falling;
 		m_AimGuide?.ShowAimGuide(false);
 
-		Vector3 direction = m_PlayerCameraObject != null
-			? m_PlayerCameraObject.transform.forward
-			: transform.forward;
+		Vector3 direction = GetAimDirection();
 
 		m_CameraEffect?.PlayFallEffect();
 		m_GravityMover?.StartFalling(direction);
@@ -130,6 +170,26 @@ public class PlayerController : NetworkBehaviour
 
 		CurrentState = EPlayerState.Idle;
 		m_GravityMover?.StopFalling();
+	}
+
+	/// <summary>
+	/// 所持中のボールをカメラ正面方向へ射出します。
+	/// </summary>
+	private void HandleShoot()
+	{
+		if (m_BallCarrier == null)
+		{
+			return;
+		}
+
+		if (!m_BallCarrier.HasBall)
+		{
+			return;
+		}
+
+		Vector3 shootDirection = GetAimDirection();
+
+		m_BallCarrier.Shoot(shootDirection);
 	}
 
 	// --- 外部モジュール連携用メソッド ---
@@ -174,6 +234,16 @@ public class PlayerController : NetworkBehaviour
 		if (IsOwner)
 		{
 			UnbindInputEvents();
+			PlayerInputReceiver.SetCursorLocked(false);
 		}
+	}
+
+	public override void OnDestroy()
+	{
+		if (IsOwner)
+		{
+			PlayerInputReceiver.SetCursorLocked(false);
+		}
+		base.OnDestroy();
 	}
 }
