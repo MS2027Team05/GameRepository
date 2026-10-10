@@ -36,10 +36,13 @@ public class LobbyManager : NetworkBehaviour
 	[SerializeField] private Button m_DebugCycleMinPlayersButton;
 	[FormerlySerializedAs("debugMinPlayersText")]
 	[SerializeField] private TextMeshProUGUI m_DebugMinPlayersText;
+	[SerializeField] private Button m_DebugToggleSceneButton;
+	[SerializeField] private TextMeshProUGUI m_DebugTargetSceneText;
 
 	[Header("シーン設定")]
 	[FormerlySerializedAs("gameSceneName")]
 	[SerializeField] private string m_GameSceneName;
+	[SerializeField] private string m_LevelDesignSceneName;
 	[FormerlySerializedAs("titleSceneName")]
 	[SerializeField] private string m_TitleSceneName;
 
@@ -49,6 +52,8 @@ public class LobbyManager : NetworkBehaviour
 
 	// 現在の必要開始人数(デバッグトグルで変更可能)
 	private int m_CurrentRequiredPlayers;
+	// 現在選択されている遷移先がレベルデザインシーンかどうか
+	private bool m_UseLevelDesignScene;
 	private readonly StringBuilder m_InfoStringBuilder = new StringBuilder();
 
 	// 参加者情報のネットワーク同期リスト
@@ -117,6 +122,11 @@ public class LobbyManager : NetworkBehaviour
 		{
 			m_DebugCycleMinPlayersButton.onClick.AddListener(CycleMinPlayersDebug);
 		}
+
+		if (m_DebugToggleSceneButton != null)
+		{
+			m_DebugToggleSceneButton.onClick.AddListener(ToggleTargetSceneDebug);
+		}
 	}
 
 	private void SetupDebugUI()
@@ -132,6 +142,7 @@ public class LobbyManager : NetworkBehaviour
 		}
 
 		UpdateDebugMinPlayersText();
+		UpdateDebugTargetSceneText();
 	}
 
 	private void HandleLobbyPlayersChanged(NetworkListEvent<LobbyPlayerData> changeEvent)
@@ -351,13 +362,41 @@ public class LobbyManager : NetworkBehaviour
 		}
 	}
 
+	/// <summary>
+	/// デバッグ用: 遷移先シーンを 通常ゲームシーン <-> レベルデザインシーン でトグル切り替えします。
+	/// </summary>
+	private void ToggleTargetSceneDebug()
+	{
+		if (!IsServer) return;
+
+		m_UseLevelDesignScene = !m_UseLevelDesignScene;
+		UpdateDebugTargetSceneText();
+	}
+
+	private void UpdateDebugTargetSceneText()
+	{
+		if (m_DebugTargetSceneText != null)
+		{
+			string currentScene = m_UseLevelDesignScene
+				? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
+				: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
+
+			m_DebugTargetSceneText.text = $"[Debug] 遷移先: {currentScene}";
+		}
+	}
+
 	private void OnStartGameButtonClicked()
 	{
 		if (!IsServer) return;
 
-		if (!string.IsNullOrEmpty(m_GameSceneName))
+		string targetScene = m_UseLevelDesignScene ? m_LevelDesignSceneName : m_GameSceneName;
+		if (!string.IsNullOrEmpty(targetScene))
 		{
-			NetworkManager.Singleton.SceneManager.LoadScene(m_GameSceneName, LoadSceneMode.Single);
+			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+		}
+		else
+		{
+			Debug.LogWarning("[LobbyManager] 遷移先シーン名が設定されていません。");
 		}
 	}
 
