@@ -59,6 +59,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	private bool m_IsFalling;
 	private bool m_IsGrounded;
 	private Tween m_AlignTween;
+	private bool m_IsAimHovering;
 
 	private Vector2 m_MoveInput;
 	private Transform m_CameraTransform;
@@ -147,6 +148,38 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	}
 
 	/// <summary>
+	/// エイム中のホバリング状態を開始します。
+	/// 通常の接地判定・地上移動・吸着処理を停止します。
+	/// </summary>
+	public void StartAimHover()
+	{
+		m_IsAimHovering = true;
+		m_IsFalling = false;
+		m_MoveInput = Vector2.zero;
+
+		if (m_Rigidbody != null)
+		{
+			m_Rigidbody.linearVelocity = Vector3.zero;
+			m_Rigidbody.angularVelocity = Vector3.zero;
+		}
+	}
+
+	/// <summary>
+	/// エイム中のホバリング状態を終了します。
+	/// 通常の接地判定・地上移動処理へ戻します。
+	/// </summary>
+	public void StopAimHover()
+	{
+		m_IsAimHovering = false;
+		m_MoveInput = Vector2.zero;
+
+		if (m_Rigidbody != null)
+		{
+			m_Rigidbody.linearVelocity = Vector3.zero;
+			m_Rigidbody.angularVelocity = Vector3.zero;
+		}
+	}
+	/// <summary>
 	/// 移動速度の倍率を設定します(ボール所持時のデバフ等)。
 	/// </summary>
 	/// <param name="multiplier">速度倍率</param>
@@ -174,13 +207,25 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			return;
 		}
 
+		// エイム中は物理移動・接地処理を停止してホバリングします。
+		if (m_IsAimHovering && m_Rigidbody != null)
+		{
+			m_Rigidbody.linearVelocity = Vector3.zero;
+			m_Rigidbody.angularVelocity = Vector3.zero;
+			return;
+		}
+
 		if (m_IsFalling && m_Rigidbody != null)
 		{
-			m_Rigidbody.linearVelocity = m_CurrentDirection * (m_BaseFallSpeed * m_SpeedMultiplier);
+			m_Rigidbody.linearVelocity =
+				m_CurrentDirection *
+				(m_BaseFallSpeed * m_SpeedMultiplier);
+
 			if (m_CurrentDirection != Vector3.zero)
 			{
 				transform.forward = m_CurrentDirection;
 			}
+
 			return;
 		}
 

@@ -597,7 +597,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4273467025
+  GlobalObjectIdHash: 4203264452
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -818,6 +818,11 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   m_MaxAimDistance: 100
+  m_AimFloatHeight: 1
+  m_AimFloatDuration: 0.3
+  m_CinemachineCameraTransform: {fileID: 5892072697104370858}
+  m_AimCameraShoulderOffset: {x: 1, y: 1, z: 2}
+  m_AimOpacity: 0.35
 --- !u!114 &1164154789786135184
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -968,27 +973,27 @@ LineRenderer:
   - {x: 0, y: 0, z: 1}
   m_Parameters:
     serializedVersion: 3
-    widthMultiplier: 0.5
+    widthMultiplier: 0.25
     widthCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 3
         time: 0
         value: 1
-        inSlope: -0.46590194
-        outSlope: -0.46590194
+        inSlope: -0.02323117
+        outSlope: -0.02323117
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
-        outWeight: 0.2379679
+        outWeight: 0.28074864
       - serializedVersion: 3
         time: 1
-        value: 0.4804369
-        inSlope: -0.4898566
-        outSlope: -0.4898566
+        value: 1
+        inSlope: -0.009274714
+        outSlope: -0.009274714
         tangentMode: 0
         weightedMode: 0
-        inWeight: 0.21301252
+        inWeight: 0.2344029
         outWeight: 0
       m_PreInfinity: 2
       m_PostInfinity: 2

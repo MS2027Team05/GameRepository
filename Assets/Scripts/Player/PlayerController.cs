@@ -138,6 +138,8 @@ public class PlayerController : NetworkBehaviour
 	{
 		if (CurrentState == EPlayerState.Stunned) return;
 
+		//↓落下中にエイムが不可能になるコード。着地先ミスったら一生飛ぶので、時が来るまでコメントアウト
+		//if (CurrentState != EPlayerState.Aiming && !m_GravityMover.IsFalling)
 		if (CurrentState != EPlayerState.Aiming)
 		{
 			CurrentState = EPlayerState.Aiming;
@@ -147,7 +149,9 @@ public class PlayerController : NetworkBehaviour
 		else
 		{
 			CurrentState = EPlayerState.Idle;
-			m_AimGuide?.ShowAimGuide(false);
+
+			// 右クリックによるエイム解除ではPlayerとCameraを元の位置に戻す
+			m_AimGuide?.CancelAimGuide();
 		}
 	}
 
@@ -156,7 +160,9 @@ public class PlayerController : NetworkBehaviour
 		if (CurrentState != EPlayerState.Aiming) return;
 
 		CurrentState = EPlayerState.Falling;
-		m_AimGuide?.ShowAimGuide(false);
+
+		// 左クリックによる移動開始ではCameraだけを通常位置に戻す
+		m_AimGuide?.EndAimGuideForMovement();
 
 		Vector3 direction = GetAimDirection();
 
