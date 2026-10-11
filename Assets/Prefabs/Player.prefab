@@ -821,7 +821,7 @@ MonoBehaviour:
   m_AimFloatHeight: 1
   m_AimFloatDuration: 0.3
   m_CinemachineCameraTransform: {fileID: 5892072697104370858}
-  m_AimCameraShoulderOffset: {x: 1, y: 1, z: 2}
+  m_AimCameraShoulderOffset: {x: 1, y: 1, z: 1.5}
   m_AimOpacity: 0.35
 --- !u!114 &1164154789786135184
 MonoBehaviour:
