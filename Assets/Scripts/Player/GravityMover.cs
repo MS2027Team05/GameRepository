@@ -69,7 +69,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	private Vector3 m_EdgeTargetForward = Vector3.forward;
 	private Vector3 m_EdgeStartNormal = Vector3.up;
 	private Vector3 m_EdgeTargetNormal = Vector3.up;
-	private float m_EdgeTransitionDuration = 0.25f;
+	private float m_EdgeTransitionDuration = 0.35f;
 	private float m_EdgeTransitionTimer;
 	private float m_EdgeCooldownTimer;
 
@@ -202,7 +202,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		m_EdgeStartNormal = m_CurrentGroundNormal;
 		m_EdgeTargetNormal = targetNormal;
 		m_EdgePivotPoint = edgePoint;
-		m_EdgeTransitionDuration = 0.25f;
+		m_EdgeTransitionDuration = 0.35f;
 		m_EdgeTransitionTimer = m_EdgeTransitionDuration;
 	}
 
@@ -237,8 +237,8 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			Vector3 targetPos = m_EdgePivotPoint + m_CurrentGroundNormal * (footOffset + 0.05f) + m_EdgeTargetForward * (0.25f * t);
 			Quaternion targetRot = Quaternion.LookRotation(forward, m_CurrentGroundNormal);
 
-			transform.rotation = targetRot;
-			m_Rigidbody.position = targetPos;
+			transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 15.0f * Time.fixedDeltaTime);
+			m_Rigidbody.position = Vector3.MoveTowards(m_Rigidbody.position, targetPos, 15.0f * Time.fixedDeltaTime);
 			float speed = m_GroundMoveSpeed > 0f ? m_GroundMoveSpeed : 10.0f;
 			m_Rigidbody.linearVelocity = forward * (speed * m_SpeedMultiplier);
 
@@ -316,13 +316,15 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			}
 		}
 
-		// 3. 通常足元検知: キャラクター直下(-transform.up)へRaycast
+		// 3. 通常足元検知: SphereCastにより角の縁や細い足場でも確実に接地を捕捉
 		if (!foundGround)
 		{
-			bool isDownHit = Physics.Raycast(transform.position, -transform.up, out RaycastHit downHit, checkDist, layerMask, QueryTriggerInteraction.Ignore);
+			float sphereRadius = 0.35f;
+			float castDist = Mathf.Max(0.1f, checkDist - sphereRadius);
+			bool isDownHit = Physics.SphereCast(transform.position, sphereRadius, -transform.up, out RaycastHit downHit, castDist, layerMask, QueryTriggerInteraction.Ignore);
 			if (m_EnableDebugDraw)
 			{
-				Debug.DrawRay(transform.position, -transform.up * checkDist, isDownHit ? Color.green : Color.red, 0f);
+				Debug.DrawRay(transform.position, -transform.up * (sphereRadius + castDist), isDownHit ? Color.green : Color.red, 0f);
 			}
 			if (isDownHit)
 			{
@@ -342,7 +344,9 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		if (foundGround)
 		{
 			m_IsGrounded = true;
-			m_CurrentGroundNormal = detectedNormal;
+			// 鋭利な角や辺に斜めに立った際の毎フレーム90度反転チャタリングを防止する平滑化補間
+			float normalAlignSpeed = (m_EdgeTransitionTimer > 0f) ? 25.0f : 15.0f;
+			m_CurrentGroundNormal = Vector3.Slerp(m_CurrentGroundNormal, detectedNormal, normalAlignSpeed * Time.fixedDeltaTime).normalized;
 		}
 	}
 

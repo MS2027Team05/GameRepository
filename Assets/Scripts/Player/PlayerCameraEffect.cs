@@ -34,6 +34,9 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	[Header("接地面法線への姿勢追従速度")]
 	[SerializeField] private float m_NormalAlignSpeed;
 
+	[Header("カメラピボット位置追従速度(角での衝撃緩和ダンピング)")]
+	[SerializeField] private float m_PositionFollowSpeed;
+
 	[Header("FOV変更")]
 	[SerializeField]
 	private AnimationCurve m_FOVCurve;
@@ -99,16 +102,17 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			return;
 		}
 
-		// プレイヤーの位置へ追従(回転は引き継がない)
-		m_CameraPivot.position = transform.position;
+		// プレイヤーの位置へ追従(角での急激な突き出し衝撃を吸収する滑らかなダンピング)
+		float posSpeed = m_PositionFollowSpeed > 0f ? m_PositionFollowSpeed : 25.0f;
+		m_CameraPivot.position = Vector3.Lerp(m_CameraPivot.position, transform.position, posSpeed * Time.deltaTime);
 
 		// 目標とする接地面法線(未接地時はtransform.up)
 		Vector3 targetUp = (m_GravityMover != null && m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
 			? m_GravityMover.CurrentGroundNormal
 			: transform.up;
 
-		// カメラのUpベクトルを法線方向へ滑らかに追従補間
-		float alignSpeed = m_NormalAlignSpeed > 0f ? m_NormalAlignSpeed : 12.0f;
+		// カメラのUpベクトルを法線方向へ滑らかに追従補間(急変によるガクつきを防止)
+		float alignSpeed = m_NormalAlignSpeed > 0f ? m_NormalAlignSpeed : 8.0f;
 		Vector3 newUp = Vector3.Slerp(m_CurrentUp, targetUp, alignSpeed * Time.deltaTime).normalized;
 
 		// 法線の変化に合わせて水平視線ベクトル(m_PlanarForward)を回転追従
