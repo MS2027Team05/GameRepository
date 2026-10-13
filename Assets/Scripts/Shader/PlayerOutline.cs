@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// キャラのルートに1つ付けるだけで、
@@ -14,116 +15,137 @@
 /// </summary>
 public class PlayerOutline : MonoBehaviour
 {
-    [Header("Custom/PlayerOutline のマテリアル")]
-    [SerializeField] private Material outlineMaterial;
+	[Header("Custom/PlayerOutline のマテリアル")]
+	[FormerlySerializedAs("outlineMaterial")]
+	[SerializeField] private Material m_OutlineMaterial;
 
-    [Header("Custom/PlayerOutlineStencilMask のマテリアル")]
-    [SerializeField] private Material stencilMaskMaterial;
+	[Header("Custom/PlayerOutlineStencilMask のマテリアル")]
+	[FormerlySerializedAs("stencilMaskMaterial")]
+	[SerializeField] private Material m_StencilMaskMaterial;
 
-    [Header("アウトラインを付けたくないRendererをここに登録")]
-    [SerializeField] private Renderer[] excludeRenderers;
+	[Header("アウトラインを付けたくないRendererをここに登録")]
+	[FormerlySerializedAs("excludeRenderers")]
+	[SerializeField] private Renderer[] m_ExcludeRenderers;
 
-    [SerializeField] private int playerIndex = 0;
+	[FormerlySerializedAs("playerIndex")]
+	[SerializeField] private int m_PlayerIndex;
 
-    [SerializeField]
-    private Color[] playerColors =
-    {
-        new Color(0.9f, 0.2f, 0.2f), // 1P: 赤
-        new Color(0.2f, 0.4f, 0.9f), // 2P: 青
-        new Color(0.9f, 0.8f, 0.2f), // 3P: 黄
-        new Color(0.2f, 0.8f, 0.3f), // 4P: 緑
-    };
+	[FormerlySerializedAs("playerColors")]
+	[SerializeField] private Color[] m_PlayerColors;
 
-    private static readonly int OutlineColorId = Shader.PropertyToID("_OutlineColor");
-    private static readonly int StencilRefId = Shader.PropertyToID("_StencilRef");
+	private static readonly int m_OutlineColorId = Shader.PropertyToID("_OutlineColor");
+	private static readonly int m_StencilRefId = Shader.PropertyToID("_StencilRef");
 
-    private Renderer[] renderers;
+	private Renderer[] m_Renderers;
 
-    // このキャラ専用のマテリアルインスタンス
-    private Material outlineInstance;
-    private Material stencilMaskInstance;
+	// このキャラ専用のマテリアルインスタンス
+	private Material m_OutlineInstance;
+	private Material m_StencilMaskInstance;
 
-    private void Awake()
-    {
-        renderers = CollectRenderers();
-        CreateMaterialInstances();
-        AddMaterials();
-        ApplyPlayerSettings();
-    }
+	private void Awake()
+	{
+		m_Renderers = CollectRenderers();
+		CreateMaterialInstances();
+		AddMaterials();
+		ApplyPlayerSettings();
+	}
 
-    public void SetPlayerIndex(int index)
-    {
-        playerIndex = index;
-        ApplyPlayerSettings();
-    }
+	public void SetPlayerIndex(int index)
+	{
+		m_PlayerIndex = index;
+		ApplyPlayerSettings();
+	}
 
-    /// <summary>子の全Rendererから除外リストに入っているものを除いて収集</summary>
-    private Renderer[] CollectRenderers()
-    {
-        var all = GetComponentsInChildren<Renderer>();
-        if (excludeRenderers == null || excludeRenderers.Length == 0)
-            return all;
+	/// <summary>子の全Rendererから除外リストに入っているものを除いて収集</summary>
+	private Renderer[] CollectRenderers()
+	{
+		var all = GetComponentsInChildren<Renderer>();
+		if (m_ExcludeRenderers == null || m_ExcludeRenderers.Length == 0)
+		{
+			return all;
+		}
 
-        var list = new System.Collections.Generic.List<Renderer>(all.Length);
-        foreach (var r in all)
-        {
-            if (System.Array.IndexOf(excludeRenderers, r) < 0)
-                list.Add(r);
-        }
-        return list.ToArray();
-    }
+		var list = new System.Collections.Generic.List<Renderer>(all.Length);
+		foreach (var r in all)
+		{
+			if (System.Array.IndexOf(m_ExcludeRenderers, r) < 0)
+			{
+				list.Add(r);
+			}
+		}
+		return list.ToArray();
+	}
 
-    private void CreateMaterialInstances()
-    {
-        if (outlineMaterial == null || stencilMaskMaterial == null)
-        {
-            // Debug.LogWarning($"{name}: マテリアルが未設定です", this);
-            return;
-        }
+	private void CreateMaterialInstances()
+	{
+		if (m_OutlineMaterial == null || m_StencilMaskMaterial == null)
+		{
+			// Debug.LogWarning($"{name}: マテリアルが未設定です", this);
+			return;
+		}
 
-        outlineInstance = new Material(outlineMaterial);
-        stencilMaskInstance = new Material(stencilMaskMaterial);
-    }
+		m_OutlineInstance = new Material(m_OutlineMaterial);
+		m_StencilMaskInstance = new Material(m_StencilMaskMaterial);
+	}
 
-    /// <summary>全Rendererのマテリアル配列末尾にマスク→アウトラインの順で追加</summary>
-    private void AddMaterials()
-    {
-        if (outlineInstance == null) return;
+	/// <summary>全Rendererのマテリアル配列末尾にマスク→アウトラインの順で追加</summary>
+	private void AddMaterials()
+	{
+		if (m_OutlineInstance == null)
+		{
+			return;
+		}
 
-        foreach (var renderer in renderers)
-        {
-            var materials = renderer.sharedMaterials;
-            var newMaterials = new Material[materials.Length + 2];
-            materials.CopyTo(newMaterials, 0);
-            newMaterials[materials.Length] = stencilMaskInstance;
-            newMaterials[materials.Length + 1] = outlineInstance;
-            renderer.sharedMaterials = newMaterials;
-        }
-    }
+		foreach (var renderer in m_Renderers)
+		{
+			var materials = renderer.sharedMaterials;
+			var newMaterials = new Material[materials.Length + 2];
+			materials.CopyTo(newMaterials, 0);
+			newMaterials[materials.Length] = m_StencilMaskInstance;
+			newMaterials[materials.Length + 1] = m_OutlineInstance;
+			renderer.sharedMaterials = newMaterials;
+		}
+	}
 
-    private void ApplyPlayerSettings()
-    {
-        if (outlineInstance == null) return;
+	private void ApplyPlayerSettings()
+	{
+		if (m_OutlineInstance == null)
+		{
+			return;
+		}
 
-        Color color = playerColors[Mathf.Clamp(playerIndex, 0, playerColors.Length - 1)];
-        int stencilRef = playerIndex + 1; // 0はステンシルの初期値なので避ける
+		Color color = Color.white;
+		if (m_PlayerColors != null && m_PlayerColors.Length > 0)
+		{
+			color = m_PlayerColors[Mathf.Clamp(m_PlayerIndex, 0, m_PlayerColors.Length - 1)];
+		}
+		int stencilRef = m_PlayerIndex + 1; // 0はステンシルの初期値なので避ける
 
-        outlineInstance.SetColor(OutlineColorId, color);
-        outlineInstance.SetFloat(StencilRefId, stencilRef);
-        stencilMaskInstance.SetFloat(StencilRefId, stencilRef);
-    }
+		m_OutlineInstance.SetColor(m_OutlineColorId, color);
+		m_OutlineInstance.SetFloat(m_StencilRefId, stencilRef);
+		m_StencilMaskInstance.SetFloat(m_StencilRefId, stencilRef);
+	}
 
-    private void OnDestroy()
-    {
-        // インスタンス化したマテリアルはリークしないよう破棄
-        if (outlineInstance != null) Destroy(outlineInstance);
-        if (stencilMaskInstance != null) Destroy(stencilMaskInstance);
-    }
+	private void OnDestroy()
+	{
+		// インスタンス化したマテリアルはリークしないよう破棄
+		if (m_OutlineInstance != null)
+		{
+			Destroy(m_OutlineInstance);
+		}
+		if (m_StencilMaskInstance != null)
+		{
+			Destroy(m_StencilMaskInstance);
+		}
+	}
 
 #if UNITY_EDITOR
-    private void OnValidate()
-    {
-        if (Application.isPlaying && outlineInstance != null) ApplyPlayerSettings();
-    }
+	private void OnValidate()
+	{
+		if (Application.isPlaying && m_OutlineInstance != null)
+		{
+			ApplyPlayerSettings();
+		}
+	}
 #endif
 }

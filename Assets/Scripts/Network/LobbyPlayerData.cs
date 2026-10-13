@@ -7,27 +7,45 @@ using Unity.Netcode;
 /// </summary>
 public struct LobbyPlayerData : INetworkSerializable, IEquatable<LobbyPlayerData>
 {
-	public ulong ClientId;
-	public byte TeamId;
-	public bool IsReady;
+	private ulong m_ClientId;
+	private byte m_TeamId;
+	private bool m_IsReady;
+
+	public ulong ClientId
+	{
+		get => m_ClientId;
+		set => m_ClientId = value;
+	}
+
+	public byte TeamId
+	{
+		get => m_TeamId;
+		set => m_TeamId = value;
+	}
+
+	public bool IsReady
+	{
+		get => m_IsReady;
+		set => m_IsReady = value;
+	}
 
 	public LobbyPlayerData(ulong clientId, byte teamId = 0, bool isReady = false)
 	{
-		ClientId = clientId;
-		TeamId = teamId;
-		IsReady = isReady;
+		m_ClientId = clientId;
+		m_TeamId = teamId;
+		m_IsReady = isReady;
 	}
 
 	public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
 	{
-		serializer.SerializeValue(ref ClientId);
-		serializer.SerializeValue(ref TeamId);
-		serializer.SerializeValue(ref IsReady);
+		serializer.SerializeValue(ref m_ClientId);
+		serializer.SerializeValue(ref m_TeamId);
+		serializer.SerializeValue(ref m_IsReady);
 	}
 
 	public bool Equals(LobbyPlayerData other)
 	{
-		return ClientId == other.ClientId && TeamId == other.TeamId && IsReady == other.IsReady;
+		return m_ClientId == other.m_ClientId && m_TeamId == other.m_TeamId && m_IsReady == other.m_IsReady;
 	}
 
 	public override bool Equals(object obj)
@@ -37,6 +55,6 @@ public struct LobbyPlayerData : INetworkSerializable, IEquatable<LobbyPlayerData
 
 	public override int GetHashCode()
 	{
-		return HashCode.Combine(ClientId, TeamId, IsReady);
+		return HashCode.Combine(m_ClientId, m_TeamId, m_IsReady);
 	}
 }
