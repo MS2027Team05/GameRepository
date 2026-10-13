@@ -34,8 +34,11 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	[Header("接地面法線への姿勢追従速度")]
 	[SerializeField] private float m_NormalAlignSpeed;
 
-	[Header("カメラピボット位置追従速度(角での衝撃緩和ダンピング)")]
-	[SerializeField] private float m_PositionFollowSpeed;
+	[Header("カメラ法線追従の最大角速度(度/秒: 初速スパイク防止)")]
+	[SerializeField] private float m_MaxNormalDegreesPerSecond;
+
+	[Header("カメラピボット位置スムース時間(衝撃緩和SmoothDamp)")]
+	[SerializeField] private float m_PositionSmoothTime;
 
 	[Header("FOV変更")]
 	[SerializeField]
@@ -45,6 +48,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	private PlayerInputReceiver m_InputReceiver;
 	private IGravityMover m_GravityMover;
 	private NetworkObject m_NetworkObject;
+	private Vector3 m_PositionVelocity;
 	private Vector3 m_CurrentUp = Vector3.up;
 	private Vector3 m_PlanarForward = Vector3.forward;
 	private float m_Pitch = 12.0f;
@@ -102,18 +106,20 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			return;
 		}
 
-		// プレイヤーの位置へ追従(角での急激な突き出し衝撃を吸収する滑らかなダンピング)
-		float posSpeed = m_PositionFollowSpeed > 0f ? m_PositionFollowSpeed : 25.0f;
-		m_CameraPivot.position = Vector3.Lerp(m_CameraPivot.position, transform.position, posSpeed * Time.deltaTime);
+		// プレイヤーの位置へ追従: SmoothDampによる滑らかなスプリングダンピングで角の衝撃を完全吸収
+		float smoothTime = m_PositionSmoothTime > 0f ? m_PositionSmoothTime : 0.08f;
+		m_CameraPivot.position = Vector3.SmoothDamp(m_CameraPivot.position, transform.position, ref m_PositionVelocity, smoothTime);
 
 		// 目標とする接地面法線(未接地時はtransform.up)
 		Vector3 targetUp = (m_GravityMover != null && m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
 			? m_GravityMover.CurrentGroundNormal
 			: transform.up;
 
-		// カメラのUpベクトルを法線方向へ滑らかに追従補間(急変によるガクつきを防止)
-		float alignSpeed = m_NormalAlignSpeed > 0f ? m_NormalAlignSpeed : 8.0f;
-		Vector3 newUp = Vector3.Slerp(m_CurrentUp, targetUp, alignSpeed * Time.deltaTime).normalized;
+		// カメラのUpベクトル追従: RotateTowardsによる角速度上限で初速スパイクを排除しふわりと追従
+		float maxDegPerSec = m_MaxNormalDegreesPerSecond > 0f ? m_MaxNormalDegreesPerSecond : 90.0f;
+		float alignSpeed = m_NormalAlignSpeed > 0f ? m_NormalAlignSpeed : 5.0f;
+		Vector3 slerpedUp = Vector3.Slerp(m_CurrentUp, targetUp, alignSpeed * Time.deltaTime);
+		Vector3 newUp = Vector3.RotateTowards(m_CurrentUp, slerpedUp, maxDegPerSec * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
 
 		// 法線の変化に合わせて水平視線ベクトル(m_PlanarForward)を回転追従
 		Quaternion upRotation = Quaternion.FromToRotation(m_CurrentUp, newUp);

@@ -227,14 +227,16 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			}
 
 			float t = Mathf.Clamp01(1.0f - (m_EdgeTransitionTimer / m_EdgeTransitionDuration));
+			// S字イージング(SmoothStep)により進入と脱出の角速度・加速度スパイクを排除
+			float tSmooth = t * t * (3.0f - 2.0f * t);
 
-			// 法線と前進向きの円弧補間
-			m_CurrentGroundNormal = Vector3.Slerp(m_EdgeStartNormal, m_EdgeTargetNormal, t).normalized;
-			Vector3 forward = Vector3.Slerp(m_EdgeStartForward, m_EdgeTargetForward, t).normalized;
+			// 法線と前進向きの滑らかな円弧補間
+			m_CurrentGroundNormal = Vector3.Slerp(m_EdgeStartNormal, m_EdgeTargetNormal, tSmooth).normalized;
+			Vector3 forward = Vector3.Slerp(m_EdgeStartForward, m_EdgeTargetForward, tSmooth).normalized;
 
 			// 角の頂点(EdgePivot)を基準とし、カプセルの高さを考慮した外側円弧配置
 			float footOffset = GetFootOffset();
-			Vector3 targetPos = m_EdgePivotPoint + m_CurrentGroundNormal * (footOffset + 0.05f) + m_EdgeTargetForward * (0.25f * t);
+			Vector3 targetPos = m_EdgePivotPoint + m_CurrentGroundNormal * (footOffset + 0.05f) + m_EdgeTargetForward * (0.25f * tSmooth);
 			Quaternion targetRot = Quaternion.LookRotation(forward, m_CurrentGroundNormal);
 
 			transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 15.0f * Time.fixedDeltaTime);

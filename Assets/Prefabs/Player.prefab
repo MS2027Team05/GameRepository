@@ -839,7 +839,9 @@ MonoBehaviour:
   m_MouseSensitivity: 0.15
   m_MinPitchAngle: -70
   m_MaxPitchAngle: 70
-  m_NormalAlignSpeed: 12
+  m_NormalAlignSpeed: 5
+  m_MaxNormalDegreesPerSecond: 150
+  m_PositionSmoothTime: 0.08
   m_FOVCurve:
     serializedVersion: 2
     m_Curve:
