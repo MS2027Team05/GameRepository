@@ -318,8 +318,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0.9945219, z: -0.10452846, w: 0}
-  m_LocalPosition: {x: 354.5, y: 203.3, z: 10}
+  m_LocalRotation: {x: 0.10452846, y: 0, z: 0, w: 0.9945219}
+  m_LocalPosition: {x: -0.9701938, y: 2.0000002, z: -1.851346}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1582,6 +1582,7 @@ GameObject:
   - component: {fileID: 2066604225}
   - component: {fileID: 2066604224}
   - component: {fileID: 2066604226}
+  - component: {fileID: 2066604227}
   m_Layer: 0
   m_Name: PlayerSpawner
   m_TagString: Untagged
@@ -1649,6 +1650,26 @@ MonoBehaviour:
   - {fileID: 1876504212}
   m_BlueSpawnPoints:
   - {fileID: 2053479995}
+--- !u!114 &2066604227
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2066604223}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
+  m_AimReticle: {fileID: 0}
+  m_AimLine: {fileID: 0}
+  m_LandingMarker: {fileID: 0}
+  m_GravityMover: {fileID: 0}
+  m_AimTargetLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_MaxAimDistance: 100
 --- !u!1001 &146070833806134461
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -52,6 +52,24 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	// 想定設定値: Groundレイヤー等のマスク(未指定時は全レイヤー対象)
 	[SerializeField] private LayerMask m_GroundLayerMask;
 
+
+	//---追加---//
+	[Header("落下中の着地姿勢回転")]
+	[SerializeField] private float m_FallingRotationSpeed = 4.0f;
+
+	// 落下中に向かう着地法線
+	private Vector3 m_FallingTargetNormal = Vector3.up;
+
+	// 落下中の目標回転
+	//private Quaternion m_FallingTargetRotation;
+
+	// 着地面を事前に検出できているか
+	private bool m_HasFallingTargetNormal = false;
+
+
+	private Vector3 m_FallingTargetPoint;
+	private bool m_HasFallingTargetPoint = false;
+
 	private Rigidbody m_Rigidbody;
 	private CapsuleCollider m_CapsuleCollider;
 	private Vector3 m_CurrentDirection;
@@ -122,13 +140,48 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		// 進行中の姿勢補正アニメーションがあれば中断
 		m_AlignTween?.Kill();
 
-		m_CurrentDirection = direction.normalized;
+		// 照準で指定した着地点があれば、その地点へ向かう方向を使う
+		if (m_HasFallingTargetPoint)
+		{
+			Vector3 targetDirection =
+				m_FallingTargetPoint - m_Rigidbody.position;
+
+			if (targetDirection.sqrMagnitude > 0.0001f)
+			{
+				m_CurrentDirection = targetDirection.normalized;
+			}
+			else
+			{
+				m_CurrentDirection = direction.normalized;
+			}
+
+			m_HasFallingTargetPoint = false;
+		}
+		else
+		{
+			m_CurrentDirection = direction.normalized;
+		}
+
 		m_IsFalling = true;
 		m_IsGrounded = false;
 		m_MoveInput = Vector2.zero;
+		
 
 		// 進行方向へ即座に向きを設定
-		transform.forward = m_CurrentDirection;
+		//transform.forward = m_CurrentDirection;
+	}
+
+	/// <summary>
+	/// 落下先の着地点と着地面の法線を設定します。
+	/// マーカーの着地点が決定した時に呼び出します。
+	/// </summary>
+	public void SetFallingTarget(Vector3 landingPoint, Vector3 landingNormal)
+	{
+		m_FallingTargetPoint = landingPoint;
+		m_HasFallingTargetPoint = true;
+
+		m_FallingTargetNormal = landingNormal.normalized;
+		m_HasFallingTargetNormal = true;
 	}
 
 	/// <summary>
@@ -176,11 +229,14 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 		if (m_IsFalling && m_Rigidbody != null)
 		{
-			m_Rigidbody.linearVelocity = m_CurrentDirection * (m_BaseFallSpeed * m_SpeedMultiplier);
-			if (m_CurrentDirection != Vector3.zero)
-			{
-				transform.forward = m_CurrentDirection;
-			}
+			// 等速直線移動
+			m_Rigidbody.linearVelocity =
+				m_CurrentDirection *
+				(m_BaseFallSpeed * m_SpeedMultiplier);
+
+			// 移動中に少しずつ着地面の向きへ補正
+			UpdateFallingRotation();
+
 			return;
 		}
 
@@ -317,19 +373,66 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		}
 
 		// 3. 通常足元検知: キャラクター直下(-transform.up)へRaycast
+		//if (!foundGround)
+		//{
+		//	bool isDownHit = Physics.Raycast(transform.position, -transform.up, out RaycastHit downHit, checkDist, layerMask, QueryTriggerInteraction.Ignore);
+		//	if (m_EnableDebugDraw)
+		//	{
+		//		Debug.DrawRay(transform.position, -transform.up * checkDist, isDownHit ? Color.green : Color.red, 0f);
+		//	}
+		//	if (isDownHit)
+		//	{
+		//		foundGround = true;
+		//		detectedNormal = downHit.normal;
+		//	}
+		//}
+
+
+		// 3. 通常足元検知：曲面に向けてRaycastし、接地法線を更新
 		if (!foundGround)
 		{
-			bool isDownHit = Physics.Raycast(transform.position, -transform.up, out RaycastHit downHit, checkDist, layerMask, QueryTriggerInteraction.Ignore);
+			float rayDistance = checkDist + 0.3f;
+			Vector3 rayDirection = -m_CurrentGroundNormal.normalized;
+
+			// キャラクターの中心から、現在の接地面の方向へ検知
+			Vector3 rayOrigin = transform.position;
+
+			bool isGroundHit = Physics.Raycast(
+				rayOrigin,
+				rayDirection,
+				out RaycastHit groundHit,
+				rayDistance,
+				layerMask,
+				QueryTriggerInteraction.Ignore
+			);
+
 			if (m_EnableDebugDraw)
 			{
-				Debug.DrawRay(transform.position, -transform.up * checkDist, isDownHit ? Color.green : Color.red, 0f);
+				Debug.DrawRay(
+					rayOrigin,
+					rayDirection * rayDistance,
+					isGroundHit ? Color.green : Color.red
+				);
 			}
-			if (isDownHit)
+
+			if (isGroundHit)
 			{
 				foundGround = true;
-				detectedNormal = downHit.normal;
+				detectedNormal = groundHit.normal.normalized;
 			}
 		}
+
+		// 接地状態と法線を更新
+		if (foundGround)
+		{
+			m_IsGrounded = true;
+			m_CurrentGroundNormal = detectedNormal.normalized;
+		}
+		else
+		{
+			m_IsGrounded = false;
+		}
+
 
 		// デバッグ表示: 現在の法線(緑線)と進行方向(青線)
 		if (m_EnableDebugDraw)
@@ -461,21 +564,53 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			// 落下を停止してホバリング状態へ遷移
 			StopFalling();
 
-			// 既存の姿勢補正アニメーションを中断
-			m_AlignTween?.Kill();
+			//// 既存の姿勢補正アニメーションを中断
+			//m_AlignTween?.Kill();
 
-			// キャラクターの足元(transform.up)が衝突面の法線を向くように姿勢補正
-			Quaternion targetRotation = Quaternion.FromToRotation(transform.up, hitNormal) * transform.rotation;
+			//// キャラクターの足元(transform.up)が衝突面の法線を向くように姿勢補正
+			//Quaternion targetRotation = Quaternion.FromToRotation(transform.up, hitNormal) * transform.rotation;
 
-			if (m_AlignDuration > 0f)
+			//if (m_AlignDuration > 0f)
+			//{
+			//	m_AlignTween = transform.DORotateQuaternion(targetRotation, m_AlignDuration)
+			//		.SetEase(m_AlignEase);
+			//}
+			//else
+			//{
+			//	transform.rotation = targetRotation;
+			//}
+
+
+			// 移動中の回転でほぼ着地姿勢になっているが、
+			// 最後に衝突面の法線へ完全に合わせる
+			Vector3 targetForward =
+				Vector3.ProjectOnPlane(
+					transform.forward,
+					hitNormal
+				);
+
+			if (targetForward.sqrMagnitude < 0.001f)
 			{
-				m_AlignTween = transform.DORotateQuaternion(targetRotation, m_AlignDuration)
-					.SetEase(m_AlignEase);
+				targetForward =
+					Vector3.ProjectOnPlane(
+						m_CurrentDirection,
+						hitNormal
+					);
 			}
-			else
+
+			if (targetForward.sqrMagnitude > 0.001f)
 			{
-				transform.rotation = targetRotation;
+				targetForward.Normalize();
+
+				transform.rotation =
+					Quaternion.LookRotation(
+						targetForward,
+						hitNormal
+					);
 			}
+
+			// 落下中の着地法線情報をクリア
+			m_HasFallingTargetNormal = false;
 
 			m_CurrentGroundNormal = hitNormal;
 			m_IsGrounded = true;
@@ -492,9 +627,59 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		m_IsGrounded = false;
 	}
 
+	// 追加
+	private void UpdateFallingRotation()
+	{
+		if (!m_HasFallingTargetNormal)
+			return;
+
+		// 着地面に沿うように、移動方向を補正する
+		Vector3 targetForward = Vector3.ProjectOnPlane(
+			m_CurrentDirection,
+			m_FallingTargetNormal
+		);
+
+		// 移動方向が着地面とほぼ平行でない場合の補助処理
+		if (targetForward.sqrMagnitude < 0.001f)
+		{
+			targetForward = Vector3.ProjectOnPlane(
+				transform.forward,
+				m_FallingTargetNormal
+			);
+		}
+
+		if (targetForward.sqrMagnitude < 0.001f)
+			return;
+
+		targetForward.Normalize();
+
+		// 着地面の法線に合わせた目標回転
+		Quaternion targetRotation = Quaternion.LookRotation(
+			targetForward,
+			m_FallingTargetNormal
+		);
+
+		// 回転速度
+		float speed = m_FallingRotationSpeed > 0f
+			? m_FallingRotationSpeed
+			: 4.0f;
+
+		// Rigidbodyを使って徐々に回転させる
+		m_Rigidbody.MoveRotation(
+			Quaternion.Slerp(
+				m_Rigidbody.rotation,
+				targetRotation,
+				speed * Time.fixedDeltaTime
+			)
+		);
+	}
+
+
 	public override void OnDestroy()
 	{
 		m_AlignTween?.Kill();
 		base.OnDestroy();
 	}
 }
+
+

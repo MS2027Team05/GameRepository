@@ -470,9 +470,10 @@ GameObject:
   - component: {fileID: 8696501033850427894}
   - component: {fileID: 6506262699355711857}
   - component: {fileID: 2874015679274306090}
-  - component: {fileID: 6097049237247373300}
   - component: {fileID: 1164154789786135184}
   - component: {fileID: -4640382079411939406}
+  - component: {fileID: 6097049237247373300}
+  - component: {fileID: -4105561431708164742}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -597,7 +598,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4273467025
+  GlobalObjectIdHash: 4203264452
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -799,25 +800,7 @@ MonoBehaviour:
   m_GroundLayerMask:
     serializedVersion: 2
     m_Bits: 0
---- !u!114 &6097049237247373300
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2466233519835475451}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
-  m_AimReticle: {fileID: 5509881642956187267}
-  m_AimLine: {fileID: 7693887922062000978}
-  m_LandingMarker: {fileID: 7693067950226141477}
-  m_AimTargetLayers:
-    serializedVersion: 2
-    m_Bits: 128
-  m_MaxAimDistance: 100
+  m_FallingRotationSpeed: 4
 --- !u!114 &1164154789786135184
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -878,6 +861,55 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBallCarrier
   ShowTopMostFoldoutHeaderGroup: 1
   m_BallHoldPoint: {fileID: 8590505130648689296}
+--- !u!114 &6097049237247373300
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
+  m_AimReticle: {fileID: 5509881642956187267}
+  m_AimLine: {fileID: 7693887922062000978}
+  m_LandingMarker: {fileID: 7693067950226141477}
+  m_GravityMover: {fileID: 2874015679274306090}
+  m_AimTargetLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  m_MaxAimDistance: 100
+--- !u!114 &-4105561431708164742
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff47b9be831fabc4d9c109233cb5a42e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GravityMover
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_BaseFallSpeed: 0
+  m_AlignDuration: 0
+  m_AlignEase: 0
+  m_GroundMoveSpeed: 0
+  m_GroundAcceleration: 0
+  m_GroundStickForce: 0
+  m_GroundCheckDistance: 0
+  m_SurfaceAlignSpeed: 0
+  m_EdgeAheadDistance: 0
+  m_EdgeWrapCheckDistance: 0
+  m_EdgeAlignSpeed: 0
+  m_EnableDebugDraw: 1
+  m_GroundLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  m_FallingRotationSpeed: 5
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0
