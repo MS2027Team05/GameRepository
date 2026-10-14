@@ -1,4 +1,4 @@
-using DG.Tweening;
+﻿using DG.Tweening;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -276,7 +276,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			return;
 		}
 
-		// エイム中は物理移動・接地処理を停止してホバリングします(isKinematic中に速度設定を行うと警告が出るため早期リターン)。
+		// エイム中は物理移動・接地処理を停止してホバリング
 		if (m_IsAimHovering)
 		{
 			return;
