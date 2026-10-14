@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 
@@ -37,9 +37,6 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	[SerializeField, Range(0.1f, 1.0f)]
 	private float m_AimOpacity = 0.35f;
 
-	// 移動制御
-	private IGravityMover m_GravityMover;
-
 	// エイム状態
 	private bool m_IsAiming;
 
@@ -71,7 +68,10 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 	private void Awake()
 	{
-		m_GravityMover = GetComponent<IGravityMover>();
+		if (m_GravityMover == null)
+		{
+			m_GravityMover = GetComponent<GravityMover>();
+		}
 
 		// カメラの通常時のローカル位置を最初に保存する
 		if (m_CinemachineCameraTransform != null)
