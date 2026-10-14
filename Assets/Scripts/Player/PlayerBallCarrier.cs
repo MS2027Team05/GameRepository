@@ -4,6 +4,14 @@ using UnityEngine;
 /// <summary>
 /// プレイヤー側のボール所持処理を担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. Ownerがボールとの接触を検出します。
+/// 2. ServerRpcでHostへ取得を要求します。
+/// 3. HostがBallControllerへ取得処理を依頼します。
+/// 4. シュート・強制解放もHost側で所持状態を確認して確定します。
+/// 5. ボール所持状態の変化をPlayerControllerへ通知します。
+/// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 public class PlayerBallCarrier :
 	NetworkBehaviour,
@@ -15,18 +23,44 @@ public class PlayerBallCarrier :
 	private PlayerController m_PlayerController;
 	private bool m_HasBall;
 
-	public bool HasBall =>
-		m_HasBall;
+	/// <summary>
+	/// このプレイヤーが現在ボールを所持しているか取得します。
+	/// </summary>
+	public bool HasBall
+	{
+		get
+		{
+			return m_HasBall;
+		}
+	}
 
-	public Transform BallHoldPoint =>
-		m_BallHoldPoint;
+	/// <summary>
+	/// ボールを所持中に配置する位置を取得します。
+	/// </summary>
+	public Transform BallHoldPoint
+	{
+		get
+		{
+			return m_BallHoldPoint;
+		}
+	}
 
+	/// <summary>
+	/// 使用するコンポーネントの参照を取得します。
+	/// </summary>
 	private void Awake()
 	{
 		m_PlayerController =
 			GetComponent<PlayerController>();
 	}
 
+	/// <summary>
+	/// Owner側でボールとの接触を検出し、
+	/// Hostへ取得要求を送信します。
+	/// </summary>
+	/// <param name="other">
+	/// 接触したColliderです。
+	/// </param>
 	private void OnTriggerEnter(
 		Collider other)
 	{
@@ -48,11 +82,15 @@ public class PlayerBallCarrier :
 			return;
 		}
 
+		// ゴール判定など別用途のColliderでは
+		// キャッチ処理を開始しません。
 		if (!ballController.IsCatchCollider(other))
 		{
 			return;
 		}
 
+		// NetworkObjectとしてSpawnされる前のボールには
+		// ServerRpcによる取得要求を行いません。
 		if (!ballController.IsSpawned)
 		{
 			return;
@@ -62,6 +100,12 @@ public class PlayerBallCarrier :
 			ballController.NetworkObjectId);
 	}
 
+	/// <summary>
+	/// Host上で指定されたボールの取得を試みます。
+	/// </summary>
+	/// <param name="ballNetworkObjectId">
+	/// 取得対象となるボールのNetworkObjectIdです。
+	/// </param>
 	[ServerRpc]
 	private void RequestPickupServerRpc(
 		ulong ballNetworkObjectId)
@@ -81,20 +125,20 @@ public class PlayerBallCarrier :
 			return;
 		}
 
-		bool pickupSucceeded =
-			ballController.TrySetHolder(
-				OwnerClientId,
-				NetworkObjectId);
-
-		Debug.Log(
-			$"[PlayerBallCarrier] キャッチ結果: " +
-			$"{pickupSucceeded}");
+		// 最終的な取得可否はBallController側で判定します。
+		ballController.TrySetHolder(
+			OwnerClientId,
+			NetworkObjectId);
 	}
 
 	/// <summary>
-	/// 所持中のボールを指定方向へ射出します。
+	/// 所持中のボールを指定方向へ射出するようHostへ要求します。
 	/// </summary>
-	public void Shoot(Vector3 direction)
+	/// <param name="direction">
+	/// ボールを射出する方向です。
+	/// </param>
+	public void Shoot(
+		Vector3 direction)
 	{
 		if (!IsOwner)
 		{
@@ -117,8 +161,12 @@ public class PlayerBallCarrier :
 	}
 
 	/// <summary>
-	/// OwnerからHostへシュートを要求します。
+	/// Host上でこのプレイヤーが所持するボールを取得し、
+	/// 指定方向へのシュートを試みます。
 	/// </summary>
+	/// <param name="shootDirection">
+	/// ボールを射出する方向です。
+	/// </param>
 	[ServerRpc]
 	private void RequestShootServerRpc(
 		Vector3 shootDirection)
@@ -131,44 +179,29 @@ public class PlayerBallCarrier :
 
 		shootDirection.Normalize();
 
-		foreach (NetworkObject networkObject in
-			NetworkManager.SpawnManager.SpawnedObjectsList)
+		if (!TryGetOwnedBallServer(
+			out BallController ballController))
 		{
-			BallController ballController =
-				networkObject.GetComponent<BallController>();
-
-			if (ballController == null)
-			{
-				continue;
-			}
-
-			if (!ballController.HasHolder)
-			{
-				continue;
-			}
-
-			if (ballController.CurrentHolderId !=
-				OwnerClientId)
-			{
-				continue;
-			}
-
-			bool shootSucceeded =
-				ballController.TryShoot(
-					shootDirection);
-
-			Debug.Log(
-				$"[PlayerBallCarrier] シュート結果: " +
-				$"{shootSucceeded}");
+			Debug.LogWarning(
+				"[PlayerBallCarrier] " +
+				"シュート対象のボールが見つかりません。");
 
 			return;
 		}
 
-		Debug.LogWarning(
-			"[PlayerBallCarrier] " +
-			"シュート対象のボールが見つかりません。");
+		if (!ballController.TryShoot(
+			shootDirection))
+		{
+			Debug.LogWarning(
+				"[PlayerBallCarrier] " +
+				"ボールのシュート処理に失敗しました。");
+		}
 	}
 
+	/// <summary>
+	/// タックルなどの外部処理から、
+	/// このプレイヤーが所持するボールを強制的に解放します。
+	/// </summary>
 	public void ForceReleaseBall()
 	{
 		if (!IsSpawned)
@@ -176,24 +209,35 @@ public class PlayerBallCarrier :
 			return;
 		}
 
+		// Host自身から呼ばれた場合は、
+		// ServerRpcを経由せず直接解放します。
 		if (IsServer)
 		{
 			ReleaseOwnedBallServer();
 			return;
 		}
 
+		// Clientからの解放要求は、
+		// 対象プレイヤー本人のOwnerだけが送信できます。
 		if (IsOwner)
 		{
 			RequestReleaseBallServerRpc();
 		}
 	}
 
+	/// <summary>
+	/// OwnerからHostへボールの強制解放を要求します。
+	/// </summary>
 	[ServerRpc]
 	private void RequestReleaseBallServerRpc()
 	{
 		ReleaseOwnedBallServer();
 	}
 
+	/// <summary>
+	/// Host上でこのプレイヤーが所持しているボールを探し、
+	/// 見つかった場合は解放します。
+	/// </summary>
 	private void ReleaseOwnedBallServer()
 	{
 		if (!IsServer)
@@ -201,35 +245,79 @@ public class PlayerBallCarrier :
 			return;
 		}
 
+		if (!TryGetOwnedBallServer(
+			out BallController ballController))
+		{
+			return;
+		}
+
+		ballController.ReleaseBall();
+	}
+
+	/// <summary>
+	/// Host上で、このプレイヤーが現在所持している
+	/// ボールを取得します。
+	/// </summary>
+	/// <param name="ballController">
+	/// 所持中のボールです。
+	/// 見つからない場合はnullになります。
+	/// </param>
+	/// <returns>
+	/// 所持中のボールが見つかった場合はtrue、
+	/// 見つからなかった場合はfalseです。
+	/// </returns>
+	private bool TryGetOwnedBallServer(
+		out BallController ballController)
+	{
+		ballController = null;
+
+		if (!IsServer)
+		{
+			return false;
+		}
+
+		// Spawn済みオブジェクトから、
+		// このプレイヤーを所持者としているボールを探します。
 		foreach (NetworkObject networkObject in
 			NetworkManager.SpawnManager.SpawnedObjectsList)
 		{
-			BallController ballController =
+			BallController candidate =
 				networkObject.GetComponent<BallController>();
 
-			if (ballController == null)
+			if (candidate == null)
 			{
 				continue;
 			}
 
-			if (!ballController.HasHolder)
+			if (!candidate.HasHolder)
 			{
 				continue;
 			}
 
-			if (ballController.CurrentHolderId !=
+			if (candidate.CurrentHolderId !=
 				OwnerClientId)
 			{
 				continue;
 			}
 
-			ballController.ReleaseBall();
+			ballController = candidate;
 
-			return;
+			return true;
 		}
+
+		return false;
 	}
 
-	public void SetBallState(bool hasBall)
+	/// <summary>
+	/// このプレイヤーのボール所持状態を更新し、
+	/// Ownerの場合はPlayerControllerへ状態変化を通知します。
+	/// </summary>
+	/// <param name="hasBall">
+	/// ボールを所持している場合はtrue、
+	/// 所持していない場合はfalseです。
+	/// </param>
+	public void SetBallState(
+		bool hasBall)
 	{
 		if (m_HasBall == hasBall)
 		{
@@ -238,11 +326,8 @@ public class PlayerBallCarrier :
 
 		m_HasBall = hasBall;
 
-		Debug.Log(
-			$"[PlayerBallCarrier] SetBallState: " +
-			$"ClientId={OwnerClientId}, " +
-			$"HasBall={m_HasBall}");
-
+		// 移動速度などプレイヤー固有の変更は、
+		// そのプレイヤーを操作するOwner側だけに通知します。
 		if (!IsOwner)
 		{
 			return;
