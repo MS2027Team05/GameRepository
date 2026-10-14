@@ -143,6 +143,8 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 		if (m_Rigidbody != null)
 		{
+			// エイムホバリング(isKinematic)から飛行移動を開始する際、
+			// 浮遊中のTransform座標をRigidbodyに同期した上で物理演算を再開する
 			m_Rigidbody.position = transform.position;
 			m_Rigidbody.isKinematic = false;
 		}
@@ -220,6 +222,9 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		{
 			m_Rigidbody.linearVelocity = Vector3.zero;
 			m_Rigidbody.angularVelocity = Vector3.zero;
+
+			// エイム中の浮遊演出(DOTweenによるTransform移動)が物理演算や
+			// 補間処理(Interpolate)によって地面へ引き戻されるのを防ぐため、一時的に物理挙動を無効化する
 			m_Rigidbody.isKinematic = true;
 		}
 	}
@@ -235,6 +240,8 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 		if (m_Rigidbody != null)
 		{
+			// エイム浮動終了時、Transformの現在位置をRigidbodyに同期した上で
+			// 通常の物理演算(isKinematic = false)に復帰させる
 			m_Rigidbody.position = transform.position;
 			m_Rigidbody.isKinematic = false;
 			m_Rigidbody.linearVelocity = Vector3.zero;
