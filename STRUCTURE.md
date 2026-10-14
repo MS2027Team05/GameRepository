@@ -46,6 +46,7 @@ GameRepository/
 │   ├── Shader/                  # カスタムシェーダー格納 (アウトライン・遮蔽シルエット等)
 │   ├── TextMesh Pro/            # TextMesh Pro関連リソース
 │   └── Textures/                # テクスチャ・スプライト格納 (AI学習対象外)
+│   └── VFX/                     # VFX関連リソース
 ├── docs/                        # 企画書・仕様書等の設計ドキュメント格納
 ├── AGENTS.md                    # AI用ルール・規約定義
 ├── player_structure.md          # プレイヤーモジュール仕様・連携手順書
