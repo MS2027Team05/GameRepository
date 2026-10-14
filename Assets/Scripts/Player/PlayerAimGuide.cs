@@ -66,8 +66,12 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	// 予測線に沿った実際の移動方向
 	public Vector3 AimMoveDirection { get; private set; }
 
+	private Rigidbody m_Rigidbody;
+
 	private void Awake()
 	{
+		m_Rigidbody = GetComponent<Rigidbody>();
+
 		if (m_GravityMover == null)
 		{
 			m_GravityMover = GetComponent<GravityMover>();
@@ -346,6 +350,14 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 					.SetEase(Ease.OutCubic));
 		}
 
+		m_AimFloatTween.OnUpdate(() =>
+		{
+			if (m_Rigidbody != null)
+			{
+				m_Rigidbody.position = transform.position;
+			}
+		});
+
 		SetAimGuideActive(true);
 		ClearAimLine();
 	}
@@ -395,6 +407,14 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 						returnDuration)
 					.SetEase(Ease.InOutCubic));
 		}
+
+		m_AimFloatTween.OnUpdate(() =>
+		{
+			if (m_Rigidbody != null)
+			{
+				m_Rigidbody.position = transform.position;
+			}
+		});
 
 		// 戻り終わってからエイムを解除する
 		m_AimFloatTween.OnComplete(() =>

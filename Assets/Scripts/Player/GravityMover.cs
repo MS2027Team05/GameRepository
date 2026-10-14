@@ -1,4 +1,4 @@
-﻿using DG.Tweening;
+using DG.Tweening;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -141,11 +141,17 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		// 進行中の姿勢補正アニメーションがあれば中断
 		m_AlignTween?.Kill();
 
+		if (m_Rigidbody != null)
+		{
+			m_Rigidbody.position = transform.position;
+			m_Rigidbody.isKinematic = false;
+		}
+
 		// 照準で指定した着地点があれば、その地点へ向かう方向を使う
 		if (m_HasFallingTargetPoint)
 		{
 			Vector3 targetDirection =
-				m_FallingTargetPoint - m_Rigidbody.position;
+				m_FallingTargetPoint - transform.position;
 
 			if (targetDirection.sqrMagnitude > 0.0001f)
 			{
@@ -214,6 +220,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		{
 			m_Rigidbody.linearVelocity = Vector3.zero;
 			m_Rigidbody.angularVelocity = Vector3.zero;
+			m_Rigidbody.isKinematic = true;
 		}
 	}
 
@@ -228,6 +235,8 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 		if (m_Rigidbody != null)
 		{
+			m_Rigidbody.position = transform.position;
+			m_Rigidbody.isKinematic = false;
 			m_Rigidbody.linearVelocity = Vector3.zero;
 			m_Rigidbody.angularVelocity = Vector3.zero;
 		}
