@@ -1013,37 +1013,37 @@ public class BallPhysicsController : NetworkBehaviour
 	/// ボールを通常のフリー状態へ戻します。
 	/// </summary>
 	public void ResetMotionState()
+	{
+		if (!IsServer)
 		{
-			if (!IsServer)
-			{
-				return;
-			}
-	
-			m_Rigidbody.useGravity =
-				false;
-	
-			m_Rigidbody.isKinematic =
-				false;
-	
-			m_Rigidbody.linearVelocity =
-				Vector3.zero;
-	
-			m_Rigidbody.angularVelocity =
-				Vector3.zero;
-	
-			m_FlightDirection =
-				Vector3.zero;
-	
-			ClearTargetSurface();
-	
-			m_NextSurfaceSearchTime =
-				0.0f;
-	
-			m_NextAttractSearchTime =
-				0.0f;
-	
-			ChangeMotionState(
-				EBallMotionState.Idle);
+			return;
 		}
+
+		m_Rigidbody.useGravity =
+			false;
+
+		m_Rigidbody.isKinematic =
+			false;
+
+		m_Rigidbody.linearVelocity =
+			Vector3.zero;
+
+		m_Rigidbody.angularVelocity =
+			Vector3.zero;
+
+		m_FlightDirection =
+			Vector3.zero;
+
+		ClearTargetSurface();
+
+		m_NextSurfaceSearchTime =
+			0.0f;
+
+		m_NextAttractSearchTime =
+			0.0f;
+
+		ChangeMotionState(
+			EBallMotionState.Idle);
+	}
 }
 

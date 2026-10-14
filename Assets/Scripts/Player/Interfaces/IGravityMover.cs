@@ -12,6 +12,13 @@ public interface IGravityMover
 	void StartFalling(Vector3 direction);
 
 	/// <summary>
+	/// 落下先の着地点と着地面の法線を設定します。
+	/// </summary>
+	/// <param name="landingPoint">予測着地点</param>
+	/// <param name="landingNormal">着地面の法線</param>
+	void SetFallingTarget(Vector3 landingPoint, Vector3 landingNormal);
+
+	/// <summary>
 	/// 落下を停止し、空中で浮遊・静止(ホバリング)させます。
 	/// </summary>
 	void StopFalling();

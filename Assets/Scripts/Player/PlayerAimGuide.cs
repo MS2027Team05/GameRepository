@@ -16,6 +16,11 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	[Header("着地マーカー")]
 	[SerializeField] private GameObject m_LandingMarker;
 
+	// 追加
+	[Header("落下制御")]
+	[SerializeField]
+	private GravityMover m_GravityMover;
+
 	[Header("Raycast設定")]
 	[SerializeField] private LayerMask m_AimTargetLayers;
 	[SerializeField] private float m_MaxAimDistance = 100.0f;
@@ -528,6 +533,12 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		// 着地点にマーカーを表示
 		UpdateLandingMarker(hit.point, hit.normal);
+
+		// 着地点と法線をGravityMoverへ渡す
+		if (m_GravityMover != null)
+		{
+			m_GravityMover.SetFallingTarget(hit.point, hit.normal);
+		}
 	}
 
 	/// <summary>

@@ -470,9 +470,9 @@ GameObject:
   - component: {fileID: 8696501033850427894}
   - component: {fileID: 6506262699355711857}
   - component: {fileID: 2874015679274306090}
-  - component: {fileID: 6097049237247373300}
   - component: {fileID: 1164154789786135184}
   - component: {fileID: -4640382079411939406}
+  - component: {fileID: 6097049237247373300}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -799,6 +799,7 @@ MonoBehaviour:
   m_GroundLayerMask:
     serializedVersion: 2
     m_Bits: 128
+  m_FallingRotationSpeed: 4
 --- !u!114 &6097049237247373300
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -814,6 +815,7 @@ MonoBehaviour:
   m_AimReticle: {fileID: 5509881642956187267}
   m_AimLine: {fileID: 7693887922062000978}
   m_LandingMarker: {fileID: 7693067950226141477}
+  m_GravityMover: {fileID: 2874015679274306090}
   m_AimTargetLayers:
     serializedVersion: 2
     m_Bits: 128
