@@ -38,6 +38,7 @@ GameRepository/
 │   ├── Settings/                # プロジェクト設定・URP描画設定
 │   ├── TextMesh Pro/            # TextMesh Pro関連リソース
 │   └── Textures/                # テクスチャ・スプライト格納 (AI学習対象外)
+│   └── VFX/                     # VFX関連リソース
 ├── docs/                        # 企画書・仕様書等の設計ドキュメント格納
 ├── AGENTS.md                    # AI用ルール・規約定義
 ├── player_structure.md          # プレイヤーモジュール仕様・連携手順書
