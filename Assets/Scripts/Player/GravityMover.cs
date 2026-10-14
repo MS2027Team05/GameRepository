@@ -276,11 +276,9 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			return;
 		}
 
-		// エイム中は物理移動・接地処理を停止してホバリングします。
-		if (m_IsAimHovering && m_Rigidbody != null)
+		// エイム中は物理移動・接地処理を停止してホバリングします(isKinematic中に速度設定を行うと警告が出るため早期リターン)。
+		if (m_IsAimHovering)
 		{
-			m_Rigidbody.linearVelocity = Vector3.zero;
-			m_Rigidbody.angularVelocity = Vector3.zero;
 			return;
 		}
 
