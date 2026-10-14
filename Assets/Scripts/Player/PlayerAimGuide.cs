@@ -58,6 +58,11 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	private Material[][] m_OriginalMaterials;
 	private Material[][] m_TransparentMaterials;
 
+	// 予測線の終点
+	private Vector3 m_AimTargetPoint;
+
+	// 予測線に沿った実際の移動方向
+	public Vector3 AimMoveDirection { get; private set; }
 
 	private void Awake()
 	{
@@ -506,6 +511,16 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 			// 着地点がない場合は予測線とマーカーを非表示
 			ClearAimLine();
 			return;
+		}
+
+		// 予測線の終点へ向かう方向を計算
+		m_AimTargetPoint = hit.point;
+
+		Vector3 moveDirection = m_AimTargetPoint - transform.position;
+
+		if (moveDirection.sqrMagnitude > 0.001f)
+		{
+			AimMoveDirection = moveDirection.normalized;
 		}
 
 		// Playerの位置から着地点まで予測線を描画

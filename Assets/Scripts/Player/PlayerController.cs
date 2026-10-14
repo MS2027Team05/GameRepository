@@ -161,10 +161,16 @@ public class PlayerController : NetworkBehaviour
 
 		CurrentState = EPlayerState.Falling;
 
+		// カメラの向きではなく、予測線から求めた方向を使う
+		Vector3 direction = transform.forward;
+
+		if (m_AimGuide is PlayerAimGuide playerAimGuide)
+		{
+			direction = playerAimGuide.AimMoveDirection;
+		}
+
 		// 左クリックによる移動開始ではCameraだけを通常位置に戻す
 		m_AimGuide?.EndAimGuideForMovement();
-
-		Vector3 direction = GetAimDirection();
 
 		m_CameraEffect?.PlayFallEffect();
 		m_GravityMover?.StartFalling(direction);
