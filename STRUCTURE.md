@@ -10,6 +10,7 @@ GameRepository/
 │   ├── Audios/                  # 音声リソース格納 (AI学習対象外)
 │   ├── Fonts/                   # フォントリソース格納 (AI学習対象外)
 │   ├── Materials/               # マテリアル・シェーダー関連格納
+│   ├── Meshes/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
 │   ├── Models/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
 │   ├── Plugins/                 # 外部プラグインライブラリ格納 (DOTween等)
 │   ├── Prefabs/                 # ゲーム内プレハブ格納
@@ -19,6 +20,7 @@ GameRepository/
 │   │   ├── Ball/                # ボール物理・同期制御
 │   │   │   ├── BallController.cs        # [EntryPoint] ボール状態管理・所持・シュート制御
 │   │   │   ├── BallPhysicsController.cs # ボール物理補正・バウンド制御
+│   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
 │   │   ├── Network/             # 通信接続・同期制御
 │   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
