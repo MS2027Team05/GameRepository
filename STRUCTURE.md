@@ -32,6 +32,7 @@ GameRepository/
 │   │   │   └── ToolSilhouette.cs        # ツール類遮蔽時シルエット描画制御
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
+│   │       │   ├── IAimGuide.cs         # エイム・ガイド表示制御インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
 │   │       │   ├── ICameraEffect.cs     # カメラ演出制御用インターフェース
 │   │       │   └── IGravityMover.cs     # 物理移動制御用インターフェース
