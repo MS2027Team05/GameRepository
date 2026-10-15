@@ -16,10 +16,14 @@ public class BallDebugRespawner : NetworkBehaviour
 	private Rigidbody m_Rigidbody;
 	private NetworkTransform m_NetworkTransform;
 	private BallController m_BallController;
+	private BallPhysicsController m_BallPhysicsController;
 
 	private Vector3 m_InitialPosition;
 	private Quaternion m_InitialRotation;
 
+	/// <summary>
+	/// 使用するコンポーネントの参照を取得します。
+	/// </summary>
 	private void Awake()
 	{
 		m_Rigidbody =
@@ -30,8 +34,14 @@ public class BallDebugRespawner : NetworkBehaviour
 
 		m_BallController =
 			GetComponent<BallController>();
+
+		m_BallPhysicsController =
+			GetComponent<BallPhysicsController>();
 	}
 
+	/// <summary>
+	/// Host側で初期位置と初期回転を保存します。
+	/// </summary>
 	public override void OnNetworkSpawn()
 	{
 		if (!IsServer)
@@ -39,8 +49,6 @@ public class BallDebugRespawner : NetworkBehaviour
 			return;
 		}
 
-		// リスポーン処理を行うHost側だけで
-		// 初期位置と初期回転を保存します。
 		m_InitialPosition =
 			transform.position;
 
@@ -48,6 +56,9 @@ public class BallDebugRespawner : NetworkBehaviour
 			transform.rotation;
 	}
 
+	/// <summary>
+	/// Host側でデバッグ用リスポーン入力を確認します。
+	/// </summary>
 	private void Update()
 	{
 		if (!IsServer)
@@ -69,7 +80,8 @@ public class BallDebugRespawner : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// ボールを初期位置へリスポーンさせます。
+	/// ボールを初期位置へ戻し、
+	/// 所持状態と物理状態を初期化します。
 	/// </summary>
 	private void RespawnBall()
 	{
@@ -78,19 +90,17 @@ public class BallDebugRespawner : NetworkBehaviour
 			return;
 		}
 
-		// 誰かが所持している場合は、
-		// 先に通常のボール解放処理を行います。
 		if (m_BallController != null &&
 			m_BallController.HasHolder)
 		{
 			m_BallController.ReleaseBall();
 		}
 
-		// 念のため親が残っている場合は解除します。
 		if (transform.parent != null)
 		{
 			bool removeSucceeded =
-				NetworkObject.TryRemoveParent(true);
+				NetworkObject.TryRemoveParent(
+					true);
 
 			if (!removeSucceeded)
 			{
@@ -102,27 +112,26 @@ public class BallDebugRespawner : NetworkBehaviour
 			}
 		}
 
-		// リスポーン後に以前の速度が残らないようにします。
 		m_Rigidbody.linearVelocity =
 			Vector3.zero;
 
 		m_Rigidbody.angularVelocity =
 			Vector3.zero;
 
+		m_Rigidbody.useGravity =
+			false;
+
 		m_Rigidbody.isKinematic =
 			false;
 
-		// HostのTransformだけを書き換えるのではなく、
-		// NetworkTransformへ即時移動として通知します。
-		// これによりClient側の補間もリセットされます。
 		m_NetworkTransform.Teleport(
 			m_InitialPosition,
 			m_InitialRotation,
 			transform.localScale);
 
-		Debug.Log(
-			$"[BallDebugRespawner] " +
-			$"ボールをリスポーンしました。 " +
-			$"Position={m_InitialPosition}");
+		if (m_BallPhysicsController != null)
+		{
+			m_BallPhysicsController.ResetMotionState();
+		}
 	}
 }

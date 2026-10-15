@@ -5,6 +5,15 @@ using UnityEngine;
 /// <summary>
 /// ボール本体の所持状態と物理状態を管理します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. Hostがプレイヤーからの取得要求を検証します。
+/// 2. 取得成功時はプレイヤーへNetworkObjectを親子付けします。
+/// 3. 所持状態をNetworkVariableで全Clientへ同期します。
+/// 4. シュート時は親子関係を解除して物理挙動へ戻します。
+/// 5. 強制解放時も同じく親子関係を解除します。
+/// 6. シュート・解放直後は元所持者のみ一定時間再キャッチを禁止します。
+/// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
 public class BallController : NetworkBehaviour
@@ -40,18 +49,47 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public event Action OnShot;
 
-	public ulong CurrentHolderId =>
-		m_CurrentHolderId.Value;
+	/// <summary>
+	/// タックルなどによってボールが強制解放されたときに
+	/// Host側で通知します。
+	/// </summary>
+	public event Action OnReleased;
 
-	public bool HasHolder =>
-		m_HasHolder.Value;
+	/// <summary>
+	/// 現在ボールを所持しているプレイヤーのClientIdを取得します。
+	/// </summary>
+	public ulong CurrentHolderId
+	{
+		get
+		{
+			return m_CurrentHolderId.Value;
+		}
+	}
 
+	/// <summary>
+	/// 現在ボールに所持者が存在するか取得します。
+	/// </summary>
+	public bool HasHolder
+	{
+		get
+		{
+			return m_HasHolder.Value;
+		}
+	}
+
+	/// <summary>
+	/// Rigidbodyの参照を取得します。
+	/// </summary>
 	private void Awake()
 	{
 		m_Rigidbody =
 			GetComponent<Rigidbody>();
 	}
 
+	/// <summary>
+	/// NetworkObjectのSpawn時に所持状態の変更通知を登録し、
+	/// 現在の所持状態を反映します。
+	/// </summary>
 	public override void OnNetworkSpawn()
 	{
 		m_HasHolder.OnValueChanged +=
@@ -63,12 +101,24 @@ public class BallController : NetworkBehaviour
 		}
 	}
 
+	/// <summary>
+	/// NetworkObjectのDespawn時に所持状態の変更通知を解除します。
+	/// </summary>
 	public override void OnNetworkDespawn()
 	{
 		m_HasHolder.OnValueChanged -=
 			HandleHolderStateChanged;
 	}
 
+	/// <summary>
+	/// 指定されたColliderがキャッチ判定用Colliderか確認します。
+	/// </summary>
+	/// <param name="targetCollider">
+	/// 判定対象のColliderです。
+	/// </param>
+	/// <returns>
+	/// キャッチ判定用Colliderの場合はtrueです。
+	/// </returns>
 	public bool IsCatchCollider(
 		Collider targetCollider)
 	{
@@ -76,6 +126,15 @@ public class BallController : NetworkBehaviour
 			m_PhysicsCollider;
 	}
 
+	/// <summary>
+	/// 指定されたColliderがSensor用Colliderか確認します。
+	/// </summary>
+	/// <param name="targetCollider">
+	/// 判定対象のColliderです。
+	/// </param>
+	/// <returns>
+	/// Sensor用Colliderの場合はtrueです。
+	/// </returns>
 	public bool IsSensorCollider(
 		Collider targetCollider)
 	{
@@ -83,6 +142,9 @@ public class BallController : NetworkBehaviour
 			m_SensorCollider;
 	}
 
+	/// <summary>
+	/// Host上で指定プレイヤーをボールの所持者として設定します。
+	/// </summary>
 	public bool TrySetHolder(
 		ulong holderClientId,
 		ulong holderNetworkObjectId)
@@ -97,22 +159,15 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		// 再キャッチ禁止時間が終わっていたら解除します。
 		if (m_HasRepickupLock &&
 			Time.time >= m_RepickupUnlockTime)
 		{
 			m_HasRepickupLock = false;
 		}
 
-		// 直前まで所持していた本人だけ、
-		// 一定時間ボールを再取得できません。
 		if (m_HasRepickupLock &&
 			holderClientId == m_LastHolderClientId)
 		{
-			Debug.Log(
-				$"[BallController] 再キャッチ防止: " +
-				$"ClientId={holderClientId}");
-
 			return false;
 		}
 
@@ -151,13 +206,14 @@ public class BallController : NetworkBehaviour
 		m_CurrentHolderNetworkObjectId.Value =
 			holderNetworkObjectId;
 
-		m_HasHolder.Value = true;
+		m_HasHolder.Value =
+			true;
 
 		return true;
 	}
 
 	/// <summary>
-	/// Host側でボールを指定方向へ射出します。
+	/// Host上で所持中のボールを指定方向へ射出します。
 	/// </summary>
 	public bool TryShoot(
 		Vector3 shootDirection)
@@ -183,39 +239,36 @@ public class BallController : NetworkBehaviour
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
 
-		// Colliderを戻す前に再キャッチ防止を開始します。
 		StartRepickupLock(
 			previousHolderClientId);
 
 		if (!DetachFromHolder())
 		{
-			m_HasRepickupLock = false;
+			m_HasRepickupLock =
+				false;
 
 			return false;
 		}
 
-		// 元所持者へSetBallState(false)を通知します。
-		m_HasHolder.Value = false;
+		m_HasHolder.Value =
+			false;
 
-		m_CurrentHolderId.Value = 0;
+		m_CurrentHolderId.Value =
+			0;
 
 		m_Rigidbody.linearVelocity =
-			shootDirection * m_ShootPower;
+			shootDirection *
+			m_ShootPower;
 
-		// シュート中の追加物理処理へ通知します。
-		// 購読者がいない場合は何も起きません。
+		// BallPhysicsControllerへ、
+		// シュート開始を通知します。
 		OnShot?.Invoke();
-
-		Debug.Log(
-			$"[BallController] シュート: " +
-			$"Direction={shootDirection}, " +
-			$"Power={m_ShootPower}");
 
 		return true;
 	}
 
 	/// <summary>
-	/// タックル等でボールを解放します。
+	/// Host上で現在の所持者からボールを強制的に解放します。
 	/// </summary>
 	public void ReleaseBall()
 	{
@@ -232,26 +285,31 @@ public class BallController : NetworkBehaviour
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
 
-		// 落とした本人がその場で即再取得するのを防ぎます。
 		StartRepickupLock(
 			previousHolderClientId);
 
 		if (!DetachFromHolder())
 		{
-			m_HasRepickupLock = false;
+			m_HasRepickupLock =
+				false;
 
 			return;
 		}
 
-		m_HasHolder.Value = false;
+		m_HasHolder.Value =
+			false;
 
-		m_CurrentHolderId.Value = 0;
+		m_CurrentHolderId.Value =
+			0;
 
-		Debug.Log(
-			$"[BallController] ボール解放: " +
-			$"元所持者ClientId={previousHolderClientId}");
+		// シュートではない解放として、
+		// BallPhysicsControllerへ通知します。
+		OnReleased?.Invoke();
 	}
 
+	/// <summary>
+	/// 指定プレイヤーに対する再キャッチ禁止時間を開始します。
+	/// </summary>
 	private void StartRepickupLock(
 		ulong holderClientId)
 	{
@@ -259,7 +317,8 @@ public class BallController : NetworkBehaviour
 			holderClientId;
 
 		m_RepickupUnlockTime =
-			Time.time + Mathf.Max(
+			Time.time +
+			Mathf.Max(
 				0.0f,
 				m_RepickupDelay);
 
@@ -267,33 +326,45 @@ public class BallController : NetworkBehaviour
 			m_RepickupDelay > 0.0f;
 	}
 
+	/// <summary>
+	/// NetworkVariableの所持状態変更を
+	/// ローカル状態へ反映します。
+	/// </summary>
 	private void HandleHolderStateChanged(
 		bool previousValue,
 		bool newValue)
 	{
-		ApplyHolderState(newValue);
+		ApplyHolderState(
+			newValue);
 	}
 
+	/// <summary>
+	/// 所持状態に合わせてColliderと
+	/// プレイヤー側の状態を更新します。
+	/// </summary>
 	private void ApplyHolderState(
 		bool hasHolder)
 	{
-		// 所持中は物理Colliderだけ無効にします。
 		if (m_PhysicsCollider != null)
 		{
 			m_PhysicsCollider.enabled =
 				!hasHolder;
 		}
 
-		// ゴール判定用Sensorは常に有効です。
 		if (m_SensorCollider != null)
 		{
-			m_SensorCollider.enabled = true;
+			m_SensorCollider.enabled =
+				true;
 		}
 
 		SetHolderBallState(
 			hasHolder);
 	}
 
+	/// <summary>
+	/// Host上でボールを指定プレイヤーへ親子付けし、
+	/// 所持位置へ移動します。
+	/// </summary>
 	private bool AttachToHolder(
 		NetworkObject holderNetworkObject,
 		PlayerBallCarrier holder)
@@ -309,11 +380,13 @@ public class BallController : NetworkBehaviour
 		m_Rigidbody.angularVelocity =
 			Vector3.zero;
 
-		m_Rigidbody.isKinematic = true;
+		m_Rigidbody.isKinematic =
+			true;
 
 		if (m_PhysicsCollider != null)
 		{
-			m_PhysicsCollider.enabled = false;
+			m_PhysicsCollider.enabled =
+				false;
 		}
 
 		bool parentSucceeded =
@@ -325,15 +398,16 @@ public class BallController : NetworkBehaviour
 		{
 			if (m_PhysicsCollider != null)
 			{
-				m_PhysicsCollider.enabled = true;
+				m_PhysicsCollider.enabled =
+					true;
 			}
 
-			m_Rigidbody.isKinematic = false;
+			m_Rigidbody.isKinematic =
+				false;
 
 			return false;
 		}
 
-		// Playerを基準にしたローカル座標へ変換します。
 		Transform holderTransform =
 			holderNetworkObject.transform;
 
@@ -342,12 +416,17 @@ public class BallController : NetworkBehaviour
 				holder.BallHoldPoint.position);
 
 		transform.localRotation =
-			Quaternion.Inverse(holderTransform.rotation) *
+			Quaternion.Inverse(
+				holderTransform.rotation) *
 			holder.BallHoldPoint.rotation;
 
 		return true;
 	}
 
+	/// <summary>
+	/// Host上でボールと所持者の親子関係を解除し、
+	/// Rigidbodyによる物理挙動へ戻します。
+	/// </summary>
 	private bool DetachFromHolder()
 	{
 		if (!IsServer)
@@ -358,7 +437,8 @@ public class BallController : NetworkBehaviour
 		if (transform.parent != null)
 		{
 			bool removeSucceeded =
-				NetworkObject.TryRemoveParent(true);
+				NetworkObject.TryRemoveParent(
+					true);
 
 			if (!removeSucceeded)
 			{
@@ -366,16 +446,22 @@ public class BallController : NetworkBehaviour
 			}
 		}
 
-		m_Rigidbody.isKinematic = false;
+		m_Rigidbody.isKinematic =
+			false;
 
 		if (m_PhysicsCollider != null)
 		{
-			m_PhysicsCollider.enabled = true;
+			m_PhysicsCollider.enabled =
+				true;
 		}
 
 		return true;
 	}
 
+	/// <summary>
+	/// 現在記録されている所持者へ
+	/// ボール所持状態を通知します。
+	/// </summary>
 	private void SetHolderBallState(
 		bool hasBall)
 	{

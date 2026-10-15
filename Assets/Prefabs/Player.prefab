@@ -470,9 +470,9 @@ GameObject:
   - component: {fileID: 8696501033850427894}
   - component: {fileID: 6506262699355711857}
   - component: {fileID: 2874015679274306090}
-  - component: {fileID: 6097049237247373300}
   - component: {fileID: 1164154789786135184}
   - component: {fileID: -4640382079411939406}
+  - component: {fileID: 6097049237247373300}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -636,7 +636,7 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 0
   m_IsKinematic: 0
-  m_Interpolate: 0
+  m_Interpolate: 1
   m_Constraints: 80
   m_CollisionDetection: 0
 --- !u!114 &6191120882356557297
@@ -798,26 +798,8 @@ MonoBehaviour:
   m_EnableDebugDraw: 1
   m_GroundLayerMask:
     serializedVersion: 2
-    m_Bits: 0
---- !u!114 &6097049237247373300
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2466233519835475451}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
-  m_AimReticle: {fileID: 5509881642956187267}
-  m_AimLine: {fileID: 7693887922062000978}
-  m_LandingMarker: {fileID: 7693067950226141477}
-  m_AimTargetLayers:
-    serializedVersion: 2
     m_Bits: 128
-  m_MaxAimDistance: 100
+  m_FallingRotationSpeed: 4
 --- !u!114 &1164154789786135184
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -839,7 +821,9 @@ MonoBehaviour:
   m_MouseSensitivity: 0.15
   m_MinPitchAngle: -70
   m_MaxPitchAngle: 70
-  m_NormalAlignSpeed: 12
+  m_NormalAlignSpeed: 5
+  m_MaxNormalDegreesPerSecond: 150
+  m_PositionSmoothTime: 0.08
   m_FOVCurve:
     serializedVersion: 2
     m_Curve:
@@ -878,6 +862,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBallCarrier
   ShowTopMostFoldoutHeaderGroup: 1
   m_BallHoldPoint: {fileID: 8590505130648689296}
+--- !u!114 &6097049237247373300
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
+  m_AimReticle: {fileID: 5509881642956187267}
+  m_AimLine: {fileID: 7693887922062000978}
+  m_LandingMarker: {fileID: 7693067950226141477}
+  m_GravityMover: {fileID: 2874015679274306090}
+  m_AimTargetLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  m_MaxAimDistance: 100
+  m_AimFloatHeight: 1
+  m_AimFloatDuration: 0.3
+  m_CinemachineCameraTransform: {fileID: 5892072697104370858}
+  m_AimCameraShoulderOffset: {x: 1, y: 1, z: 3.3}
+  m_AimOpacity: 0.35
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0
@@ -968,27 +977,27 @@ LineRenderer:
   - {x: 0, y: 0, z: 1}
   m_Parameters:
     serializedVersion: 3
-    widthMultiplier: 0.5
+    widthMultiplier: 0.25
     widthCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 3
         time: 0
         value: 1
-        inSlope: -0.46590194
-        outSlope: -0.46590194
+        inSlope: -0.02323117
+        outSlope: -0.02323117
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
-        outWeight: 0.2379679
+        outWeight: 0.28074864
       - serializedVersion: 3
         time: 1
-        value: 0.4804369
-        inSlope: -0.4898566
-        outSlope: -0.4898566
+        value: 1
+        inSlope: -0.009274714
+        outSlope: -0.009274714
         tangentMode: 0
         weightedMode: 0
-        inWeight: 0.21301252
+        inWeight: 0.2344029
         outWeight: 0
       m_PreInfinity: 2
       m_PostInfinity: 2

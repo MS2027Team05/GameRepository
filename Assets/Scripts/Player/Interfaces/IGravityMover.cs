@@ -12,9 +12,26 @@ public interface IGravityMover
 	void StartFalling(Vector3 direction);
 
 	/// <summary>
+	/// 落下先の着地点と着地面の法線を設定します。
+	/// </summary>
+	/// <param name="landingPoint">予測着地点</param>
+	/// <param name="landingNormal">着地面の法線</param>
+	void SetFallingTarget(Vector3 landingPoint, Vector3 landingNormal);
+
+	/// <summary>
 	/// 落下を停止し、空中で浮遊・静止(ホバリング)させます。
 	/// </summary>
 	void StopFalling();
+
+	/// <summary>
+	/// エイム中のホバリング状態を開始します。
+	/// </summary>
+	void StartAimHover();
+
+	/// <summary>
+	/// エイム中のホバリング状態を終了します。
+	/// </summary>
+	void StopAimHover();
 
 	/// <summary>
 	/// 移動速度の倍率を設定します(ボール所持時のデバフ等)。
@@ -26,13 +43,14 @@ public interface IGravityMover
 	/// 足場に接地しているかどうかを取得します。
 	/// </summary>
 	bool IsGrounded { get; }
+	bool IsFalling { get; }
 
 	/// <summary>
 	/// 地上移動用の入力ベクトルと基準となるカメラのTransformを設定します。
 	/// </summary>
 	/// <param name="moveInput">入力ベクトル(WASD/スティック)</param>
 	/// <param name="cameraTransform">視点基準となるカメラのTransform</param>
-		/// <summary>
+	/// <summary>
 	/// 現在の接地面法線ベクトルを取得します。
 	/// </summary>
 	Vector3 CurrentGroundNormal { get; }

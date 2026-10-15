@@ -67,12 +67,12 @@ GameObject:
   - component: {fileID: 5545497133015468413}
   - component: {fileID: 3706687999057599681}
   - component: {fileID: 7636002575303798792}
+  - component: {fileID: 1323764943930010185}
+  - component: {fileID: 4631393730862146185}
   - component: {fileID: 7810532941759177924}
   - component: {fileID: 3558045125194342948}
   - component: {fileID: 7969707258151822165}
-  - component: {fileID: 4631393730862146185}
-  - component: {fileID: 1323764943930010185}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Ball
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -87,14 +87,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7223661482325723954}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0.007515348, y: 0.0000000014305936, z: 0.004437745, w: 0.9999619}
   m_LocalPosition: {x: 2.14486, y: 0.12, z: 1.71245}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 9123052412022592093}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -0.861, y: -0.004, z: 0.509}
 --- !u!33 &7038129314946238862
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -174,7 +174,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 1
+  m_UseGravity: 0
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 0
@@ -191,7 +191,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 455381987
+  GlobalObjectIdHash: 1705466128
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -221,8 +221,52 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_PhysicsCollider: {fileID: 7969707258151822165}
   m_SensorCollider: {fileID: 5519193905326050400}
-  m_ShootPower: 20
+  m_ShootPower: 25
   m_RepickupDelay: 0.2
+--- !u!114 &1323764943930010185
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7223661482325723954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 487c7f86bbb2f6645afc7ca7290321b8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BallPhysicsController
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_FlightDeceleration: 3
+  m_StopSpeedThreshold: 0.5
+  m_AttachSurfaceMask:
+    serializedVersion: 2
+    m_Bits: 128
+  m_AttractStartSpeed: 20
+  m_AttractSearchDistance: 10
+  m_AttractReleaseDistance: 15
+  m_AttractSearchInterval: 0.2
+  m_AttractMinAcceleration: 20
+  m_AttractMaxAcceleration: 100
+  m_AttractAccelerationCurve: 2
+  m_AttractDeceleration: 0.5
+  m_AttractMaxSpeed: 50
+  m_SurfaceSearchRadius: 100
+  m_SurfaceSearchInterval: 0.25
+  m_SurfaceSeekSpeed: 4
+  m_SurfaceSeekAcceleration: 10
+--- !u!114 &4631393730862146185
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7223661482325723954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0734a4747a3ca74eb48e2ccd5189e36, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BallDebugRespawner
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!114 &7810532941759177924
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -307,34 +351,3 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.5
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &4631393730862146185
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7223661482325723954}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c0734a4747a3ca74eb48e2ccd5189e36, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BallDebugRespawner
-  ShowTopMostFoldoutHeaderGroup: 1
---- !u!114 &1323764943930010185
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7223661482325723954}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 487c7f86bbb2f6645afc7ca7290321b8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BallPhysicsController
-  ShowTopMostFoldoutHeaderGroup: 1
-  m_FreeBallDeceleration: 10
-  m_MaxFreeBallSpeed: 20
-  m_AngularDeceleration: 8
-  m_ShotGravityMultiplier: 0.4
-  m_CollisionSpeedMultiplier: 1

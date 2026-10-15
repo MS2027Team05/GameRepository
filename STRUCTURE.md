@@ -10,6 +10,7 @@ GameRepository/
 │   ├── Audios/                  # 音声リソース格納 (AI学習対象外)
 │   ├── Fonts/                   # フォントリソース格納 (AI学習対象外)
 │   ├── Materials/               # マテリアル・シェーダー関連格納
+│   ├── Meshes/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
 │   ├── Models/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
 │   ├── Plugins/                 # 外部プラグインライブラリ格納 (DOTween等)
 │   ├── Prefabs/                 # ゲーム内プレハブ格納
@@ -19,12 +20,19 @@ GameRepository/
 │   │   ├── Ball/                # ボール物理・同期制御
 │   │   │   ├── BallController.cs        # [EntryPoint] ボール状態管理・所持・シュート制御
 │   │   │   ├── BallPhysicsController.cs # ボール物理補正・バウンド制御
+│   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
 │   │   ├── Network/             # 通信接続・同期制御
 │   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
-│   │   │   └── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
+│   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
+│   │   │   └── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
+│   │   ├── Shader/              # シェーダー連携・描画制御スクリプト
+│   │   │   ├── PlayerOutline.cs         # アウトライン描画制御
+│   │   │   ├── PlayerSilhouette.cs      # オブジェクト遮蔽時シルエット描画制御
+│   │   │   └── ToolSilhouette.cs        # ツール類遮蔽時シルエット描画制御
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
+│   │       │   ├── IAimGuide.cs         # エイム・ガイド表示制御インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
 │   │       │   ├── ICameraEffect.cs     # カメラ演出制御用インターフェース
 │   │       │   └── IGravityMover.cs     # 物理移動制御用インターフェース
@@ -36,8 +44,10 @@ GameRepository/
 │   │       ├── PlayerInputReceiver.cs   # 入力検知・視点操作・カーソルロック管理
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
 │   ├── Settings/                # プロジェクト設定・URP描画設定
+│   ├── Shader/                  # カスタムシェーダー格納 (アウトライン・遮蔽シルエット等)
 │   ├── TextMesh Pro/            # TextMesh Pro関連リソース
 │   └── Textures/                # テクスチャ・スプライト格納 (AI学習対象外)
+│   └── VFX/                     # VFX関連リソース
 ├── docs/                        # 企画書・仕様書等の設計ドキュメント格納
 ├── AGENTS.md                    # AI用ルール・規約定義
 ├── player_structure.md          # プレイヤーモジュール仕様・連携手順書
