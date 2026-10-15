@@ -1,16 +1,7 @@
 ﻿using UnityEngine;
 
-public class LightningBolt : MonoBehaviour
+public abstract class ALightningBolt : MonoBehaviour
 {
-    [Header("電撃位置の設定")]
-    [SerializeField] private Transform m_CenterPoint;
-    [SerializeField] private Transform m_StartPoint;
-    [SerializeField] private Transform m_EndPoint;
-
-    [Header("電撃生成モード")]
-    [SerializeField] private bool m_SphericalMode;
-    [SerializeField] private bool m_UseStartPoint;
-
     [Header("電撃本数の設定")]
     [SerializeField] private int m_BoltCount;
     [SerializeField] private int m_MaxActiveBoltCount;
@@ -37,21 +28,21 @@ public class LightningBolt : MonoBehaviour
     private Transform m_BoltContainer;
     private float m_SpawnTimer;
     private int m_ActiveBoltCount;
+    private int m_SpawnCycle;
+    private bool m_HasFinishedSpawning;
 
-    private class BoltData
+    protected sealed class BoltData
     {
         public LineRenderer m_CoreLineRenderer;
         public LineRenderer m_GlowLineRenderer;
-
         public Vector3[] m_Positions;
         public Vector3 m_StartPosition;
         public Vector3 m_EndPosition;
         public Vector3 m_Direction;
-
         public float m_LifetimeTimer;
         public float m_RefreshTimer;
-
         public bool m_IsActive;
+        public int m_LastActivatedSpawnCycle;
     }
 
     private void Awake()
@@ -64,6 +55,31 @@ public class LightningBolt : MonoBehaviour
     {
         UpdateActiveBolts();
         UpdateSpawn();
+    }
+
+    protected virtual void InitializeBolt(BoltData bolt)
+    {
+    }
+
+    protected virtual bool CanSpawnBolt()
+    {
+        return true;
+    }
+
+    protected virtual bool ReusesDeactivatedBolts => true;
+
+    protected abstract void UpdateBoltPosition(BoltData bolt);
+
+    protected virtual Vector3 AdjustRandomOffset(Vector3 randomOffset)
+    {
+        return randomOffset;
+    }
+
+    protected void ResetSpawnCycle()
+    {
+        m_SpawnCycle++;
+        m_HasFinishedSpawning = false;
+        m_SpawnTimer = 0f;
     }
 
     private void CreateBoltContainer()
@@ -84,8 +100,7 @@ public class LightningBolt : MonoBehaviour
 
         for (int i = 0; i < m_BoltCount; i++)
         {
-            GameObject boltObject =
-                new GameObject($"LightningBolt_{i}");
+            GameObject boltObject = new GameObject($"LightningBolt_{i}");
 
             boltObject.transform.SetParent(m_BoltContainer);
             boltObject.transform.localPosition = Vector3.zero;
@@ -111,7 +126,8 @@ public class LightningBolt : MonoBehaviour
                 m_CoreLineRenderer = coreLineRenderer,
                 m_GlowLineRenderer = glowLineRenderer,
                 m_Positions = new Vector3[m_SegmentCount + 1],
-                m_IsActive = false
+                m_IsActive = false,
+                m_LastActivatedSpawnCycle = -1
             };
         }
     }
@@ -129,8 +145,7 @@ public class LightningBolt : MonoBehaviour
         lineObject.transform.localRotation = Quaternion.identity;
         lineObject.transform.localScale = Vector3.one;
 
-        LineRenderer lineRenderer =
-            lineObject.AddComponent<LineRenderer>();
+        LineRenderer lineRenderer = lineObject.AddComponent<LineRenderer>();
 
         lineRenderer.positionCount = m_SegmentCount + 1;
         lineRenderer.startWidth = lineWidth;
@@ -180,7 +195,9 @@ public class LightningBolt : MonoBehaviour
 
     private void UpdateSpawn()
     {
-        if (m_ActiveBoltCount >= m_MaxActiveBoltCount)
+        if (m_HasFinishedSpawning ||
+            m_ActiveBoltCount >= m_MaxActiveBoltCount ||
+            !CanSpawnBolt())
         {
             return;
         }
@@ -196,6 +213,11 @@ public class LightningBolt : MonoBehaviour
 
         if (availableBolt == null)
         {
+            if (!ReusesDeactivatedBolts)
+            {
+                m_HasFinishedSpawning = true;
+            }
+
             return;
         }
 
@@ -208,9 +230,13 @@ public class LightningBolt : MonoBehaviour
     {
         for (int i = 0; i < m_Bolts.Length; i++)
         {
-            if (!m_Bolts[i].m_IsActive)
+            BoltData bolt = m_Bolts[i];
+
+            if (!bolt.m_IsActive &&
+                (bolt.m_LastActivatedSpawnCycle != m_SpawnCycle ||
+                 ReusesDeactivatedBolts))
             {
-                return m_Bolts[i];
+                return bolt;
             }
         }
 
@@ -220,14 +246,14 @@ public class LightningBolt : MonoBehaviour
     private void ActivateBolt(BoltData bolt)
     {
         bolt.m_IsActive = true;
+        bolt.m_LastActivatedSpawnCycle = m_SpawnCycle;
         bolt.m_LifetimeTimer = 0f;
         bolt.m_RefreshTimer = 0f;
 
         ApplyBoltSettings(bolt);
-        SetBoltDirection(bolt);
+        InitializeBolt(bolt);
         UpdateBoltPosition(bolt);
         GenerateLightning(bolt);
-
         SetBoltVisible(bolt, true);
 
         m_ActiveBoltCount++;
@@ -236,13 +262,12 @@ public class LightningBolt : MonoBehaviour
     private void DeactivateBolt(BoltData bolt)
     {
         bolt.m_IsActive = false;
-
         SetBoltVisible(bolt, false);
 
         m_ActiveBoltCount--;
     }
 
-    private void SetBoltVisible(
+    private static void SetBoltVisible(
         BoltData bolt,
         bool isVisible)
     {
@@ -256,111 +281,25 @@ public class LightningBolt : MonoBehaviour
 
         if (bolt.m_Positions.Length != requiredPositionCount)
         {
-            bolt.m_Positions =
-                new Vector3[requiredPositionCount];
-
-            bolt.m_CoreLineRenderer.positionCount =
-                requiredPositionCount;
-
-            bolt.m_GlowLineRenderer.positionCount =
-                requiredPositionCount;
+            bolt.m_Positions = new Vector3[requiredPositionCount];
+            bolt.m_CoreLineRenderer.positionCount = requiredPositionCount;
+            bolt.m_GlowLineRenderer.positionCount = requiredPositionCount;
         }
 
         bolt.m_CoreLineRenderer.startWidth = m_CoreWidth;
-        bolt.m_CoreLineRenderer.endWidth =
-            m_CoreWidth * m_EndWidthRatio;
-
+        bolt.m_CoreLineRenderer.endWidth = m_CoreWidth * m_EndWidthRatio;
         bolt.m_GlowLineRenderer.startWidth = m_GlowWidth;
-        bolt.m_GlowLineRenderer.endWidth =
-            m_GlowWidth * m_EndWidthRatio;
-    }
-
-    private void SetBoltDirection(BoltData bolt)
-    {
-        if (!m_SphericalMode)
-        {
-            return;
-        }
-
-        bolt.m_Direction = Random.onUnitSphere;
-    }
-
-    private void UpdateBoltPosition(BoltData bolt)
-    {
-        Vector3 centerPosition = GetCenterPosition();
-
-        if (!m_SphericalMode)
-        {
-            bolt.m_StartPosition = m_UseStartPoint
-                ? GetStartPosition(centerPosition)
-                : centerPosition;
-
-            bolt.m_EndPosition = m_EndPoint.position;
-
-            return;
-        }
-
-        float startRadius = 0f;
-
-        if (m_UseStartPoint && m_StartPoint != null)
-        {
-            startRadius = Vector3.Distance(
-                centerPosition,
-                m_StartPoint.position);
-        }
-
-        float endRadius = Vector3.Distance(
-            centerPosition,
-            m_EndPoint.position);
-
-        bolt.m_StartPosition =
-            centerPosition +
-            bolt.m_Direction * startRadius;
-
-        bolt.m_EndPosition =
-            centerPosition +
-            bolt.m_Direction * endRadius;
-    }
-
-    private Vector3 GetCenterPosition()
-    {
-        if (m_CenterPoint != null)
-        {
-            return m_CenterPoint.position;
-        }
-
-        if (m_StartPoint != null)
-        {
-            return m_StartPoint.position;
-        }
-
-        return transform.position;
-    }
-
-    private Vector3 GetStartPosition(
-        Vector3 centerPosition)
-    {
-        if (m_StartPoint != null)
-        {
-            return m_StartPoint.position;
-        }
-
-        return centerPosition;
+        bolt.m_GlowLineRenderer.endWidth = m_GlowWidth * m_EndWidthRatio;
     }
 
     private void GenerateLightning(BoltData bolt)
     {
-        bolt.m_Positions[0] =
-            bolt.m_StartPosition;
-
-        bolt.m_Positions[^1] =
-            bolt.m_EndPosition;
+        bolt.m_Positions[0] = bolt.m_StartPosition;
+        bolt.m_Positions[^1] = bolt.m_EndPosition;
 
         for (int i = 1; i < m_SegmentCount; i++)
         {
-            float progress =
-                (float)i / m_SegmentCount;
-
+            float progress = (float)i / m_SegmentCount;
             Vector3 basePosition =
                 Vector3.Lerp(
                     bolt.m_StartPosition,
@@ -368,17 +307,12 @@ public class LightningBolt : MonoBehaviour
                     progress);
 
             Vector3 randomOffset =
-                Random.insideUnitSphere *
-                m_Displacement;
+                AdjustRandomOffset(Random.insideUnitSphere * m_Displacement);
 
-            bolt.m_Positions[i] =
-                basePosition + randomOffset;
+            bolt.m_Positions[i] = basePosition + randomOffset;
         }
 
-        bolt.m_GlowLineRenderer.SetPositions(
-            bolt.m_Positions);
-
-        bolt.m_CoreLineRenderer.SetPositions(
-            bolt.m_Positions);
+        bolt.m_GlowLineRenderer.SetPositions(bolt.m_Positions);
+        bolt.m_CoreLineRenderer.SetPositions(bolt.m_Positions);
     }
 }

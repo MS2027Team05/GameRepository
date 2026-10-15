@@ -12,6 +12,16 @@ public interface IAimGuide
 	void ShowAimGuide(bool show);
 
 	/// <summary>
+	/// エイムをキャンセルし、プレイヤーとカメラを開始時の位置に戻します。
+	/// </summary>
+	void CancelAimGuide();
+
+	/// <summary>
+	/// 移動によってエイムを終了し、プレイヤーの位置を維持してカメラを通常位置に戻します。
+	/// </summary>
+	void EndAimGuideForMovement();
+
+	/// <summary>
 	/// エイム中のカメラ正面方向ベクトルを渡し、予測線をリアルタイム更新します。
 	/// </summary>
 	/// <param name="direction">カメラの正面方向ベクトル</param>

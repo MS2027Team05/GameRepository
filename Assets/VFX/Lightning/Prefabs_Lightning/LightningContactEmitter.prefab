@@ -1,0 +1,96 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8468636275290488135
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2469474700041498405}
+  - component: {fileID: 2670942979508096669}
+  - component: {fileID: 2025448065179312745}
+  - component: {fileID: 1872607273138909280}
+  m_Layer: 0
+  m_Name: LightningContactEmitter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2469474700041498405
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8468636275290488135}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2670942979508096669
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8468636275290488135}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 741a0ce96f8e7124f93fbe5b7fe4e751, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FootRaycaster
+  m_RayDistance: 0.3
+  m_GroundLayer:
+    serializedVersion: 2
+    m_Bits: 128
+--- !u!114 &2025448065179312745
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8468636275290488135}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca63a8632b215f042a0e183cb8091fa3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FootGroundDetector
+  m_ContactDistance: 0.05
+  m_DebugIsContacting: 0
+  m_ShowDebugGizmos: 1
+  m_ShowDebugLog: 0
+--- !u!114 &1872607273138909280
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8468636275290488135}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0d60708d8894c98a18aadcc59bb0387, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SurfaceBurstLightningBolt
+  m_BoltCount: 10
+  m_MaxActiveBoltCount: 5
+  m_SegmentCount: 5
+  m_Displacement: 0.1
+  m_CoreMaterial: {fileID: 2100000, guid: 4a1b1b60ed625a94cb60ef678d192fb5, type: 2}
+  m_GlowMaterial: {fileID: 2100000, guid: 602ee0b63f2c1da4f8428fe746db83ce, type: 2}
+  m_CoreWidth: 0.015
+  m_GlowWidth: 0.06
+  m_EndWidthRatio: 0.015
+  m_RefreshInterval: 0.05
+  m_Lifetime: 0.3
+  m_SpawnInterval: 0.001
+  m_ContactDetector: {fileID: 2025448065179312745}
+  m_StartRadius: 0.1
+  m_Height: 0.5
+  m_SpreadRadius: 0.01
