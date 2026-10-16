@@ -87,6 +87,23 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	private Transform m_CameraTransform;
 	private Vector3 m_CurrentGroundNormal = Vector3.up;
 	private Vector3 m_LastMoveDirection = Vector3.forward;
+	private float m_LandingSnapTimer;
+
+	private struct DebugRayInfo
+	{
+		public Vector3 Origin;
+		public Vector3 Direction;
+		public float Distance;
+		public bool Hit;
+		public Vector3 HitPoint;
+	}
+
+	private readonly System.Collections.Generic.List<DebugRayInfo> m_DebugRays = new System.Collections.Generic.List<DebugRayInfo>();
+	private Vector3 m_DebugSphereCastOrigin;
+	private Vector3 m_DebugSphereCastEnd;
+	private float m_DebugSphereCastRadius;
+	private bool m_DebugSphereCastHit;
+	private Vector3 m_DebugSphereCastHitPoint;
 
 	/// <summary>
 	/// 現在等速直線移動(落下)中であるかを取得します。
@@ -351,6 +368,11 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		float checkDist = footDist + (m_GroundCheckDistance > 0f ? m_GroundCheckDistance : 0.6f);
 		int layerMask = m_GroundLayerMask.value == 0 ? ~0 : m_GroundLayerMask.value;
 
+		if (m_EnableDebugDraw)
+		{
+			m_DebugRays.Clear();
+		}
+
 		bool foundGround = false;
 		Vector3 detectedNormal = m_CurrentGroundNormal;
 
@@ -379,6 +401,11 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			bool isDownHit = Physics.SphereCast(transform.position, sphereRadius, -transform.up, out RaycastHit downHit, castDist, layerMask, QueryTriggerInteraction.Ignore);
 			if (m_EnableDebugDraw)
 			{
+				m_DebugSphereCastOrigin = transform.position;
+				m_DebugSphereCastEnd = transform.position - transform.up * castDist;
+				m_DebugSphereCastRadius = sphereRadius;
+				m_DebugSphereCastHit = isDownHit;
+				m_DebugSphereCastHitPoint = isDownHit ? downHit.point : Vector3.zero;
 				Debug.DrawRay(transform.position, -transform.up * (sphereRadius + castDist), isDownHit ? Color.green : Color.red, 0f);
 			}
 			if (isDownHit)
@@ -388,47 +415,60 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			}
 		}
 
-		// 3. 角・エッジ近傍マルチアングル検知: 足元真下が空中に抜けた瞬間、近接する角の上面や側面を捉えて接地を維持
+		// 3. 角・エッジ近傍マルチアングル検知: 足元真下が空中に抜けた際、近接する角の上面・側面・真横の壁面を捉えて接地維持
 		if (!foundGround && m_EnableEdgeGroundedAssist && m_CapsuleCollider != null)
 		{
 			Vector3 footOrigin = transform.position - transform.up * (footDist - 0.2f);
+			Vector3 centerOrigin = transform.position;
 			float edgeCheckDist = m_EdgeSearchRadius > 0f ? m_EdgeSearchRadius : 0.8f;
 
-			Vector3[] edgeCheckDirections = new Vector3[]
+			// 足元および腰(中心)からの多方向Ray(斜め下・周囲・真横)
+			(Vector3 origin, Vector3 dir)[] checkRays = new (Vector3 origin, Vector3 dir)[]
 			{
-				// 進行方向の斜め下(これから進む側面や下りエッジ)
-				(-transform.up + currentMoveDir).normalized,
-				// 進行方向の斜め手前(踏み外した直前の上面・エッジ)
-				(-transform.up - currentMoveDir * 0.6f).normalized,
-				// 直前の接地面の逆方向(上面)
-				-m_CurrentGroundNormal,
-				// 進行方向の真後ろ(通り過ぎた側面)
-				-currentMoveDir,
-				// 進行方向の左右斜め下(斜め進入時のエッジ捕捉)
-				(-transform.up + transform.right * 0.7f).normalized,
-				(-transform.up - transform.right * 0.7f).normalized,
+				// 足元から斜め下・周囲
+				(footOrigin, (-transform.up + currentMoveDir).normalized),
+				(footOrigin, (-transform.up - currentMoveDir * 0.6f).normalized),
+				(footOrigin, (-transform.up + transform.right * 0.8f).normalized),
+				(footOrigin, (-transform.up - transform.right * 0.8f).normalized),
+				(footOrigin, -m_CurrentGroundNormal),
+				(footOrigin, -currentMoveDir),
+
+				// 腰・中心から水平四方(カス当たりした真横の壁面を捕捉)
+				(centerOrigin, transform.right),
+				(centerOrigin, -transform.right),
+				(centerOrigin, currentMoveDir),
+				(centerOrigin, -currentMoveDir),
+				(centerOrigin, (transform.right - transform.up * 0.5f).normalized),
+				(centerOrigin, (-transform.right - transform.up * 0.5f).normalized),
 			};
 
 			float closestDist = float.MaxValue;
 			RaycastHit bestHit = default;
 			bool foundEdge = false;
 
-			for (int i = 0; i < edgeCheckDirections.Length; i++)
+			for (int i = 0; i < checkRays.Length; i++)
 			{
-				Vector3 dir = edgeCheckDirections[i];
-				if (Physics.Raycast(footOrigin, dir, out RaycastHit hit, edgeCheckDist, layerMask, QueryTriggerInteraction.Ignore))
-				{
-					if (m_EnableDebugDraw)
-					{
-						Debug.DrawLine(footOrigin, hit.point, Color.yellow, 0f);
-					}
+				Vector3 origin = checkRays[i].origin;
+				Vector3 dir = checkRays[i].dir;
+				bool isHit = Physics.Raycast(origin, dir, out RaycastHit hit, edgeCheckDist, layerMask, QueryTriggerInteraction.Ignore);
 
-					if (hit.distance < closestDist)
+				if (m_EnableDebugDraw)
+				{
+					m_DebugRays.Add(new DebugRayInfo
 					{
-						closestDist = hit.distance;
-						bestHit = hit;
-						foundEdge = true;
-					}
+						Origin = origin,
+						Direction = dir,
+						Distance = edgeCheckDist,
+						Hit = isHit,
+						HitPoint = isHit ? hit.point : Vector3.zero
+					});
+				}
+
+				if (isHit && hit.distance < closestDist)
+				{
+					closestDist = hit.distance;
+					bestHit = hit;
+					foundEdge = true;
 				}
 			}
 
@@ -452,10 +492,17 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		if (foundGround)
 		{
 			m_IsGrounded = true;
+			m_LandingSnapTimer = 0f;
 			// 角を乗り越える際(法線角度差大)は機敏に追従、通常歩行時は滑らかに追従
 			float dot = Vector3.Dot(m_CurrentGroundNormal, detectedNormal);
 			float normalAlignSpeed = dot < 0.7f ? 25.0f : 15.0f;
 			m_CurrentGroundNormal = Vector3.Slerp(m_CurrentGroundNormal, detectedNormal, normalAlignSpeed * Time.fixedDeltaTime).normalized;
+		}
+		else if (m_LandingSnapTimer > 0f)
+		{
+			// 着地直後の猶予バッファ: 接地を維持しダウンフォースを利かせて壁面へ足元を引き寄せる
+			m_LandingSnapTimer -= Time.fixedDeltaTime;
+			m_IsGrounded = true;
 		}
 		else
 		{
@@ -635,6 +682,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 			m_CurrentGroundNormal = hitNormal;
 			m_IsGrounded = true;
+			m_LandingSnapTimer = 0.25f;
 		}
 	}
 
@@ -701,6 +749,62 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		m_AlignTween?.Kill();
 		base.OnDestroy();
 	}
+
+#if UNITY_EDITOR
+	private void OnDrawGizmos()
+	{
+		if (!m_EnableDebugDraw)
+		{
+			return;
+		}
+
+		// 1. 接地面法線(緑)と前進方向(青)
+		Gizmos.color = Color.green;
+		Gizmos.DrawRay(transform.position, m_CurrentGroundNormal * 1.5f);
+		Gizmos.color = Color.blue;
+		Gizmos.DrawRay(transform.position, m_LastMoveDirection * 1.0f);
+
+		// 2. 足元 SphereCast の可視化(始点球と終点球を外周4本線で結んだカプセル形状)
+		if (m_DebugSphereCastRadius > 0f)
+		{
+			Gizmos.color = m_DebugSphereCastHit ? new Color(0f, 1f, 0f, 0.5f) : new Color(1f, 0f, 0f, 0.4f);
+			Gizmos.DrawWireSphere(m_DebugSphereCastOrigin, m_DebugSphereCastRadius);
+			Gizmos.DrawWireSphere(m_DebugSphereCastEnd, m_DebugSphereCastRadius);
+
+			// 外周4本の母線を描画してカプセル形状を表現
+			Vector3 rOffset = transform.right * m_DebugSphereCastRadius;
+			Vector3 fOffset = transform.forward * m_DebugSphereCastRadius;
+			Gizmos.DrawLine(m_DebugSphereCastOrigin + rOffset, m_DebugSphereCastEnd + rOffset);
+			Gizmos.DrawLine(m_DebugSphereCastOrigin - rOffset, m_DebugSphereCastEnd - rOffset);
+			Gizmos.DrawLine(m_DebugSphereCastOrigin + fOffset, m_DebugSphereCastEnd + fOffset);
+			Gizmos.DrawLine(m_DebugSphereCastOrigin - fOffset, m_DebugSphereCastEnd - fOffset);
+
+			if (m_DebugSphereCastHit)
+			{
+				Gizmos.color = Color.cyan;
+				Gizmos.DrawSphere(m_DebugSphereCastHitPoint, 0.08f);
+			}
+		}
+
+		// 3. マルチアングル近接探索 Ray の可視化(ヒットは黄色線+マゼンタ球、未ヒットは半透明黄線)
+		for (int i = 0; i < m_DebugRays.Count; i++)
+		{
+			DebugRayInfo ray = m_DebugRays[i];
+			if (ray.Hit)
+			{
+				Gizmos.color = Color.yellow;
+				Gizmos.DrawLine(ray.Origin, ray.HitPoint);
+				Gizmos.color = Color.magenta;
+				Gizmos.DrawSphere(ray.HitPoint, 0.06f);
+			}
+			else
+			{
+				Gizmos.color = new Color(1f, 0.92f, 0.016f, 0.2f);
+				Gizmos.DrawLine(ray.Origin, ray.Origin + ray.Direction * ray.Distance);
+			}
+		}
+	}
+#endif
 }
 
 
