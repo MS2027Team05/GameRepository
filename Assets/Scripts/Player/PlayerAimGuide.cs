@@ -522,7 +522,7 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		rayDirection.Normalize();
 
-		// カメラ中央からRaycast
+		// 1. カメラ中央からRaycast
 		bool hasHit = Physics.Raycast(
 			rayOrigin,
 			rayDirection,
@@ -538,8 +538,46 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 			return;
 		}
 
+		Vector3 targetPoint = hit.point;
+		Vector3 targetNormal = hit.normal;
+
+		// 2. 角(エッジ)のフチを狙った際、足元が安全に乗るように面の内側へ安全インセット
+		// 接平面上で、カメラ視線の射影方向(面の奥側)に向かって安全マージン分(0.35m)シフトを試みる
+		Vector3 forwardOnPlane = Vector3.ProjectOnPlane(rayDirection, targetNormal);
+		if (forwardOnPlane.sqrMagnitude > 0.001f)
+		{
+			forwardOnPlane.Normalize();
+			Vector3 testPoint = targetPoint + forwardOnPlane * 0.35f;
+			// シフト先にも同じ面(地面)が存在するかチェック
+			if (Physics.Raycast(testPoint + targetNormal * 0.5f, -targetNormal, out RaycastHit insetHit, 1.0f, m_AimTargetLayers, QueryTriggerInteraction.Ignore))
+			{
+				if (Vector3.Dot(insetHit.normal, targetNormal) > 0.8f)
+				{
+					// 安全な面の内側が確認できた場合、着地点を面の内側に補正
+					targetPoint = insetHit.point;
+					targetNormal = insetHit.normal;
+				}
+			}
+		}
+
+		// 3. プレイヤー本体から目標地点への直進ライン上に手前の角が干渉していないか検証
+		Vector3 playerPos = transform.position;
+		Vector3 toTarget = targetPoint - playerPos;
+		float targetDist = toTarget.magnitude;
+		if (targetDist > 0.2f)
+		{
+			Vector3 flyDir = toTarget / targetDist;
+			// プレイヤーの足元・カプセル厚み(0.25m半径)を考慮したSphereCastで手前角の干渉をチェック
+			if (Physics.SphereCast(playerPos, 0.25f, flyDir, out RaycastHit obstacleHit, targetDist - 0.1f, m_AimTargetLayers, QueryTriggerInteraction.Ignore))
+			{
+				// 手前の角や側面に引っかかる場合、手前の接触面を実際の着地点として適用
+				targetPoint = obstacleHit.point;
+				targetNormal = obstacleHit.normal;
+			}
+		}
+
 		// 予測線の終点へ向かう方向を計算
-		m_AimTargetPoint = hit.point;
+		m_AimTargetPoint = targetPoint;
 
 		Vector3 moveDirection = m_AimTargetPoint - transform.position;
 
@@ -549,15 +587,15 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		}
 
 		// Playerの位置から着地点まで予測線を描画
-		UpdateAimLine(transform.position, hit.point);
+		UpdateAimLine(transform.position, targetPoint);
 
 		// 着地点にマーカーを表示
-		UpdateLandingMarker(hit.point, hit.normal);
+		UpdateLandingMarker(targetPoint, targetNormal);
 
 		// 着地点と法線をGravityMoverへ渡す
 		if (m_GravityMover != null)
 		{
-			m_GravityMover.SetFallingTarget(hit.point, hit.normal);
+			m_GravityMover.SetFallingTarget(targetPoint, targetNormal);
 		}
 	}
 

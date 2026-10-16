@@ -1,4 +1,4 @@
-﻿using DG.Tweening;
+using DG.Tweening;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -36,26 +36,29 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	// 想定設定値: 10.0f (歩行中の曲面法線への姿勢追従速度)
 	[SerializeField] private float m_SurfaceAlignSpeed;
 
-	[Header("エッジ・角部回り込み設定")]
-	// 想定設定値: 0.6f (進行方向へのエッジ先読み距離)
-	[SerializeField] private float m_EdgeAheadDistance;
-
-	// 想定設定値: 1.2f (エッジ外側から側面を検知する折り返し距離)
-	[SerializeField] private float m_EdgeWrapCheckDistance;
-
-	// 想定設定値: 25.0f (エッジ回り込み時の姿勢追従速度)
-	[SerializeField] private float m_EdgeAlignSpeed;
-
 	[Header("デバッグ可視化設定")]
 	[SerializeField] private bool m_EnableDebugDraw = true;
 
 	// 想定設定値: Groundレイヤー等のマスク(未指定時は全レイヤー対象)
 	[SerializeField] private LayerMask m_GroundLayerMask;
 
+	[Header("連続衝突判定設定")]
+	// 想定設定値: true (所有者端末のRigidbodyで連続衝突判定を有効化)
+	[SerializeField] private bool m_EnableContinuousDetectionForOwner = true;
 
-	//---追加---//
+	[Header("エッジ着地・スタック対策設定")]
+	// パターンB: 飛行中のコライダー縮小を有効化(エイム線への忠実な追従)
+	[SerializeField] private bool m_EnableSlimColliderInFlight = true;
+	// 想定設定値: 0.3f (飛行中のコライダー半径倍率: 通常の30%までスリム化)
+	[SerializeField] private float m_FlightColliderRadiusScale;
+
+	// パターンA: 角部接地スタック防止(足元キャストが外れても近傍の角や面を捉えて接地維持)
+	[SerializeField] private bool m_EnableEdgeGroundedAssist = true;
+	// 想定設定値: 0.6f (足元外れ時に近傍の角や面を探索するサーチ半径)
+	[SerializeField] private float m_EdgeSearchRadius;
+
 	[Header("落下中の着地姿勢回転")]
-	[SerializeField] private float m_FallingRotationSpeed = 4.0f;
+	[SerializeField] private float m_FallingRotationSpeed;
 
 	// 落下中に向かう着地法線
 	private Vector3 m_FallingTargetNormal = Vector3.up;
@@ -72,6 +75,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 	private Rigidbody m_Rigidbody;
 	private CapsuleCollider m_CapsuleCollider;
+	private float m_OriginalColliderRadius;
 	private Vector3 m_CurrentDirection;
 	private float m_SpeedMultiplier = 1.0f;
 	private bool m_IsFalling;
@@ -83,14 +87,6 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	private Transform m_CameraTransform;
 	private Vector3 m_CurrentGroundNormal = Vector3.up;
 	private Vector3 m_LastMoveDirection = Vector3.forward;
-	private Vector3 m_EdgePivotPoint = Vector3.zero;
-	private Vector3 m_EdgeStartForward = Vector3.forward;
-	private Vector3 m_EdgeTargetForward = Vector3.forward;
-	private Vector3 m_EdgeStartNormal = Vector3.up;
-	private Vector3 m_EdgeTargetNormal = Vector3.up;
-	private float m_EdgeTransitionDuration = 0.35f;
-	private float m_EdgeTransitionTimer;
-	private float m_EdgeCooldownTimer;
 
 	/// <summary>
 	/// 現在等速直線移動(落下)中であるかを取得します。
@@ -120,10 +116,35 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	{
 		m_Rigidbody = GetComponent<Rigidbody>();
 		m_CapsuleCollider = GetComponent<CapsuleCollider>();
+		if (m_CapsuleCollider != null)
+		{
+			m_OriginalColliderRadius = m_CapsuleCollider.radius;
+		}
+
 		if (m_Rigidbody != null)
 		{
 			// 無重力状態で自前ベクトル推進を行うため物理重力を無効化
 			m_Rigidbody.useGravity = false;
+
+			// スタンドアロン動作時(ネットワーク未起動時)の連続衝突判定
+			if (!NetworkManager.Singleton || !NetworkManager.Singleton.IsListening)
+			{
+				if (m_EnableContinuousDetectionForOwner)
+				{
+					m_Rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+				}
+			}
+		}
+	}
+
+	public override void OnNetworkSpawn()
+	{
+		base.OnNetworkSpawn();
+
+		// ネットワーク接続時は自身の所有端末(IsOwner)のみ連続衝突判定を有効化して負荷を抑制
+		if (IsOwner && m_Rigidbody != null && m_EnableContinuousDetectionForOwner)
+		{
+			m_Rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 		}
 	}
 
@@ -175,6 +196,13 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		m_IsGrounded = false;
 		m_MoveInput = Vector2.zero;
 
+		// パターンB: 飛行中のコライダーをスリム化して角のカス当たりを抑制
+		if (m_EnableSlimColliderInFlight && m_CapsuleCollider != null && m_OriginalColliderRadius > 0f)
+		{
+			float scale = m_FlightColliderRadiusScale > 0f ? m_FlightColliderRadiusScale : 0.3f;
+			m_CapsuleCollider.radius = m_OriginalColliderRadius * scale;
+		}
+
 
 		// 進行方向へ即座に向きを設定
 		//transform.forward = m_CurrentDirection;
@@ -200,6 +228,12 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	{
 		m_IsFalling = false;
 		m_MoveInput = Vector2.zero;
+
+		// パターンB: 停止時にコライダーを元のサイズへ復元
+		if (m_CapsuleCollider != null && m_OriginalColliderRadius > 0f)
+		{
+			m_CapsuleCollider.radius = m_OriginalColliderRadius;
+		}
 
 		if (m_Rigidbody != null)
 		{
@@ -302,23 +336,9 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 	/// <summary>
 	/// エッジ(角)回り込み遷移を開始します。
-	/// </summary>
-	/// <param name="targetNormal">移行先の新面の法線</param>
-	/// <param name="edgePoint">角の頂点座標</param>
-	private void StartEdgeTransition(Vector3 targetNormal, Vector3 edgePoint)
-	{
-		Quaternion edgeRot = Quaternion.FromToRotation(m_CurrentGroundNormal, targetNormal);
-		m_EdgeStartForward = transform.forward;
-		m_EdgeTargetForward = (edgeRot * transform.forward).normalized;
-		m_EdgeStartNormal = m_CurrentGroundNormal;
-		m_EdgeTargetNormal = targetNormal;
-		m_EdgePivotPoint = edgePoint;
-		m_EdgeTransitionDuration = 0.35f;
-		m_EdgeTransitionTimer = m_EdgeTransitionDuration;
-	}
-
 	/// <summary>
-	/// 地面・エッジ・壁の法線検知および角の円弧回り込み制御を行います。
+	/// 地面・エッジ・壁の法線検知および角のマルチアングル接地制御を行います。
+	/// 幾何学的テレポート(MovePosition)を行わず、物理速度と吸着力のみで自然に角を回り込ませます。
 	/// </summary>
 	private void UpdateGroundStatus()
 	{
@@ -327,44 +347,8 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			return;
 		}
 
-		// エッジ回り込み遷移中の処理: 角の頂点を中心として外側に円弧を描いて位置・姿勢を滑らかに送り込む
-		if (m_EdgeTransitionTimer > 0f)
-		{
-			m_EdgeTransitionTimer -= Time.fixedDeltaTime;
-			if (m_EdgeTransitionTimer <= 0f)
-			{
-				// 遷移完了後、細いブロックでの連続遷移によるチャタリング・浮遊を防止するインターバル
-				m_EdgeCooldownTimer = 0.15f;
-			}
-
-			float t = Mathf.Clamp01(1.0f - (m_EdgeTransitionTimer / m_EdgeTransitionDuration));
-			// S字イージング(SmoothStep)により進入と脱出の角速度・加速度スパイクを排除
-			float tSmooth = t * t * (3.0f - 2.0f * t);
-
-			// 法線と前進向きの滑らかな円弧補間
-			m_CurrentGroundNormal = Vector3.Slerp(m_EdgeStartNormal, m_EdgeTargetNormal, tSmooth).normalized;
-			Vector3 forward = Vector3.Slerp(m_EdgeStartForward, m_EdgeTargetForward, tSmooth).normalized;
-
-			// 角の頂点(EdgePivot)を基準とし、カプセルの高さを考慮した外側円弧配置
-			float footOffset = GetFootOffset();
-			Vector3 targetPos = m_EdgePivotPoint + m_CurrentGroundNormal * (footOffset + 0.05f) + m_EdgeTargetForward * (0.25f * tSmooth);
-			Quaternion targetRot = Quaternion.LookRotation(forward, m_CurrentGroundNormal);
-
-			transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 15.0f * Time.fixedDeltaTime);
-			m_Rigidbody.position = Vector3.MoveTowards(m_Rigidbody.position, targetPos, 15.0f * Time.fixedDeltaTime);
-			float speed = m_GroundMoveSpeed > 0f ? m_GroundMoveSpeed : 10.0f;
-			m_Rigidbody.linearVelocity = forward * (speed * m_SpeedMultiplier);
-
-			m_IsGrounded = true;
-			return; // 遷移中は通常のRaycastと接地判定をバイパスして安定遷移を維持
-		}
-		else if (m_EdgeCooldownTimer > 0f)
-		{
-			m_EdgeCooldownTimer -= Time.fixedDeltaTime;
-		}
-
 		float footDist = GetFootOffset();
-		float checkDist = footDist + (m_GroundCheckDistance > 0f ? m_GroundCheckDistance : 0.4f);
+		float checkDist = footDist + (m_GroundCheckDistance > 0f ? m_GroundCheckDistance : 0.6f);
 		int layerMask = m_GroundLayerMask.value == 0 ? ~0 : m_GroundLayerMask.value;
 
 		bool foundGround = false;
@@ -381,58 +365,16 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		{
 			Debug.DrawRay(wallCheckOrigin, currentMoveDir * 0.8f, isWallHit ? Color.white : Color.gray, 0f);
 		}
-		if (isWallHit && Vector3.Dot(wallHit.normal, m_CurrentGroundNormal) < 0.8f && m_EdgeCooldownTimer <= 0f)
+		if (isWallHit && Vector3.Dot(wallHit.normal, m_CurrentGroundNormal) < 0.8f)
 		{
 			foundGround = true;
 			detectedNormal = wallHit.normal;
-			Vector3 currentFootPos = transform.position - transform.up * footDist;
-			Vector3 edgePoint = wallHit.point + Vector3.Project(currentFootPos - wallHit.point, m_CurrentGroundNormal);
-			StartEdgeTransition(wallHit.normal, edgePoint);
 		}
 
-		// 2. 凸角検知: 足元前方の床が途切れた(崖のエッジに達した)瞬間のみ厳密に検知(クールダウン中は抑制)
-		if (!foundGround && m_MoveInput.sqrMagnitude > 0.001f && m_EdgeCooldownTimer <= 0f)
-		{
-			// 先読み距離をコンパクト(0.25m)に設定し、細い足場でも直前まで直進を維持
-			float aheadDist = m_EdgeAheadDistance > 0f ? m_EdgeAheadDistance : 0.25f;
-			float wrapDist = m_EdgeWrapCheckDistance > 0f ? m_EdgeWrapCheckDistance : 1.2f;
-
-			// 進行方向の足元直前をチェック(手前での誤発動を防止)
-			Vector3 aheadOrigin = transform.position + currentMoveDir * aheadDist;
-			bool hasAheadGround = Physics.Raycast(aheadOrigin, -transform.up, out RaycastHit _, checkDist, layerMask, QueryTriggerInteraction.Ignore);
-			if (m_EnableDebugDraw)
-			{
-				Debug.DrawRay(aheadOrigin, -transform.up * checkDist, hasAheadGround ? Color.cyan : Color.red, 0f);
-			}
-
-			// 足元前方の地面が途切れた場合のみ、角の外側から折り返しRaycastを照射して側面を捉える
-			if (!hasAheadGround)
-			{
-				Vector3 currentFootPos = transform.position - transform.up * footDist;
-				Vector3 wrapOrigin = currentFootPos + currentMoveDir * aheadDist - transform.up * 0.4f;
-				Vector3 wrapDirection = -currentMoveDir;
-
-				bool isWrapHit = Physics.Raycast(wrapOrigin, wrapDirection, out RaycastHit wrapHit, wrapDist, layerMask, QueryTriggerInteraction.Ignore);
-				if (m_EnableDebugDraw)
-				{
-					Debug.DrawRay(wrapOrigin, wrapDirection * wrapDist, isWrapHit ? Color.yellow : Color.blue, 0f);
-				}
-				if (isWrapHit && Vector3.Dot(wrapHit.normal, m_CurrentGroundNormal) < 0.8f)
-				{
-					foundGround = true;
-					detectedNormal = wrapHit.normal;
-
-					// 角の頂点(上面の床高と側面の壁面の交点)を幾何学的に特定
-					Vector3 edgePoint = wrapHit.point + Vector3.Project(currentFootPos - wrapHit.point, m_CurrentGroundNormal);
-					StartEdgeTransition(wrapHit.normal, edgePoint);
-				}
-			}
-		}
-
-		// 3. 通常足元検知: SphereCastにより角の縁や細い足場でも確実に接地を捕捉
+		// 2. 通常足元検知: SphereCastにより角の縁や曲面でも確実に接地を捕捉
 		if (!foundGround)
 		{
-			float sphereRadius = 0.35f;
+			float sphereRadius = m_CapsuleCollider != null ? m_CapsuleCollider.radius * 0.85f : 0.4f;
 			float castDist = Mathf.Max(0.1f, checkDist - sphereRadius);
 			bool isDownHit = Physics.SphereCast(transform.position, sphereRadius, -transform.up, out RaycastHit downHit, castDist, layerMask, QueryTriggerInteraction.Ignore);
 			if (m_EnableDebugDraw)
@@ -446,6 +388,57 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			}
 		}
 
+		// 3. 角・エッジ近傍マルチアングル検知: 足元真下が空中に抜けた瞬間、近接する角の上面や側面を捉えて接地を維持
+		if (!foundGround && m_EnableEdgeGroundedAssist && m_CapsuleCollider != null)
+		{
+			Vector3 footOrigin = transform.position - transform.up * (footDist - 0.2f);
+			float edgeCheckDist = m_EdgeSearchRadius > 0f ? m_EdgeSearchRadius : 0.8f;
+
+			Vector3[] edgeCheckDirections = new Vector3[]
+			{
+				// 進行方向の斜め下(これから進む側面や下りエッジ)
+				(-transform.up + currentMoveDir).normalized,
+				// 進行方向の斜め手前(踏み外した直前の上面・エッジ)
+				(-transform.up - currentMoveDir * 0.6f).normalized,
+				// 直前の接地面の逆方向(上面)
+				-m_CurrentGroundNormal,
+				// 進行方向の真後ろ(通り過ぎた側面)
+				-currentMoveDir,
+				// 進行方向の左右斜め下(斜め進入時のエッジ捕捉)
+				(-transform.up + transform.right * 0.7f).normalized,
+				(-transform.up - transform.right * 0.7f).normalized,
+			};
+
+			float closestDist = float.MaxValue;
+			RaycastHit bestHit = default;
+			bool foundEdge = false;
+
+			for (int i = 0; i < edgeCheckDirections.Length; i++)
+			{
+				Vector3 dir = edgeCheckDirections[i];
+				if (Physics.Raycast(footOrigin, dir, out RaycastHit hit, edgeCheckDist, layerMask, QueryTriggerInteraction.Ignore))
+				{
+					if (m_EnableDebugDraw)
+					{
+						Debug.DrawLine(footOrigin, hit.point, Color.yellow, 0f);
+					}
+
+					if (hit.distance < closestDist)
+					{
+						closestDist = hit.distance;
+						bestHit = hit;
+						foundEdge = true;
+					}
+				}
+			}
+
+			if (foundEdge)
+			{
+				foundGround = true;
+				detectedNormal = bestHit.normal;
+			}
+		}
+
 		// デバッグ表示: 現在の法線(緑線)と進行方向(青線)
 		if (m_EnableDebugDraw)
 		{
@@ -453,24 +446,44 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			Debug.DrawRay(transform.position, currentMoveDir * 1.0f, Color.blue, 0f);
 		}
 
+		bool wasGrounded = m_IsGrounded;
+
 		// 接地状態と目標法線の更新
 		if (foundGround)
 		{
 			m_IsGrounded = true;
-			// 鋭利な角や辺に斜めに立った際の毎フレーム90度反転チャタリングを防止する平滑化補間
-			float normalAlignSpeed = (m_EdgeTransitionTimer > 0f) ? 25.0f : 15.0f;
+			// 角を乗り越える際(法線角度差大)は機敏に追従、通常歩行時は滑らかに追従
+			float dot = Vector3.Dot(m_CurrentGroundNormal, detectedNormal);
+			float normalAlignSpeed = dot < 0.7f ? 25.0f : 15.0f;
 			m_CurrentGroundNormal = Vector3.Slerp(m_CurrentGroundNormal, detectedNormal, normalAlignSpeed * Time.fixedDeltaTime).normalized;
 		}
 		else
 		{
 			m_IsGrounded = false;
+			if (wasGrounded && m_EnableDebugDraw)
+			{
+				Debug.LogWarning($"[GravityMover-Debug] 接地ロスト発生: Pos={transform.position}, 前回の法線={m_CurrentGroundNormal}");
+			}
 		}
 	}
 
 	private void HandleGroundMovement()
 	{
-		if (m_Rigidbody == null || !m_IsGrounded || m_IsFalling || m_EdgeTransitionTimer > 0f)
+		if (m_Rigidbody == null || m_IsFalling)
 		{
+			return;
+		}
+
+		if (!m_IsGrounded)
+		{
+			// フェールセーフ: 未接地かつ非落下時、直前の歩行慣性で空中滑走しないよう速やかに減速(ドラッグ制動)
+			float dragRate = m_GroundAcceleration > 0f ? m_GroundAcceleration * 2.5f : 30.0f;
+			m_Rigidbody.linearVelocity = Vector3.MoveTowards(m_Rigidbody.linearVelocity, Vector3.zero, dragRate * Time.fixedDeltaTime);
+
+			if (m_MoveInput.sqrMagnitude > 0.001f && m_EnableDebugDraw)
+			{
+				Debug.LogWarning($"[GravityMover-Debug] 接地ロスト中に入力検知(スタック疑い): Pos={transform.position}, Up={transform.up}, CurrentGroundNormal={m_CurrentGroundNormal}, Input={m_MoveInput}");
+			}
 			return;
 		}
 
@@ -549,7 +562,8 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			targetForward.Normalize();
 			Quaternion targetRotation = Quaternion.LookRotation(targetForward, m_CurrentGroundNormal);
 			float alignSpeed = m_SurfaceAlignSpeed > 0f ? m_SurfaceAlignSpeed : 10.0f;
-			transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, alignSpeed * Time.fixedDeltaTime);
+			Quaternion newRotation = Quaternion.Slerp(m_Rigidbody.rotation, targetRotation, alignSpeed * Time.fixedDeltaTime);
+			m_Rigidbody.MoveRotation(newRotation);
 		}
 	}
 
@@ -579,25 +593,13 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			ContactPoint contact = collision.GetContact(0);
 			Vector3 hitNormal = contact.normal;
 
-			// 落下を停止してホバリング状態へ遷移
+			if (m_EnableDebugDraw)
+			{
+				Debug.Log($"[GravityMover-Debug] 着地検出: hitNormal={hitNormal}, 目標Normal={m_FallingTargetNormal}, hasTargetNormal={m_HasFallingTargetNormal}, 接触物体={collision.gameObject.name}, contactPoint={contact.point}, playerPos={transform.position}");
+			}
+
+			// 落下を停止してホバリング状態へ遷移(コライダーサイズも復元)
 			StopFalling();
-
-			//// 既存の姿勢補正アニメーションを中断
-			//m_AlignTween?.Kill();
-
-			//// キャラクターの足元(transform.up)が衝突面の法線を向くように姿勢補正
-			//Quaternion targetRotation = Quaternion.FromToRotation(transform.up, hitNormal) * transform.rotation;
-
-			//if (m_AlignDuration > 0f)
-			//{
-			//	m_AlignTween = transform.DORotateQuaternion(targetRotation, m_AlignDuration)
-			//		.SetEase(m_AlignEase);
-			//}
-			//else
-			//{
-			//	transform.rotation = targetRotation;
-			//}
-
 
 			// 移動中の回転でほぼ着地姿勢になっているが、
 			// 最後に衝突面の法線へ完全に合わせる
@@ -620,11 +622,12 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			{
 				targetForward.Normalize();
 
-				transform.rotation =
+				Quaternion targetRotation =
 					Quaternion.LookRotation(
 						targetForward,
 						hitNormal
 					);
+				m_Rigidbody.MoveRotation(targetRotation);
 			}
 
 			// 落下中の着地法線情報をクリア
