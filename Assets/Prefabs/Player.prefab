@@ -473,6 +473,8 @@ GameObject:
   - component: {fileID: 1164154789786135184}
   - component: {fileID: -4640382079411939406}
   - component: {fileID: 6097049237247373300}
+  - component: {fileID: 2680069497177182038}
+  - component: {fileID: 3112936510738658285}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -786,29 +788,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GravityMover
   ShowTopMostFoldoutHeaderGroup: 1
   m_BaseFallSpeed: 20
-  m_AlignDuration: 0.25
-  m_AlignEase: 2
-  m_GroundMoveSpeed: 10
-  m_GroundAcceleration: 15
-  m_GroundStickForce: 15
-  m_GroundCheckDistance: 1.5
-  m_SurfaceAlignSpeed: 10
-  m_EdgeAheadDistance: 0.6
-  m_EdgeWrapCheckDistance: 1.2
-  m_EdgeAlignSpeed: 25
-  m_EnableDebugDraw: 1
+  m_FallingRotationSpeed: 4
+  m_EnableContinuousDetectionForOwner: 1
   m_GroundLayerMask:
     serializedVersion: 2
     m_Bits: 128
-  m_MaxDepenetrationPush: 0.1
-  m_EnableContinuousDetectionForOwner: 1
-  m_EnableSlimColliderInFlight: 0
-  m_FlightColliderRadiusScale: 0.3
-  m_BypassEarlySideHit: 0
-  m_EarlySideHitThresholdDistance: 1.5
-  m_EnableEdgeGroundedAssist: 1
-  m_EdgeSearchRadius: 0.6
-  m_FallingRotationSpeed: 4
+  m_EnableDebugDraw: 1
 --- !u!114 &1164154789786135184
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -886,7 +871,6 @@ MonoBehaviour:
   m_AimReticle: {fileID: 5509881642956187267}
   m_AimLine: {fileID: 7693887922062000978}
   m_LandingMarker: {fileID: 7693067950226141477}
-  m_GravityMover: {fileID: 2874015679274306090}
   m_AimTargetLayers:
     serializedVersion: 2
     m_Bits: 128
@@ -896,6 +880,42 @@ MonoBehaviour:
   m_CinemachineCameraTransform: {fileID: 5892072697104370858}
   m_AimCameraShoulderOffset: {x: 1, y: 1, z: 3.3}
   m_AimOpacity: 0.35
+--- !u!114 &2680069497177182038
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c341a49390dda194c91e377a613be574, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerGroundDetector
+  m_GroundCheckDistance: 1.5
+  m_GroundLayerMask:
+    serializedVersion: 2
+    m_Bits: 128
+  m_EnableEdgeGroundedAssist: 1
+  m_EdgeSearchRadius: 0.6
+  m_EnableDebugDraw: 1
+--- !u!114 &3112936510738658285
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cd64b44efc9278c47bca2a31c108f6a8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSurfaceMover
+  m_GroundMoveSpeed: 10
+  m_GroundAcceleration: 15
+  m_GroundStickForce: 15
+  m_SurfaceAlignSpeed: 10
+  m_EnableDebugDraw: 1
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 
@@ -16,10 +16,9 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	[Header("着地マーカー")]
 	[SerializeField] private GameObject m_LandingMarker;
 
-	// 追加
 	[Header("落下制御")]
-	[SerializeField]
-	private GravityMover m_GravityMover;
+	private IGravityMover m_GravityMover;
+	private IGroundDetector m_GroundDetector;
 
 	[Header("Raycast設定")]
 	[SerializeField] private LayerMask m_AimTargetLayers;
@@ -71,11 +70,8 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	private void Awake()
 	{
 		m_Rigidbody = GetComponent<Rigidbody>();
-
-		if (m_GravityMover == null)
-		{
-			m_GravityMover = GetComponent<GravityMover>();
-		}
+		m_GravityMover = GetComponent<IGravityMover>();
+		m_GroundDetector = GetComponent<IGroundDetector>();
 
 		// カメラの通常時のローカル位置を最初に保存する
 		if (m_CinemachineCameraTransform != null)
@@ -274,8 +270,8 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		m_AimStartPosition = transform.position;
 
 		// 現在立っている面の法線方向を取得
-		Vector3 groundNormal = m_GravityMover != null
-			? m_GravityMover.CurrentGroundNormal
+		Vector3 groundNormal = m_GroundDetector != null
+			? m_GroundDetector.CurrentGroundNormal
 			: transform.up;
 
 		// 法線が取得できない場合はPlayerの上方向を使用

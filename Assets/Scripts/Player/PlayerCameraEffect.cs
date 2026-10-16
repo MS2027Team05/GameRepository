@@ -1,4 +1,4 @@
-﻿using Unity.Cinemachine;
+using Unity.Cinemachine;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -46,7 +46,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 	private Coroutine m_FOVCoroutine;
 	private PlayerInputReceiver m_InputReceiver;
-	private IGravityMover m_GravityMover;
+	private IGroundDetector m_GroundDetector;
 	private NetworkObject m_NetworkObject;
 	private Vector3 m_PositionVelocity;
 	private Vector3 m_CurrentUp = Vector3.up;
@@ -57,7 +57,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	private void Awake()
 	{
 		m_InputReceiver = GetComponent<PlayerInputReceiver>();
-		m_GravityMover = GetComponent<IGravityMover>();
+		m_GroundDetector = GetComponent<IGroundDetector>();
 		m_NetworkObject = GetComponent<NetworkObject>();
 
 		if (m_CameraPivot == null && m_CinemachineCamera != null)
@@ -79,8 +79,8 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			// 親(Player)の回転に引きずられないよう階層を独立化
 			m_CameraPivot.SetParent(null);
 
-			m_CurrentUp = (m_GravityMover != null && m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
-				? m_GravityMover.CurrentGroundNormal
+			m_CurrentUp = (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
+				? m_GroundDetector.CurrentGroundNormal
 				: transform.up;
 
 			m_PlanarForward = Vector3.ProjectOnPlane(transform.forward, m_CurrentUp);
@@ -111,8 +111,8 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		m_CameraPivot.position = Vector3.SmoothDamp(m_CameraPivot.position, transform.position, ref m_PositionVelocity, smoothTime);
 
 		// 目標とする接地面法線(未接地時はtransform.up)
-		Vector3 targetUp = (m_GravityMover != null && m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
-			? m_GravityMover.CurrentGroundNormal
+		Vector3 targetUp = (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
+			? m_GroundDetector.CurrentGroundNormal
 			: transform.up;
 
 		// カメラのUpベクトル追従: RotateTowardsによる角速度上限で初速スパイクを排除しふわりと追従

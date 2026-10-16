@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -17,6 +17,8 @@ public class PlayerController : NetworkBehaviour
 
 	// 各担当者が実装するインターフェース・コンポーネント参照
 	private IGravityMover m_GravityMover;
+	private ISurfaceMover m_SurfaceMover;
+	private IGroundDetector m_GroundDetector;
 	private IAimGuide m_AimGuide;
 	private IBallCarrier m_BallCarrier;
 	private ICameraEffect m_CameraEffect;
@@ -31,6 +33,8 @@ public class PlayerController : NetworkBehaviour
 	{
 		// 各インターフェースおよび演出コンポーネントの取得
 		m_GravityMover = GetComponent<IGravityMover>();
+		m_SurfaceMover = GetComponent<ISurfaceMover>();
+		m_GroundDetector = GetComponent<IGroundDetector>();
 		m_AimGuide = GetComponent<IAimGuide>();
 		m_BallCarrier = GetComponent<IBallCarrier>();
 		m_CameraEffect = GetComponent<ICameraEffect>();
@@ -38,6 +42,14 @@ public class PlayerController : NetworkBehaviour
 		if (m_GravityMover == null)
 		{
 			Debug.LogError("[PlayerController] IGravityMover (GravityMover) が見つかりません。PlayerオブジェクトにGravityMoverをアタッチしてください。");
+		}
+		if (m_SurfaceMover == null)
+		{
+			Debug.LogWarning("[PlayerController] ISurfaceMover (PlayerSurfaceMover) が見つかりません。");
+		}
+		if (m_GroundDetector == null)
+		{
+			Debug.LogWarning("[PlayerController] IGroundDetector (PlayerGroundDetector) が見つかりません。");
 		}
 		if (m_AimGuide == null)
 		{
@@ -65,6 +77,19 @@ public class PlayerController : NetworkBehaviour
 		if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(true);
 		BindInputEvents();
 		PlayerInputReceiver.SetCursorLocked(true);
+
+		if (m_GravityMover != null)
+		{
+			m_GravityMover.OnLanded += HandleLanded;
+		}
+	}
+
+	private void HandleLanded()
+	{
+		if (CurrentState == EPlayerState.Falling)
+		{
+			CurrentState = EPlayerState.Idle;
+		}
 	}
 
 	private void BindInputEvents()
@@ -100,7 +125,7 @@ public class PlayerController : NetworkBehaviour
 		}
 
 		// 地上移動入力のルーティング(スタン中やエイム中でない場合に伝達)
-		if (m_GravityMover != null && m_InputReceiver != null)
+		if (m_SurfaceMover != null && m_InputReceiver != null)
 		{
 			Vector2 moveInput = (CurrentState == EPlayerState.Aiming || CurrentState == EPlayerState.Stunned)
 				? Vector2.zero
@@ -110,7 +135,22 @@ public class PlayerController : NetworkBehaviour
 				? Camera.main.transform
 				: (m_PlayerCameraObject != null ? m_PlayerCameraObject.transform : transform);
 
-			m_GravityMover.SetMoveInput(moveInput, camTransform);
+			m_SurfaceMover.SetMoveInput(moveInput, camTransform);
+		}
+	}
+
+	private void FixedUpdate()
+	{
+		if (!IsOwner) return;
+
+		// 地上待機・歩行中は接地検知および地上移動物理処理を実行
+		if (CurrentState == EPlayerState.Idle)
+		{
+			if (m_GroundDetector != null && m_SurfaceMover != null)
+			{
+				m_GroundDetector.DetectGround(m_SurfaceMover.CurrentMoveDirection, m_SurfaceMover.CurrentPlaneSpeed);
+				m_SurfaceMover.UpdateSurfaceMovement();
+			}
 		}
 	}
 
@@ -214,6 +254,7 @@ public class PlayerController : NetworkBehaviour
 	{
 		float speedMultiplier = hasBall ? 0.7f : 1.0f;
 		m_GravityMover?.SetSpeedMultiplier(speedMultiplier);
+		m_SurfaceMover?.SetSpeedMultiplier(speedMultiplier);
 	}
 
 	/// <summary>
@@ -245,6 +286,10 @@ public class PlayerController : NetworkBehaviour
 	{
 		if (IsOwner)
 		{
+			if (m_GravityMover != null)
+			{
+				m_GravityMover.OnLanded -= HandleLanded;
+			}
 			UnbindInputEvents();
 			PlayerInputReceiver.SetCursorLocked(false);
 		}
