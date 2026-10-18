@@ -241,4 +241,46 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		m_CinemachineCamera.Lens.FieldOfView = targetFOV;
 		m_FOVCoroutine = null;
 	}
+
+	/// <summary>
+	/// プレイヤーの前方向に視点をリセットします。
+	/// </summary>
+	public void ResetView()
+	{
+		// カメラ制御が初期化されていない場合は何もしない
+		if (!m_IsInitialized)
+		{
+			return;
+		}
+
+		// 接地面の法線を取得
+		Vector3 upDirection =
+			(m_GravityMover != null &&
+			 m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
+			? m_GravityMover.CurrentGroundNormal.normalized
+			: transform.up;
+
+		// プレイヤーの前方向を接地面に沿わせる
+		Vector3 forwardDirection =
+			Vector3.ProjectOnPlane(transform.forward, upDirection);
+
+		// 前方向が取得できない場合は現在のカメラ方向を利用
+		if (forwardDirection.sqrMagnitude < 0.001f)
+		{
+			forwardDirection =
+				Vector3.ProjectOnPlane(m_PlanarForward, upDirection);
+		}
+
+		if (forwardDirection.sqrMagnitude < 0.001f)
+		{
+			return;
+		}
+
+		// カメラ制御用の内部変数を更新
+		m_CurrentUp = upDirection;
+		m_PlanarForward = forwardDirection.normalized;
+
+		// 通常時の上下角度へ戻す
+		m_Pitch = 12.0f;
+	}
 }

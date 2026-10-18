@@ -71,7 +71,7 @@ public class BallDebugRespawner : NetworkBehaviour
 			return;
 		}
 
-		if (!Keyboard.current.rKey.wasPressedThisFrame)
+		if (!Keyboard.current.cKey.wasPressedThisFrame)
 		{
 			return;
 		}
