@@ -152,8 +152,22 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 		m_LastPlaneSpeed = newPlaneVel.magnitude;
 
 		// 曲面・角回り込み時の求心吸着スナップ
-		float snapRate = 25.0f;
-		float snapSpeed = Mathf.Clamp(groundGap * snapRate, -3.0f, 15.0f);
+		// 速度に連動した適度な向心力を持たせつつ、急激な階段状付与を抑えて滑らかな円弧軌道を描く
+		float currentSpeed = newPlaneVel.magnitude;
+		float normalDiff = 1.0f - Mathf.Clamp01(Vector3.Dot(transform.up, groundNormal)); // 0(平坦)〜1(直角)
+		float maxSnapSpeed = Mathf.Max(15.0f, currentSpeed * 1.5f);
+
+		float snapRate = 22.0f;
+		float snapSpeed = Mathf.Clamp(groundGap * snapRate, -2.5f, maxSnapSpeed);
+
+		// 角を跨ぐ過渡期(浮き上がり防止)は、法線差に応じて緩やかに向心引き込みをアシスト
+		if (normalDiff > 0.05f && currentSpeed > 0.5f)
+		{
+			// 二乗イージングにより、微小角では影響を与えず、急角になるにつれて滑らかに引き込みを強化
+			float smoothCentripetal = currentSpeed * (normalDiff * normalDiff) * 0.5f;
+			snapSpeed = Mathf.Max(snapSpeed, smoothCentripetal);
+		}
+
 		Vector3 snapVelocity = -groundNormal * snapSpeed;
 
 		// 地面への安定吸着力(ダウンフォース)
@@ -184,7 +198,12 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 		{
 			targetForward.Normalize();
 			Quaternion targetRotation = Quaternion.LookRotation(targetForward, groundNormal);
-			float alignSpeed = m_SurfaceAlignSpeed > 0f ? m_SurfaceAlignSpeed : 10.0f;
+			float baseAlignSpeed = m_SurfaceAlignSpeed > 0f ? m_SurfaceAlignSpeed : 10.0f;
+
+			// 角回り込み時でも急変させず、心地よい円弧を描く範囲(最大16.0f程度)で滑らかに姿勢追従
+			float normalDiff = 1.0f - Mathf.Clamp01(Vector3.Dot(transform.up, groundNormal));
+			float alignSpeed = baseAlignSpeed + normalDiff * 6.0f;
+
 			Quaternion newRotation = Quaternion.Slerp(m_Rigidbody.rotation, targetRotation, alignSpeed * Time.fixedDeltaTime);
 			m_Rigidbody.MoveRotation(newRotation);
 		}

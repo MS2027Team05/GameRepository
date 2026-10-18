@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -227,9 +227,9 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 			Vector3 footPos = transform.position - transform.up * footDist;
 			m_GroundGap = Vector3.Dot(footPos - detectedPoint, m_CurrentGroundNormal);
 
-			// 角を乗り越える際(法線角度差大)は機敏に追従、通常歩行時は滑らかに追従
+			// 角を乗り越える際(法線角度差大)でもカクつかず滑らかな円弧を描いて追従
 			float dot = Vector3.Dot(m_CurrentGroundNormal, detectedNormal);
-			float normalAlignSpeed = dot < 0.7f ? 35.0f : 15.0f;
+			float normalAlignSpeed = dot < 0.7f ? 20.0f : 15.0f;
 			m_CurrentGroundNormal = Vector3.Slerp(m_CurrentGroundNormal, detectedNormal, normalAlignSpeed * Time.fixedDeltaTime).normalized;
 		}
 		else
