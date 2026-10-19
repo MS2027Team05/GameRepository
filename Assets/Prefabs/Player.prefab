@@ -273,6 +273,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerNamePlate
   m_NameText: {fileID: 4093982885352747298}
   m_HideOnLocalPlayer: 0
+  m_KeepConstantSize: 0
+  m_ReferenceDistance: 10
+  m_MinScaleMultiplier: 0.5
+  m_MaxScaleMultiplier: 1.25
   m_RedTeamColor: {r: 1, g: 0, b: 0, a: 1}
   m_BlueTeamColor: {r: 0, g: 0, b: 1, a: 1}
   m_DefaultColor: {r: 1, g: 1, b: 1, a: 1}
@@ -725,7 +729,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2466233519835475451}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1

@@ -104,8 +104,14 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		foreach (Renderer targetRenderer in allRenderers)
 		{
-			// 照準UI・予測線・着地マーカーは対象外
-			if (targetRenderer == m_AimLine ||
+			// 照準UI・予測線・着地マーカー・LineRenderer・テキスト用Rendererは対象外
+			if (targetRenderer == null ||
+				targetRenderer == m_AimLine ||
+				targetRenderer is LineRenderer ||
+				targetRenderer is TrailRenderer ||
+				targetRenderer is ParticleSystemRenderer ||
+				targetRenderer.GetComponent<TMPro.TMP_Text>() != null ||
+				targetRenderer.GetComponent<TMPro.TMP_SubMeshUI>() != null ||
 				IsChildOfObject(targetRenderer.transform, m_AimReticle) ||
 				IsChildOfObject(targetRenderer.transform, m_LandingMarker))
 			{
@@ -241,25 +247,34 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 			return;
 		}
 
+		var silhouette = GetComponent<PlayerSilhouette>();
+
 		if (transparent)
 		{
-			for (int i = 0; i < m_PlayerRenderers.Length; i++)
+			// PlayerSilhouetteが存在する場合はアウトラインを合成して半透明化
+			if (silhouette != null)
 			{
-				if (m_PlayerRenderers[i] == null)
+				silhouette.ApplyAimTransparentState(true, m_PlayerRenderers, m_TransparentMaterials);
+			}
+			else
+			{
+				for (int i = 0; i < m_PlayerRenderers.Length; i++)
 				{
-					continue;
-				}
+					if (m_PlayerRenderers[i] == null)
+					{
+						continue;
+					}
 
-				m_PlayerRenderers[i].sharedMaterials = m_TransparentMaterials[i];
+					m_PlayerRenderers[i].sharedMaterials = m_TransparentMaterials[i];
+				}
 			}
 		}
 		else
 		{
-			// エイム終了時: PlayerSilhouetteが存在する場合はアウトライン・シルエット設定を再適用して完全復元
-			var silhouette = GetComponent<PlayerSilhouette>();
+			// エイム終了時: PlayerSilhouetteが存在する場合はエイム状態解除で完全復元
 			if (silhouette != null)
 			{
-				silhouette.ApplyTeamSettings();
+				silhouette.ApplyAimTransparentState(false, null, null);
 			}
 			else
 			{

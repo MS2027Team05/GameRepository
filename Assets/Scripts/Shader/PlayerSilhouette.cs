@@ -40,10 +40,12 @@ public class PlayerSilhouette : MonoBehaviour
 	private static readonly int m_StencilCompId = Shader.PropertyToID("_StencilComp");
 	private static readonly int m_StencilPassId = Shader.PropertyToID("_StencilPass");
 
-	// レンダリングキュー定数(道具本体の2050より前に描画して誤遮蔽を防止)
+	// レンダリングキュー定数(不透明壁描画後の3010でZTest Greaterを評価して確実に壁裏描画)
 	private const int m_StencilMaskQueue = 2010;
-	private const int m_SilhouetteQueue = 2015;
+	private const int m_SilhouetteQueue = 3010;
 	private const int m_OutlineQueue = 2020;
+
+	private static readonly List<PlayerSilhouette> s_Instances = new List<PlayerSilhouette>();
 
 	private Renderer[] m_Renderers;
 	private Dictionary<Renderer, Material[]> m_OriginalMaterials;
@@ -54,6 +56,7 @@ public class PlayerSilhouette : MonoBehaviour
 
 	private PlayerNetworkProfile m_Profile;
 	private NetworkObject m_NetworkObject;
+	private bool m_IsAiming;
 
 	private void Awake()
 	{
@@ -63,6 +66,19 @@ public class PlayerSilhouette : MonoBehaviour
 		m_Renderers = CollectRenderers();
 		CacheOriginalMaterials();
 		CreateMaterialInstances();
+	}
+
+	private void OnEnable()
+	{
+		if (!s_Instances.Contains(this))
+		{
+			s_Instances.Add(this);
+		}
+	}
+
+	private void OnDisable()
+	{
+		s_Instances.Remove(this);
 	}
 
 	private void Start()
@@ -92,24 +108,77 @@ public class PlayerSilhouette : MonoBehaviour
 	private void HandleProfileChanged()
 	{
 		ApplyTeamSettings();
+
+		// 自端末のプレイヤープロファイルが確定・更新された場合はシーン内の全シルエットを再評価
+		if (m_NetworkObject != null && m_NetworkObject.IsOwner)
+		{
+			RefreshAll();
+		}
+	}
+
+	/// <summary>
+	/// シーン内に存在するすべてのPlayerSilhouetteのチーム設定を再評価します。
+	/// ローカルプレイヤーの所属チームが確定した際に呼び出します。
+	/// </summary>
+	public static void RefreshAll()
+	{
+		for (int i = 0; i < s_Instances.Count; i++)
+		{
+			if (s_Instances[i] != null)
+			{
+				s_Instances[i].ApplyTeamSettings();
+			}
+		}
 	}
 
 	private Renderer[] CollectRenderers()
 	{
-		var all = GetComponentsInChildren<Renderer>();
-		if (m_ExcludeRenderers == null || m_ExcludeRenderers.Length == 0)
-		{
-			return all;
-		}
-
+		var all = GetComponentsInChildren<Renderer>(true);
 		var list = new List<Renderer>(all.Length);
-		foreach (var r in all)
+
+		// キャラクターモデル(SkinnedMeshRenderer)が存在するか判定
+		bool hasSkinnedMesh = false;
+		for (int i = 0; i < all.Length; i++)
 		{
-			if (Array.IndexOf(m_ExcludeRenderers, r) < 0)
+			if (all[i] is SkinnedMeshRenderer)
 			{
-				list.Add(r);
+				hasSkinnedMesh = true;
+				break;
 			}
 		}
+
+		for (int i = 0; i < all.Length; i++)
+		{
+			var r = all[i];
+			if (r == null) continue;
+
+			// LineRendererやTrailRenderer等の特殊ライン演出は除外
+			if (r is LineRenderer || r is TrailRenderer || r is ParticleSystemRenderer)
+			{
+				continue;
+			}
+
+			// TextMeshPro等のUI・テキスト用レンダラーは除外
+			if (r.GetComponent<TMPro.TMP_Text>() != null || r.GetComponent<TMPro.TMP_SubMeshUI>() != null)
+			{
+				continue;
+			}
+
+			// 手動除外リストに含まれている場合は除外
+			if (m_ExcludeRenderers != null && Array.IndexOf(m_ExcludeRenderers, r) >= 0)
+			{
+				continue;
+			}
+
+			// Tポーズ等のSkinnedMeshRendererが存在する場合、ルートのカプセル用MeshRenderer等の干渉を除外
+			if (hasSkinnedMesh && r is MeshRenderer && r.gameObject == gameObject)
+			{
+				continue;
+			}
+
+			list.Add(r);
+		}
+
 		return list.ToArray();
 	}
 
@@ -164,6 +233,8 @@ public class PlayerSilhouette : MonoBehaviour
 	/// </summary>
 	public void ApplyTeamSettings()
 	{
+		if (m_IsAiming) return;
+
 		ETeamType myTeam = m_Profile != null ? m_Profile.Team : ETeamType.None;
 
 		// ローカルクライアント情報の判定
@@ -219,13 +290,58 @@ public class PlayerSilhouette : MonoBehaviour
 		{
 			Color silColor = new Color(teamColor.r, teamColor.g, teamColor.b, m_PlayerSilhouetteAlpha);
 			m_SilhouetteInstance.SetColor(m_SilhouetteColorId, silColor);
-			m_SilhouetteInstance.SetFloat(m_StencilRefId, 0f);
-			m_SilhouetteInstance.SetFloat(m_StencilCompId, (float)UnityEngine.Rendering.CompareFunction.Equal);
-			m_SilhouetteInstance.SetFloat(m_StencilPassId, (float)UnityEngine.Rendering.StencilOp.IncrementSaturate);
+			// 遮蔽時は壁の奥のメッシュを無条件描画するためCompareFunction.Alwaysに設定
+			m_SilhouetteInstance.SetFloat(m_StencilCompId, (float)UnityEngine.Rendering.CompareFunction.Always);
+			m_SilhouetteInstance.SetFloat(m_StencilPassId, (float)UnityEngine.Rendering.StencilOp.Keep);
 		}
 
 		// マテリアル配列の再構築
 		RebuildMaterials(m_UseOutline, shouldShowSilhouette);
+	}
+
+	/// <summary>
+	/// エイム時の半透明マテリアル適用状態をアウトラインおよびシルエットと合成して反映します。
+	/// </summary>
+	public void ApplyAimTransparentState(bool isAiming, Renderer[] renderers, Material[][] transparentMaterials)
+	{
+		m_IsAiming = isAiming;
+
+		if (!isAiming)
+		{
+			ApplyTeamSettings();
+			return;
+		}
+
+		if (renderers == null || transparentMaterials == null) return;
+
+		for (int i = 0; i < renderers.Length; i++)
+		{
+			var r = renderers[i];
+			if (r == null || i >= transparentMaterials.Length) continue;
+
+			var baseMats = transparentMaterials[i];
+			if (baseMats == null) continue;
+
+			// 半透明マテリアルの末尾にアウトライン・シルエット用マテリアルを付与
+			int extraCount = 0;
+			if (m_UseOutline && m_StencilMaskInstance != null) extraCount++;
+			if (m_UseOutline && m_OutlineInstance != null) extraCount++;
+
+			var newMats = new Material[baseMats.Length + extraCount];
+			baseMats.CopyTo(newMats, 0);
+
+			int idx = baseMats.Length;
+			if (m_UseOutline && m_StencilMaskInstance != null)
+			{
+				newMats[idx++] = m_StencilMaskInstance;
+			}
+			if (m_UseOutline && m_OutlineInstance != null)
+			{
+				newMats[idx++] = m_OutlineInstance;
+			}
+
+			r.sharedMaterials = newMats;
+		}
 	}
 
 	private void RebuildMaterials(bool useOutline, bool useSilhouette)

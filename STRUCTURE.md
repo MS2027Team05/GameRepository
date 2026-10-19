@@ -31,11 +31,11 @@ GameRepository/
 │   │   │   └── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
 │   │   ├── Shader/              # シェーダー連携・描画制御スクリプト
 │   │   │   ├── PlayerOutline.cs         # アウトライン描画制御
-│   │   │   ├── PlayerSilhouette.cs      # オブジェクト遮蔽時シルエット描画制御
+│   │   │   ├── PlayerSilhouette.cs      # チーム別アウトライン・味方/観戦者向け遮蔽シルエット描画制御
 │   │   │   └── ToolSilhouette.cs        # ツール類遮蔽時シルエット描画制御
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
-│   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従制御
+│   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
 │   │       │   ├── IAimGuide.cs         # エイム・ガイド表示制御インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
