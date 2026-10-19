@@ -258,6 +258,54 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	}
 
 	/// <summary>
+	/// 指定された位置と回転へ移動し、移動・物理状態を初期化します。
+	/// ボール所持などによる速度倍率は維持します。
+	/// </summary>
+	/// <param name="position">復帰先のワールド座標</param>
+	/// <param name="rotation">復帰後のワールド回転</param>
+	public void ResetMovement(Vector3 position, Quaternion rotation)
+	{
+		m_AlignTween?.Kill();
+		m_AlignTween = null;
+
+		m_IsFalling = false;
+		m_IsGrounded = false;
+		m_IsAimHovering = false;
+		m_HasFallingTargetNormal = false;
+		m_HasFallingTargetPoint = false;
+
+		m_CurrentDirection = Vector3.zero;
+		m_MoveInput = Vector2.zero;
+		m_CameraTransform = null;
+		m_FallingTargetPoint = Vector3.zero;
+
+		m_CurrentGroundNormal = rotation * Vector3.up;
+		m_FallingTargetNormal = m_CurrentGroundNormal;
+		m_LastMoveDirection = rotation * Vector3.forward;
+
+		m_EdgePivotPoint = Vector3.zero;
+		m_EdgeStartForward = m_LastMoveDirection;
+		m_EdgeTargetForward = m_LastMoveDirection;
+		m_EdgeStartNormal = m_CurrentGroundNormal;
+		m_EdgeTargetNormal = m_CurrentGroundNormal;
+		m_EdgeTransitionTimer = 0.0f;
+		m_EdgeCooldownTimer = 0.0f;
+
+		if (m_Rigidbody == null)
+		{
+			transform.SetPositionAndRotation(position, rotation);
+			return;
+		}
+
+		m_Rigidbody.isKinematic = false;
+		m_Rigidbody.position = position;
+		m_Rigidbody.rotation = rotation;
+		m_Rigidbody.linearVelocity = Vector3.zero;
+		m_Rigidbody.angularVelocity = Vector3.zero;
+		m_Rigidbody.WakeUp();
+	}
+
+	/// <summary>
 	/// 地上移動用の入力ベクトルと基準となるカメラのTransformを設定します。
 	/// </summary>
 	/// <param name="moveInput">入力ベクトル(WASD/スティック)</param>

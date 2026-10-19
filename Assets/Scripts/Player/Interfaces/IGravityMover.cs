@@ -40,6 +40,13 @@ public interface IGravityMover
 	void SetSpeedMultiplier(float multiplier);
 
 	/// <summary>
+	/// 指定された位置と回転へ移動し、移動・物理状態を初期化します。
+	/// </summary>
+	/// <param name="position">復帰先のワールド座標</param>
+	/// <param name="rotation">復帰後のワールド回転</param>
+	void ResetMovement(Vector3 position, Quaternion rotation);
+
+	/// <summary>
 	/// 足場に接地しているかどうかを取得します。
 	/// </summary>
 	bool IsGrounded { get; }

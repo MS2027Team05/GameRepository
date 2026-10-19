@@ -566,6 +566,38 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	}
 
 	/// <summary>
+	/// 場外復帰時にエイムの演出と内部状態を即時解除します。
+	/// プレイヤー座標は復帰処理側で設定するため、このメソッドでは変更しません。
+	/// </summary>
+	public void ResetAimGuideForRespawn()
+	{
+		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
+		{
+			m_AimFloatTween.Kill();
+		}
+
+		m_AimFloatTween = null;
+
+		if (m_CinemachineCameraTransform != null)
+		{
+			m_CinemachineCameraTransform.DOKill();
+			RestoreCameraPosition();
+		}
+
+		m_GravityMover?.StopAimHover();
+		SetPlayerTransparent(false);
+
+		m_IsAiming = false;
+		m_IsReturning = false;
+		m_IsMidFallAimGuide = false;
+		AimMoveDirection = Vector3.zero;
+		m_AimTargetPoint = Vector3.zero;
+
+		SetAimGuideActive(false);
+		ClearAimLine();
+	}
+
+	/// <summary>
 	/// カメラ中央からRaycastし、予測線と着地マーカーを更新します。
 	/// </summary>
 	public void UpdateAimDirection(Vector3 direction)

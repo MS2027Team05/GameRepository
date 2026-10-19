@@ -473,6 +473,7 @@ GameObject:
   - component: {fileID: 1164154789786135184}
   - component: {fileID: -4640382079411939406}
   - component: {fileID: 6097049237247373300}
+  - component: {fileID: 3206255922665213962}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -598,7 +599,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4273467025
+  GlobalObjectIdHash: 4203264452
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -890,6 +891,22 @@ MonoBehaviour:
   m_CinemachineCameraTransform: {fileID: 5892072697104370858}
   m_AimCameraShoulderOffset: {x: 1, y: 1, z: 3.3}
   m_AimOpacity: 0.35
+--- !u!114 &3206255922665213962
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44515c9010c898243b0cfaef0a1bff69, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerOutOfBoundsRespawner
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_IsRespawnEnabled: 0
+  m_MinBounds: {x: -143, y: -50, z: -151}
+  m_MaxBounds: {x: 8, y: 50, z: 50}
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0
