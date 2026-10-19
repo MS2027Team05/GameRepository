@@ -347,16 +347,9 @@ public class PlayerController : NetworkBehaviour
 
 	/// <summary>
 	/// Rキーによる視点リセット処理。
-	/// Idle状態のときだけ実行します。
 	/// </summary>
 	private void HandleViewReset()
 	{
-		// Idle状態以外ではリセットしない
-		if (CurrentState != EPlayerState.Idle)
-		{
-			return;
-		}
-
 		// カメラ制御スクリプトを取得
 		PlayerCameraEffect cameraEffect =
 			GetComponent<PlayerCameraEffect>();
