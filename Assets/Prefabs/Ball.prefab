@@ -1,5 +1,95 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3004533732176181672
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1884387621747958466}
+  - component: {fileID: 7320698786864491168}
+  - component: {fileID: 2683469968702031855}
+  m_Layer: 0
+  m_Name: BallXray
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1884387621747958466
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3004533732176181672}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4761453385499398907}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!33 &7320698786864491168
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3004533732176181672}
+  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!23 &2683469968702031855
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3004533732176181672}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: 9a46f17b90fec9f468c6918a2c632bae, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
 --- !u!1 &6866774762153050833
 GameObject:
   m_ObjectHideFlags: 0
@@ -87,14 +177,15 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7223661482325723954}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.007515348, y: 0.0000000014305936, z: 0.004437745, w: 0.9999619}
-  m_LocalPosition: {x: 2.14486, y: 0.12, z: 1.71245}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.6, y: 0.6, z: 0.6}
+  m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 9123052412022592093}
+  - {fileID: 1884387621747958466}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: -0.861, y: -0.004, z: 0.509}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &7038129314946238862
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -128,7 +219,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 4f4b03a44059493408802f390603c91d, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -178,7 +269,7 @@ Rigidbody:
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 0
-  m_CollisionDetection: 0
+  m_CollisionDetection: 2
 --- !u!114 &3706687999057599681
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -221,7 +312,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_PhysicsCollider: {fileID: 7969707258151822165}
   m_SensorCollider: {fileID: 5519193905326050400}
-  m_ShootPower: 25
+  m_ShootPower: 37.5
   m_RepickupDelay: 0.2
 --- !u!114 &1323764943930010185
 MonoBehaviour:
@@ -236,12 +327,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallPhysicsController
   ShowTopMostFoldoutHeaderGroup: 1
-  m_FlightDeceleration: 3
+  m_FlightDeceleration: 8
   m_StopSpeedThreshold: 0.5
   m_AttachSurfaceMask:
     serializedVersion: 2
     m_Bits: 128
-  m_AttractStartSpeed: 20
+  m_BounceSpeedThreshold: 5
+  m_BounceNormalRetention: 0.8
+  m_BounceTangentialRetention: 0.8
+  m_MinBounceNormalSpeed: 3
+  m_MaxBounceNormalSpeed: 20
+  m_AttractStartSpeed: 35
   m_AttractSearchDistance: 10
   m_AttractReleaseDistance: 15
   m_AttractSearchInterval: 0.2
@@ -250,6 +346,8 @@ MonoBehaviour:
   m_AttractAccelerationCurve: 2
   m_AttractDeceleration: 0.5
   m_AttractMaxSpeed: 50
+  m_SurfaceMoveDeceleration: 4
+  m_SurfaceStopSpeedThreshold: 1
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4

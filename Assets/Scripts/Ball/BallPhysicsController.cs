@@ -2,31 +2,70 @@
 using UnityEngine;
 
 /// <summary>
-/// フリー状態のボールの移動とGroundへの吸着を管理します。
+/// フリー状態のボールに関する物理挙動全体を管理します。
 /// </summary>
 /// <remarks>
+/// このクラスはボール物理の司令塔として、
+/// 状態遷移、Rigidbodyへの速度反映、衝突処理、
+/// 各専門クラスへの処理委譲を担当します。
+///
 /// 主な処理の流れ:
 /// 1. シュート後は射出方向を維持しながら減速します。
-/// 2. 一定速度以下になると、一定間隔で周囲のGroundを探索します。
-/// 3. Groundが見つかった場合、その表面上の一点を重力源として固定します。
-/// 4. Groundへ近づくほど疑似重力を強くし、
-///    スイングバイしながら最後に強く吸着する動きを作ります。
-/// 5. 重力源から一定距離以上離れた場合は疑似重力を解除します。
-/// 6. Groundへ実際に衝突すると、その場で固定されます。
-/// 7. 空中で停止した場合は64方向探索で近くのGroundを探します。
-/// 8. 物理状態の確定はHost側だけで行います。
+/// 2. 一定速度以下になるとAttachSurfaceを探索します。
+/// 3. 発見したSurface上の一点へ疑似重力を掛けます。
+/// 4. AttachSurfaceへ高速で接触した場合はバウンドします。
+/// 5. バウンド後は接触したLocalSurfaceを地面として扱います。
+/// 6. LocalSurface上では専用の減速を適用します。
+/// 7. 接触状態で十分低速になった場合はSurfaceへ吸着します。
+/// 8. AttachSurface以外への衝突は反射のみ行います。
+/// 9. 物理状態の確定はHost側だけで行います。
+///
+/// 専門処理:
+/// BallBounce
+///     バウンド判定・反射速度計算を担当します。
+///
+/// BallSurfaceGravity
+///     固定点重力・接触後のSurface重力を担当します。
+///
+/// BallSurfaceSearch
+///     AttachSurfaceの周辺探索を担当します。
 /// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(BallController))]
 public class BallPhysicsController : NetworkBehaviour
 {
+	/// <summary>
+	/// ボールの現在の移動状態です。
+	/// </summary>
 	private enum EBallMotionState
 	{
+		/// <summary>
+		/// 所持中やリスポーン直後など、
+		/// 自由移動していない状態です。
+		/// </summary>
 		Idle,
+
+		/// <summary>
+		/// シュート後に通常飛行している状態です。
+		/// </summary>
 		Flying,
+
+		/// <summary>
+		/// AttachSurfaceから疑似重力を受けている状態です。
+		/// </summary>
 		AttractingSurface,
+
+		/// <summary>
+		/// 空中停止後にAttachSurfaceを探索し、
+		/// Surfaceへ向かっている状態です。
+		/// </summary>
 		SeekingSurface,
+
+		/// <summary>
+		/// AttachSurfaceへ吸着して
+		/// 完全停止している状態です。
+		/// </summary>
 		StuckToSurface
 	}
 
@@ -35,124 +74,158 @@ public class BallPhysicsController : NetworkBehaviour
 	[Tooltip(
 		"大きいほどシュート後に早く減速します。")]
 	[Min(0.0f)]
-	// 推奨値: 12.0
 	[SerializeField] private float m_FlightDeceleration;
 
 	[Tooltip(
 		"大きいほど早い速度で停止扱いになります。")]
 	[Min(0.0f)]
-	// 推奨値: 0.5
 	[SerializeField] private float m_StopSpeedThreshold;
 
-	[Header("吸着可能な面")]
+	[Header("吸着・バウンド可能な面")]
 
 	[Tooltip(
-		"ボールが吸着できるLayerです。")]
+		"疑似重力・バウンド・吸着の対象となるLayerです。複数選択できます。")]
 	[SerializeField] private LayerMask m_AttachSurfaceMask;
 
-	[Header("飛行中の疑似重力")]
+	[Header("バウンド")]
 
 	[Tooltip(
-		"大きいほど早い段階からGroundを探し始めます。")]
+		"AttachSurfaceへ接触した時、この速度以上ならバウンドします。")]
 	[Min(0.0f)]
-	// 推奨値: 9.0
+	[SerializeField] private float m_BounceSpeedThreshold;
+
+	[Tooltip(
+		"面から跳ね返る方向に残す速度割合です。")]
+	[Range(0.0f, 1.0f)]
+	[SerializeField] private float m_BounceNormalRetention;
+
+	[Tooltip(
+		"接触面に沿う方向に残す速度割合です。")]
+	[Range(0.0f, 1.0f)]
+	[SerializeField] private float m_BounceTangentialRetention;
+
+	[Tooltip(
+		"浅い角度で衝突した場合でも最低限保証する跳ね返り速度です。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_MinBounceNormalSpeed;
+
+	[Tooltip(
+		"バウンド時に面から離れる方向の最大速度です。0なら制限しません。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_MaxBounceNormalSpeed;
+
+	[Header("飛行中・バウンド後の疑似重力")]
+
+	[Tooltip(
+		"この速度以下になると飛行中のAttachSurface探索を開始します。")]
+	[Min(0.0f)]
 	[SerializeField] private float m_AttractStartSpeed;
 
 	[Tooltip(
-		"大きいほど遠くのGroundを発見できます。")]
+		"飛行中にAttachSurfaceを探す最大距離です。")]
 	[Min(0.0f)]
-	// 推奨値: 18.0
 	[SerializeField] private float m_AttractSearchDistance;
 
 	[Tooltip(
-		"大きいほど遠くまでGroundの引力を受け続けます。")]
+		"疑似重力を維持する最大距離です。")]
 	[Min(0.0f)]
-	// 推奨値: 24.0
 	[SerializeField] private float m_AttractReleaseDistance;
 
 	[Tooltip(
-		"大きいほどGroundを探す間隔が長くなります。")]
+		"飛行中にAttachSurfaceを再探索する間隔です。")]
 	[Min(0.0f)]
-	// 推奨値: 0.2
 	[SerializeField] private float m_AttractSearchInterval;
 
 	[Tooltip(
-		"大きいほど遠くにいる時から強く引っ張られます。")]
+		"疑似重力の最低加速度です。")]
 	[Min(0.0f)]
-	// 推奨値: 4.0
 	[SerializeField] private float m_AttractMinAcceleration;
 
 	[Tooltip(
-		"大きいほどGround直前で強く加速します。")]
+		"疑似重力の最大加速度です。")]
 	[Min(0.0f)]
-	// 推奨値: 45.0
 	[SerializeField] private float m_AttractMaxAcceleration;
 
 	[Tooltip(
-		"大きいほどGround直前で急激に加速します。")]
+		"Surfaceへ近づいた時の加速度変化を調整します。")]
 	[Min(0.01f)]
-	// 推奨値: 2.0
 	[SerializeField] private float m_AttractAccelerationCurve;
 
 	[Tooltip(
-		"大きいほど元の進行方向の勢いが早く失われます。")]
+		"空中で固定点重力を受けている間の速度減衰量です。")]
 	[Min(0.0f)]
-	// 推奨値: 0.0
 	[SerializeField] private float m_AttractDeceleration;
 
 	[Tooltip(
-		"大きいほど吸引中の最高速度が上がります。0で制限しません。")]
+		"疑似重力中の最高速度です。0なら制限しません。")]
 	[Min(0.0f)]
-	// 推奨値: 30.0
 	[SerializeField] private float m_AttractMaxSpeed;
 
-	[Header("停止後のGround探索")]
+	[Header("Surface上の移動")]
 
 	[Tooltip(
-		"大きいほど停止後に遠くのGroundを探します。")]
+		"一度Surfaceへバウンドした後、移動速度を減衰させる量です。")]
 	[Min(0.0f)]
-	// 推奨値: 100.0
+	[SerializeField] private float m_SurfaceMoveDeceleration;
+
+	[Tooltip(
+		"Surfaceと接触中にこの速度以下になると吸着して停止します。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_SurfaceStopSpeedThreshold;
+
+	[Header("停止後のAttachSurface探索")]
+
+	[Tooltip(
+		"停止後にAttachSurfaceを探す最大距離です。")]
+	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceSearchRadius;
 
 	[Tooltip(
-		"大きいほど停止後の再探索間隔が長くなります。")]
+		"停止後のAttachSurface再探索間隔です。")]
 	[Min(0.0f)]
-	// 推奨値: 0.25
 	[SerializeField] private float m_SurfaceSearchInterval;
 
 	[Tooltip(
-		"大きいほど停止後にGroundへ速く向かいます。")]
+		"停止後にAttachSurfaceへ向かう速度です。")]
 	[Min(0.0f)]
-	// 推奨値: 4.0
 	[SerializeField] private float m_SurfaceSeekSpeed;
 
 	[Tooltip(
-		"大きいほど停止後にGroundへ素早く加速します。")]
+		"停止後にAttachSurfaceへ向かう加速度です。")]
 	[Min(0.0f)]
-	// 推奨値: 10.0
 	[SerializeField] private float m_SurfaceSeekAcceleration;
 
-	private const int m_StoppedSearchRayCount = 64;
-	private const float m_GoldenAngle = 2.39996323f;
+	/// <summary>
+	/// 距離計算時の0除算を防ぐ最小距離です。
+	/// </summary>
 	private const float m_MinimumCalculationDistance = 0.001f;
 
 	private Rigidbody m_Rigidbody;
 	private BallController m_BallController;
 
+	private BallSurfaceGravity m_SurfaceGravity;
+	private BallSurfaceSearch m_SurfaceSearch;
+	private BallBounce m_Bounce;
+
 	private EBallMotionState m_MotionState;
 
+	/// <summary>
+	/// 通常飛行中に維持する進行方向です。
+	/// </summary>
 	private Vector3 m_FlightDirection;
 
-	private Collider m_TargetSurfaceCollider;
-	private Vector3 m_TargetSurfacePoint;
-	private bool m_HasTargetSurface;
+	/// <summary>
+	/// Physicsシミュレーション直前の速度です。
+	/// 衝突時の入射速度取得に使用します。
+	/// </summary>
+	private Vector3 m_PrePhysicsVelocity;
 
 	private float m_NextSurfaceSearchTime;
 	private float m_NextAttractSearchTime;
 
 	/// <summary>
-	/// 必要なコンポーネントを取得し、
-	/// 通常の重力を無効化します。
+	/// 必要なComponentを取得し、
+	/// ボール物理用の各専門クラスを生成します。
 	/// </summary>
 	private void Awake()
 	{
@@ -162,12 +235,24 @@ public class BallPhysicsController : NetworkBehaviour
 		m_BallController =
 			GetComponent<BallController>();
 
+		m_SurfaceGravity =
+			new BallSurfaceGravity();
+
+		m_SurfaceSearch =
+			new BallSurfaceSearch();
+
+		m_Bounce =
+			new BallBounce();
+
+		// Unity標準重力ではなく
+		// 独自の疑似重力を使用します。
 		m_Rigidbody.useGravity =
 			false;
 	}
 
 	/// <summary>
-	/// ネットワークSpawn時にボール状態の通知を登録します。
+	/// NetworkObjectのSpawn時に、
+	/// シュート・強制解放通知を登録します。
 	/// </summary>
 	public override void OnNetworkSpawn()
 	{
@@ -184,7 +269,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// ネットワークDespawn時に通知を解除します。
+	/// NetworkObjectのDespawn時に、
+	/// 登録した通知を解除します。
 	/// </summary>
 	public override void OnNetworkDespawn()
 	{
@@ -201,7 +287,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Host側で現在の状態に応じた物理挙動を更新します。
+	/// Host側で現在のMotionStateに応じた
+	/// ボール物理を更新します。
 	/// </summary>
 	private void FixedUpdate()
 	{
@@ -215,6 +302,8 @@ public class BallPhysicsController : NetworkBehaviour
 			return;
 		}
 
+		// 所持中は自由移動を行わないため、
+		// 内部の物理状態をIdleへ戻します。
 		if (m_BallController.HasHolder)
 		{
 			if (m_MotionState !=
@@ -222,6 +311,9 @@ public class BallPhysicsController : NetworkBehaviour
 			{
 				ResetInternalState();
 			}
+
+			m_PrePhysicsVelocity =
+				Vector3.zero;
 
 			return;
 		}
@@ -244,14 +336,19 @@ public class BallPhysicsController : NetworkBehaviour
 			case EBallMotionState.StuckToSurface:
 				break;
 		}
+
+		// Unityの衝突解決前の速度として使用するため、
+		// FixedUpdateで決定した速度を保存します。
+		m_PrePhysicsVelocity =
+			m_Rigidbody.linearVelocity;
 	}
 
 	/// <summary>
-	/// Groundへ衝突した場合、
-	/// ボールをその場へ固定します。
+	/// Colliderへ接触した瞬間に、
+	/// バウンドまたは吸着処理を行います。
 	/// </summary>
 	/// <param name="collision">
-	/// 衝突情報です。
+	/// Unityから渡される衝突情報です。
 	/// </param>
 	private void OnCollisionEnter(
 		Collision collision)
@@ -267,8 +364,90 @@ public class BallPhysicsController : NetworkBehaviour
 			return;
 		}
 
+		if (collision.contactCount <= 0)
+		{
+			return;
+		}
+
+		ContactPoint contact =
+			collision.GetContact(0);
+
+		Vector3 incomingVelocity =
+			GetIncomingVelocity(
+				collision);
+
+		float collisionSpeed =
+			incomingVelocity.magnitude;
+
+		if (IsAttachSurface(
+			collision.collider))
+		{
+			HandleAttachSurfaceCollision(
+				collision.collider,
+				contact,
+				incomingVelocity,
+				collisionSpeed);
+
+			return;
+		}
+
+		// AttachSurfaceではないColliderは、
+		// 重力対象を変更せず反射だけ行います。
+		HandleNormalCollision(
+			contact,
+			incomingVelocity);
+	}
+
+	/// <summary>
+	/// AttachSurfaceとの接触が継続している間、
+	/// 十分低速になったボールをSurfaceへ吸着させます。
+	/// </summary>
+	/// <remarks>
+	/// OnCollisionEnterだけでは、
+	/// 浅い角度で接触してそのまま転がり続けた場合に
+	/// 低速になった瞬間を検出できません。
+	///
+	/// そのためCollisionStay中にも停止速度を確認します。
+	/// </remarks>
+	/// <param name="collision">
+	/// 現在継続している衝突情報です。
+	/// </param>
+	private void OnCollisionStay(
+		Collision collision)
+	{
+		if (!IsServer)
+		{
+			return;
+		}
+
+		if (m_BallController == null ||
+			m_BallController.HasHolder)
+		{
+			return;
+		}
+
+		if (m_MotionState !=
+			EBallMotionState.AttractingSurface)
+		{
+			return;
+		}
+
+		if (!m_SurfaceGravity.IsLocalSurfaceTarget)
+		{
+			return;
+		}
+
 		if (!IsAttachSurface(
 			collision.collider))
+		{
+			return;
+		}
+
+		float currentSpeed =
+			m_Rigidbody.linearVelocity.magnitude;
+
+		if (currentSpeed >
+			m_SurfaceStopSpeedThreshold)
 		{
 			return;
 		}
@@ -277,7 +456,173 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// シュートされたボールを飛行状態へ移行します。
+	/// AttachSurfaceとの衝突を処理します。
+	/// </summary>
+	/// <remarks>
+	/// 十分な速度がある場合はバウンドし、
+	/// 接触したLocalSurfaceを新しい重力対象にします。
+	///
+	/// 低速の場合はバウンドせず、その場へ吸着します。
+	/// </remarks>
+	private void HandleAttachSurfaceCollision(
+		Collider surfaceCollider,
+		ContactPoint contact,
+		Vector3 incomingVelocity,
+		float collisionSpeed)
+	{
+		if (!m_Bounce.ShouldBounce(
+			collisionSpeed,
+			m_BounceSpeedThreshold))
+		{
+			StickToSurface();
+			return;
+		}
+
+		Vector3 bounceVelocity =
+			CalculateBounceVelocity(
+				incomingVelocity,
+				contact.normal);
+
+		ApplyBounceVelocity(
+			bounceVelocity);
+
+		// ステージ全体が1つのColliderでも、
+		// 接触地点と法線を基準にLocalSurfaceを設定します。
+		m_SurfaceGravity.SetLocalSurface(
+			surfaceCollider,
+			contact.point,
+			contact.normal);
+
+		ChangeMotionState(
+			EBallMotionState.AttractingSurface);
+	}
+
+	/// <summary>
+	/// AttachSurface以外との衝突を処理します。
+	/// </summary>
+	/// <remarks>
+	/// 反射だけを行い、
+	/// 現在の疑似重力対象は変更しません。
+	/// </remarks>
+	private void HandleNormalCollision(
+		ContactPoint contact,
+		Vector3 incomingVelocity)
+	{
+		Vector3 bounceVelocity =
+			CalculateBounceVelocity(
+				incomingVelocity,
+				contact.normal);
+
+		ApplyBounceVelocity(
+			bounceVelocity);
+
+		if (m_MotionState ==
+			EBallMotionState.SeekingSurface)
+		{
+			ChangeMotionState(
+				EBallMotionState.Flying);
+		}
+	}
+
+	/// <summary>
+	/// 現在のInspector設定を使用して、
+	/// バウンド後の速度を計算します。
+	/// </summary>
+	/// <param name="incomingVelocity">
+	/// 衝突直前の速度です。
+	/// </param>
+	/// <param name="surfaceNormal">
+	/// 接触面の法線です。
+	/// </param>
+	/// <returns>
+	/// 計算されたバウンド後の速度です。
+	/// </returns>
+	private Vector3 CalculateBounceVelocity(
+		Vector3 incomingVelocity,
+		Vector3 surfaceNormal)
+	{
+		return m_Bounce.CalculateBounceVelocity(
+			incomingVelocity,
+			surfaceNormal,
+			m_BounceNormalRetention,
+			m_BounceTangentialRetention,
+			m_MinBounceNormalSpeed,
+			m_MaxBounceNormalSpeed);
+	}
+
+	/// <summary>
+	/// バウンド計算に使用する
+	/// 衝突直前の速度を取得します。
+	/// </summary>
+	/// <remarks>
+	/// Unityの衝突解決によって現在速度が変化する可能性があるため、
+	/// 基本的には直前のFixedUpdateで保存した速度を使用します。
+	/// </remarks>
+	private Vector3 GetIncomingVelocity(
+		Collision collision)
+	{
+		if (m_PrePhysicsVelocity.sqrMagnitude >
+			Mathf.Epsilon)
+		{
+			return m_PrePhysicsVelocity;
+		}
+
+		Vector3 currentVelocity =
+			m_Rigidbody.linearVelocity;
+
+		if (currentVelocity.sqrMagnitude >
+			Mathf.Epsilon)
+		{
+			return currentVelocity;
+		}
+
+		float relativeSpeed =
+			collision.relativeVelocity.magnitude;
+
+		if (relativeSpeed <=
+			Mathf.Epsilon)
+		{
+			return Vector3.zero;
+		}
+
+		ContactPoint contact =
+			collision.GetContact(0);
+
+		return -contact.normal *
+			relativeSpeed;
+	}
+
+	/// <summary>
+	/// 計算済みのバウンド速度をRigidbodyへ反映します。
+	/// </summary>
+	private void ApplyBounceVelocity(
+		Vector3 bounceVelocity)
+	{
+		m_Rigidbody.isKinematic =
+			false;
+
+		m_Rigidbody.linearVelocity =
+			bounceVelocity;
+
+		m_PrePhysicsVelocity =
+			bounceVelocity;
+
+		if (bounceVelocity.sqrMagnitude >
+			Mathf.Epsilon)
+		{
+			m_FlightDirection =
+				bounceVelocity.normalized;
+		}
+		else
+		{
+			m_FlightDirection =
+				Vector3.zero;
+		}
+	}
+
+	/// <summary>
+	/// BallControllerからシュート通知を受け取り、
+	/// 通常飛行状態へ移行します。
 	/// </summary>
 	private void HandleShot()
 	{
@@ -299,18 +644,21 @@ public class BallPhysicsController : NetworkBehaviour
 		m_FlightDirection =
 			currentVelocity.normalized;
 
+		m_PrePhysicsVelocity =
+			currentVelocity;
+
 		m_NextAttractSearchTime =
 			Time.time;
 
-		ClearTargetSurface();
+		m_SurfaceGravity.Clear();
 
 		ChangeMotionState(
 			EBallMotionState.Flying);
 	}
 
 	/// <summary>
-	/// ボールが所持者から解放された場合、
-	/// Ground探索状態へ移行します。
+	/// BallControllerから強制解放通知を受け取り、
+	/// AttachSurface探索状態へ移行します。
 	/// </summary>
 	private void HandleReleased()
 	{
@@ -323,8 +671,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// シュート方向を維持しながら減速します。
-	/// 一定速度以下になるとGroundを探索します。
+	/// 通常飛行中の速度減衰と
+	/// AttachSurface探索開始判定を行います。
 	/// </summary>
 	private void UpdateFlying()
 	{
@@ -369,8 +717,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 低速飛行中に26方向でGroundを探索し、
-	/// 見つかった地点を重力源として固定します。
+	/// 飛行中に低コストのSurface探索を実行し、
+	/// Surfaceを発見した場合は疑似重力を開始します。
 	/// </summary>
 	private void TryBeginSurfaceAttraction()
 	{
@@ -384,34 +732,59 @@ public class BallPhysicsController : NetworkBehaviour
 			Time.time +
 			m_AttractSearchInterval;
 
-		if (!TrySearchNearestSurfaceLowCost(
-			m_AttractSearchDistance))
+		if (!m_SurfaceSearch.TrySearchLowCost(
+			m_Rigidbody.position,
+			m_AttractSearchDistance,
+			m_AttachSurfaceMask,
+			out RaycastHit nearestHit))
 		{
 			return;
 		}
+
+		// 空中飛行時は見つけたSurface上の一点を
+		// 固定された重力源として使用します。
+		m_SurfaceGravity.SetFixedPoint(
+			nearestHit.collider,
+			nearestHit.point);
 
 		ChangeMotionState(
 			EBallMotionState.AttractingSurface);
 	}
 
 	/// <summary>
-	/// Ground上の固定地点へ疑似重力を加えます。
-	/// Groundへ近づくほど加速度が強くなります。
+	/// 現在設定されているSurfaceへ
+	/// 疑似重力を適用します。
 	/// </summary>
+	/// <remarks>
+	/// 空中飛行中のFixedPoint重力では
+	/// AttractDecelerationを使用します。
+	///
+	/// 一度SurfaceへバウンドしたLocalSurface重力では
+	/// SurfaceMoveDecelerationを使用し、
+	/// 転がり続けないよう徐々に速度を失わせます。
+	/// </remarks>
 	private void UpdateSurfaceAttraction()
 	{
-		if (!IsTargetSurfaceValid())
+		if (!m_SurfaceGravity.IsTargetValid())
 		{
 			ReleaseSurfaceAttraction();
 			return;
 		}
 
-		Vector3 toGravityPoint =
-			m_TargetSurfacePoint -
-			m_Rigidbody.position;
+		float surfaceTrackDistance =
+			Mathf.Max(
+				m_AttractSearchDistance,
+				m_AttractReleaseDistance);
 
-		float distance =
-			toGravityPoint.magnitude;
+		if (!m_SurfaceGravity.TryGetGravityData(
+			m_Rigidbody.position,
+			surfaceTrackDistance,
+			out Vector3 gravityDirection,
+			out float distance))
+		{
+			ReleaseSurfaceAttraction();
+			return;
+		}
 
 		if (m_AttractReleaseDistance >
 			0.0f &&
@@ -422,15 +795,11 @@ public class BallPhysicsController : NetworkBehaviour
 			return;
 		}
 
-		if (distance <=
-			m_MinimumCalculationDistance)
+		if (gravityDirection.sqrMagnitude <=
+			Mathf.Epsilon)
 		{
 			return;
 		}
-
-		Vector3 gravityDirection =
-			toGravityPoint /
-			distance;
 
 		float attractionAcceleration =
 			CalculateAttractionAcceleration(
@@ -439,15 +808,22 @@ public class BallPhysicsController : NetworkBehaviour
 		Vector3 currentVelocity =
 			m_Rigidbody.linearVelocity;
 
+		// 空中のスイング状態と、
+		// Surface接触後では別の減速値を使用します。
+		float deceleration =
+			m_SurfaceGravity.IsLocalSurfaceTarget
+				? m_SurfaceMoveDeceleration
+				: m_AttractDeceleration;
+
 		Vector3 dampedVelocity =
 			Vector3.MoveTowards(
 				currentVelocity,
 				Vector3.zero,
-				m_AttractDeceleration *
+				deceleration *
 				Time.fixedDeltaTime);
 
-		// 現在の慣性は残したまま、
-		// Ground方向へ加速度だけを加えます。
+		// 慣性を残しながら、
+		// 現在のSurface方向へ疑似重力を追加します。
 		Vector3 nextVelocity =
 			dampedVelocity +
 			gravityDirection *
@@ -469,14 +845,14 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Groundまでの距離から疑似重力の強さを求めます。
-	/// Groundへ近づくほどMinからMaxへ加速します。
+	/// Surfaceまでの距離から
+	/// 現在の疑似重力加速度を計算します。
 	/// </summary>
 	/// <param name="distance">
-	/// 重力源までの距離です。
+	/// Surfaceまでの距離です。
 	/// </param>
 	/// <returns>
-	/// 現在距離で使用する加速度です。
+	/// 現在適用する疑似重力加速度です。
 	/// </returns>
 	private float CalculateAttractionAcceleration(
 		float distance)
@@ -486,8 +862,8 @@ public class BallPhysicsController : NetworkBehaviour
 				m_AttractSearchDistance,
 				m_MinimumCalculationDistance);
 
-		// 0 = 遠い
-		// 1 = Groundに近い
+		// 0 = Surfaceから遠い
+		// 1 = Surfaceに近い
 		float proximity =
 			1.0f -
 			Mathf.Clamp01(
@@ -499,8 +875,6 @@ public class BallPhysicsController : NetworkBehaviour
 				m_AttractAccelerationCurve,
 				0.01f);
 
-		// Curveを大きくすると、
-		// Ground直前まで弱く、最後に一気に強くなります。
 		float curvedProximity =
 			Mathf.Pow(
 				proximity,
@@ -513,16 +887,15 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 疑似重力を解除し、
-	/// 現在の進行方向を維持した飛行へ戻します。
+	/// 現在の疑似重力を解除して
+	/// 通常飛行状態へ戻します。
 	/// </summary>
 	private void ReleaseSurfaceAttraction()
 	{
 		Vector3 currentVelocity =
 			m_Rigidbody.linearVelocity;
 
-		// スイングバイ後の方向を維持するため、
-		// 現在速度を新しい飛行方向として保存します。
+		// スイング後の方向を維持します。
 		if (currentVelocity.sqrMagnitude >
 			Mathf.Epsilon)
 		{
@@ -530,7 +903,7 @@ public class BallPhysicsController : NetworkBehaviour
 				currentVelocity.normalized;
 		}
 
-		ClearTargetSurface();
+		m_SurfaceGravity.Clear();
 
 		m_NextAttractSearchTime =
 			Time.time +
@@ -541,7 +914,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 完全停止したボールをGround探索状態へ移行します。
+	/// ボールを空中停止後の
+	/// AttachSurface探索状態へ移行します。
 	/// </summary>
 	private void BeginSurfaceSeeking()
 	{
@@ -557,7 +931,10 @@ public class BallPhysicsController : NetworkBehaviour
 		m_FlightDirection =
 			Vector3.zero;
 
-		ClearTargetSurface();
+		m_PrePhysicsVelocity =
+			Vector3.zero;
+
+		m_SurfaceGravity.Clear();
 
 		m_NextSurfaceSearchTime =
 			Time.time;
@@ -567,14 +944,14 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 停止後に64方向で周囲のGroundを探索し、
-	/// 見つかった場合はその表面へ移動します。
+	/// 空中停止後に高精度Surface探索を実行し、
+	/// 発見したSurfaceへボールを移動させます。
 	/// </summary>
 	private void UpdateSurfaceSeeking()
 	{
-		if (!IsTargetSurfaceValid())
+		if (!m_SurfaceGravity.IsTargetValid())
 		{
-			ClearTargetSurface();
+			m_SurfaceGravity.Clear();
 
 			if (Time.time <
 				m_NextSurfaceSearchTime)
@@ -586,285 +963,53 @@ public class BallPhysicsController : NetworkBehaviour
 				Time.time +
 				m_SurfaceSearchInterval;
 
-			if (!TrySearchNearestSurfaceHighPrecision(
-				m_SurfaceSearchRadius))
+			if (!m_SurfaceSearch.TrySearchHighPrecision(
+				m_Rigidbody.position,
+				m_SurfaceSearchRadius,
+				m_AttachSurfaceMask,
+				out RaycastHit nearestHit))
 			{
 				m_Rigidbody.linearVelocity =
 					Vector3.zero;
 
 				return;
 			}
+
+			m_SurfaceGravity.SetFixedPoint(
+				nearestHit.collider,
+				nearestHit.point);
 		}
 
 		MoveTowardTargetSurface();
 	}
 
 	/// <summary>
-	/// 飛行中用の軽量な26方向探索を行います。
-	/// </summary>
-	/// <param name="searchDistance">
-	/// 探索距離です。
-	/// </param>
-	/// <returns>
-	/// Groundを発見した場合はtrueです。
-	/// </returns>
-	private bool TrySearchNearestSurfaceLowCost(
-		float searchDistance)
-	{
-		ClearTargetSurface();
-
-		if (searchDistance <=
-			0.0f)
-		{
-			return false;
-		}
-
-		float nearestDistance =
-			float.MaxValue;
-
-		RaycastHit nearestHit =
-			default;
-
-		bool hasHit =
-			false;
-
-		for (int x = -1;
-			x <= 1;
-			x++)
-		{
-			for (int y = -1;
-				y <= 1;
-				y++)
-			{
-				for (int z = -1;
-					z <= 1;
-					z++)
-				{
-					if (x == 0 &&
-						y == 0 &&
-						z == 0)
-					{
-						continue;
-					}
-
-					Vector3 direction =
-						new Vector3(
-							x,
-							y,
-							z).normalized;
-
-					if (!Physics.Raycast(
-						m_Rigidbody.position,
-						direction,
-						out RaycastHit hit,
-						searchDistance,
-						m_AttachSurfaceMask,
-						QueryTriggerInteraction.Ignore))
-					{
-						continue;
-					}
-
-					if (hit.distance >=
-						nearestDistance)
-					{
-						continue;
-					}
-
-					nearestDistance =
-						hit.distance;
-
-					nearestHit =
-						hit;
-
-					hasHit =
-						true;
-				}
-			}
-		}
-
-		return ApplySurfaceSearchResult(
-			hasHit,
-			nearestHit);
-	}
-
-	/// <summary>
-	/// 停止後用に球面へ均等な64方向のRaycastを行い、
-	/// 最も近いGroundを探索します。
-	/// </summary>
-	/// <param name="searchDistance">
-	/// 探索距離です。
-	/// </param>
-	/// <returns>
-	/// Groundを発見した場合はtrueです。
-	/// </returns>
-	private bool TrySearchNearestSurfaceHighPrecision(
-		float searchDistance)
-	{
-		ClearTargetSurface();
-
-		if (searchDistance <=
-			0.0f)
-		{
-			return false;
-		}
-
-		float nearestDistance =
-			float.MaxValue;
-
-		RaycastHit nearestHit =
-			default;
-
-		bool hasHit =
-			false;
-
-		for (int i = 0;
-			i < m_StoppedSearchRayCount;
-			i++)
-		{
-			Vector3 direction =
-				GetFibonacciSphereDirection(
-					i,
-					m_StoppedSearchRayCount);
-
-			if (!Physics.Raycast(
-				m_Rigidbody.position,
-				direction,
-				out RaycastHit hit,
-				searchDistance,
-				m_AttachSurfaceMask,
-				QueryTriggerInteraction.Ignore))
-			{
-				continue;
-			}
-
-			if (hit.distance >=
-				nearestDistance)
-			{
-				continue;
-			}
-
-			nearestDistance =
-				hit.distance;
-
-			nearestHit =
-				hit;
-
-			hasHit =
-				true;
-		}
-
-		return ApplySurfaceSearchResult(
-			hasHit,
-			nearestHit);
-	}
-
-	/// <summary>
-	/// Fibonacci Sphereを使って、
-	/// 球面上へ均等に配置された探索方向を求めます。
-	/// </summary>
-	/// <param name="index">
-	/// 現在のRay番号です。
-	/// </param>
-	/// <param name="count">
-	/// 全Ray数です。
-	/// </param>
-	/// <returns>
-	/// 正規化済み探索方向です。
-	/// </returns>
-	private Vector3 GetFibonacciSphereDirection(
-		int index,
-		int count)
-	{
-		float normalizedIndex =
-			(index + 0.5f) /
-			count;
-
-		float y =
-			1.0f -
-			2.0f *
-			normalizedIndex;
-
-		float horizontalRadius =
-			Mathf.Sqrt(
-				Mathf.Max(
-					0.0f,
-					1.0f -
-					y * y));
-
-		float angle =
-			m_GoldenAngle *
-			index;
-
-		float x =
-			Mathf.Cos(
-				angle) *
-			horizontalRadius;
-
-		float z =
-			Mathf.Sin(
-				angle) *
-			horizontalRadius;
-
-		return new Vector3(
-			x,
-			y,
-			z);
-	}
-
-	/// <summary>
-	/// Ground探索結果を現在の対象として保存します。
-	/// </summary>
-	/// <param name="hasHit">
-	/// Groundを検出したかどうかです。
-	/// </param>
-	/// <param name="nearestHit">
-	/// 最も近かったGroundです。
-	/// </param>
-	/// <returns>
-	/// Groundを保存できた場合はtrueです。
-	/// </returns>
-	private bool ApplySurfaceSearchResult(
-		bool hasHit,
-		RaycastHit nearestHit)
-	{
-		if (!hasHit)
-		{
-			return false;
-		}
-
-		m_TargetSurfaceCollider =
-			nearestHit.collider;
-
-		m_TargetSurfacePoint =
-			nearestHit.point;
-
-		m_HasTargetSurface =
-			true;
-
-		return true;
-	}
-
-	/// <summary>
-	/// 停止後に発見したGroundへ加速しながら移動します。
+	/// 停止後探索で発見したSurfaceへ向かって
+	/// ボールを加速させます。
 	/// </summary>
 	private void MoveTowardTargetSurface()
 	{
-		if (!m_HasTargetSurface)
+		float surfaceTrackDistance =
+			Mathf.Max(
+				m_SurfaceSearchRadius,
+				m_AttractReleaseDistance);
+
+		if (!m_SurfaceGravity.TryGetGravityData(
+			m_Rigidbody.position,
+			surfaceTrackDistance,
+			out Vector3 surfaceDirection,
+			out float distance))
 		{
 			return;
 		}
 
-		Vector3 surfaceDirection =
-			m_TargetSurfacePoint -
-			m_Rigidbody.position;
-
-		if (surfaceDirection.sqrMagnitude <=
-			Mathf.Epsilon)
+		if (distance <=
+			m_MinimumCalculationDistance)
 		{
 			m_Rigidbody.linearVelocity =
 				Vector3.zero;
 
-			ClearTargetSurface();
+			m_SurfaceGravity.Clear();
 
 			m_NextSurfaceSearchTime =
 				Time.time +
@@ -872,8 +1017,6 @@ public class BallPhysicsController : NetworkBehaviour
 
 			return;
 		}
-
-		surfaceDirection.Normalize();
 
 		Vector3 targetVelocity =
 			surfaceDirection *
@@ -897,8 +1040,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// ボールを現在位置で停止させ、
-	/// Groundへ固定します。
+	/// ボールを現在位置で完全停止させ、
+	/// AttachSurfaceへ吸着した状態へ移行します。
 	/// </summary>
 	private void StickToSurface()
 	{
@@ -914,36 +1057,19 @@ public class BallPhysicsController : NetworkBehaviour
 		m_FlightDirection =
 			Vector3.zero;
 
-		ClearTargetSurface();
+		m_PrePhysicsVelocity =
+			Vector3.zero;
+
+		m_SurfaceGravity.Clear();
 
 		ChangeMotionState(
 			EBallMotionState.StuckToSurface);
 	}
 
 	/// <summary>
-	/// 現在保存しているGround対象を解除します。
+	/// 指定ColliderがAttachSurfaceMaskに
+	/// 含まれているか確認します。
 	/// </summary>
-	private void ClearTargetSurface()
-	{
-		m_TargetSurfaceCollider =
-			null;
-
-		m_TargetSurfacePoint =
-			Vector3.zero;
-
-		m_HasTargetSurface =
-			false;
-	}
-
-	/// <summary>
-	/// Colliderが吸着対象Layerに含まれているか確認します。
-	/// </summary>
-	/// <param name="targetCollider">
-	/// 確認対象です。
-	/// </param>
-	/// <returns>
-	/// 吸着可能な場合はtrueです。
-	/// </returns>
 	private bool IsAttachSurface(
 		Collider targetCollider)
 	{
@@ -961,25 +1087,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 保存しているGround対象が有効か確認します。
+	/// ボールの現在のMotionStateを変更します。
 	/// </summary>
-	/// <returns>
-	/// 有効な場合はtrueです。
-	/// </returns>
-	private bool IsTargetSurfaceValid()
-	{
-		return m_HasTargetSurface &&
-			m_TargetSurfaceCollider != null &&
-			m_TargetSurfaceCollider.enabled &&
-			m_TargetSurfaceCollider.gameObject.activeInHierarchy;
-	}
-
-	/// <summary>
-	/// ボールの移動状態を変更します。
-	/// </summary>
-	/// <param name="newState">
-	/// 変更後の状態です。
-	/// </param>
 	private void ChangeMotionState(
 		EBallMotionState newState)
 	{
@@ -994,7 +1103,8 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 所持開始時などに内部状態を初期化します。
+	/// 所持開始時などに、
+	/// 内部の物理状態を初期化します。
 	/// </summary>
 	private void ResetInternalState()
 	{
@@ -1004,13 +1114,15 @@ public class BallPhysicsController : NetworkBehaviour
 		m_FlightDirection =
 			Vector3.zero;
 
-		ClearTargetSurface();
-	}
+		m_PrePhysicsVelocity =
+			Vector3.zero;
 
+		m_SurfaceGravity.Clear();
+	}
 
 	/// <summary>
 	/// デバッグリスポーン時などに、
-	/// ボールを通常のフリー状態へ戻します。
+	/// ボールを静止した通常のフリー状態へ戻します。
 	/// </summary>
 	public void ResetMotionState()
 	{
@@ -1034,7 +1146,10 @@ public class BallPhysicsController : NetworkBehaviour
 		m_FlightDirection =
 			Vector3.zero;
 
-		ClearTargetSurface();
+		m_PrePhysicsVelocity =
+			Vector3.zero;
+
+		m_SurfaceGravity.Clear();
 
 		m_NextSurfaceSearchTime =
 			0.0f;
@@ -1046,4 +1161,3 @@ public class BallPhysicsController : NetworkBehaviour
 			EBallMotionState.Idle);
 	}
 }
-
