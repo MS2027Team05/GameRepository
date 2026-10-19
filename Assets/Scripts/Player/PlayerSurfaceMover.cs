@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 地上・曲面・壁面でのカメラ基準歩行移動・運動量転送・ダウンフォース・姿勢回転を担当するコンポーネント。

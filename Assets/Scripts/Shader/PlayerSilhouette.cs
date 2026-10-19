@@ -1,19 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// プレイヤー(PlayerPrefab)専用の輪郭線・遮蔽シルエット制御コンポーネント。
-/// 描画キュー(Render Queue)を制御し、手持ち道具によるプレイヤーの意図しない遮蔽(透け)を防止する。
+/// プレイヤーキャラクターのチーム別アウトライン・遮蔽シルエット制御コンポーネント。
+/// 「視界が通っている時は敵味方ともにアウトライン表示」「遮蔽時は味方のみシルエット透過」「観戦者は両陣営透過」を制御します。
 /// </summary>
 public class PlayerSilhouette : MonoBehaviour
 {
 	[Header("機能の有効化設定")]
 	[FormerlySerializedAs("useOutline")]
 	[SerializeField] private bool m_UseOutline;
-	[FormerlySerializedAs("useSilhouette")]
-	[SerializeField] private bool m_UseSilhouette;
 
 	[Header("マテリアル設定")]
 	[FormerlySerializedAs("outlineMaterial")]
@@ -27,11 +26,10 @@ public class PlayerSilhouette : MonoBehaviour
 	[FormerlySerializedAs("excludeRenderers")]
 	[SerializeField] private Renderer[] m_ExcludeRenderers;
 
-	[Header("プレイヤー設定")]
-	[FormerlySerializedAs("playerIndex")]
-	[SerializeField] private int m_PlayerIndex;
-	[FormerlySerializedAs("playerColors")]
-	[SerializeField] private Color[] m_PlayerColors;
+	[Header("チームカラー設定")]
+	[SerializeField] private Color m_RedTeamColor;
+	[SerializeField] private Color m_BlueTeamColor;
+	[SerializeField] private Color m_DefaultOutlineColor;
 	[Range(0f, 1f)]
 	[FormerlySerializedAs("playerSilhouetteAlpha")]
 	[SerializeField] private float m_PlayerSilhouetteAlpha;
@@ -48,23 +46,52 @@ public class PlayerSilhouette : MonoBehaviour
 	private const int m_OutlineQueue = 2020;
 
 	private Renderer[] m_Renderers;
+	private Dictionary<Renderer, Material[]> m_OriginalMaterials;
 
 	private Material m_OutlineInstance;
 	private Material m_StencilMaskInstance;
 	private Material m_SilhouetteInstance;
 
+	private PlayerNetworkProfile m_Profile;
+	private NetworkObject m_NetworkObject;
+
 	private void Awake()
 	{
+		m_Profile = GetComponentInParent<PlayerNetworkProfile>();
+		m_NetworkObject = GetComponentInParent<NetworkObject>();
+
 		m_Renderers = CollectRenderers();
+		CacheOriginalMaterials();
 		CreateMaterialInstances();
-		AddMaterials();
-		ApplySettings();
 	}
 
-	public void SetPlayerIndex(int index)
+	private void Start()
 	{
-		m_PlayerIndex = index;
-		ApplySettings();
+		if (m_Profile != null)
+		{
+			m_Profile.OnProfileChanged += HandleProfileChanged;
+		}
+
+		ApplyTeamSettings();
+	}
+
+	private void OnDestroy()
+	{
+		if (m_Profile != null)
+		{
+			m_Profile.OnProfileChanged -= HandleProfileChanged;
+		}
+
+		RestoreOriginalMaterials();
+
+		if (m_OutlineInstance != null) Destroy(m_OutlineInstance);
+		if (m_StencilMaskInstance != null) Destroy(m_StencilMaskInstance);
+		if (m_SilhouetteInstance != null) Destroy(m_SilhouetteInstance);
+	}
+
+	private void HandleProfileChanged()
+	{
+		ApplyTeamSettings();
 	}
 
 	private Renderer[] CollectRenderers()
@@ -86,82 +113,101 @@ public class PlayerSilhouette : MonoBehaviour
 		return list.ToArray();
 	}
 
+	private void CacheOriginalMaterials()
+	{
+		m_OriginalMaterials = new Dictionary<Renderer, Material[]>(m_Renderers.Length);
+		foreach (var r in m_Renderers)
+		{
+			if (r != null)
+			{
+				m_OriginalMaterials[r] = r.sharedMaterials;
+			}
+		}
+	}
+
+	private void RestoreOriginalMaterials()
+	{
+		if (m_OriginalMaterials == null) return;
+
+		foreach (var kvp in m_OriginalMaterials)
+		{
+			if (kvp.Key != null && kvp.Value != null)
+			{
+				kvp.Key.sharedMaterials = kvp.Value;
+			}
+		}
+	}
+
 	private void CreateMaterialInstances()
 	{
-		if (m_UseOutline)
+		if (m_OutlineMaterial != null)
 		{
-			if (m_OutlineMaterial != null)
-			{
-				m_OutlineInstance = new Material(m_OutlineMaterial);
-				m_OutlineInstance.renderQueue = m_OutlineQueue;
-			}
-			if (m_StencilMaskMaterial != null)
-			{
-				m_StencilMaskInstance = new Material(m_StencilMaskMaterial);
-				m_StencilMaskInstance.renderQueue = m_StencilMaskQueue;
-			}
+			m_OutlineInstance = new Material(m_OutlineMaterial);
+			m_OutlineInstance.renderQueue = m_OutlineQueue;
 		}
 
-		if (m_UseSilhouette)
+		if (m_StencilMaskMaterial != null)
 		{
-			if (m_SilhouetteMaterial != null)
-			{
-				m_SilhouetteInstance = new Material(m_SilhouetteMaterial);
-				// 道具本体(Queue 2050)より前に描画することで道具による誤遮蔽を防止
-				m_SilhouetteInstance.renderQueue = m_SilhouetteQueue;
-			}
+			m_StencilMaskInstance = new Material(m_StencilMaskMaterial);
+			m_StencilMaskInstance.renderQueue = m_StencilMaskQueue;
+		}
+
+		if (m_SilhouetteMaterial != null)
+		{
+			m_SilhouetteInstance = new Material(m_SilhouetteMaterial);
+			m_SilhouetteInstance.renderQueue = m_SilhouetteQueue;
 		}
 	}
 
-	private void AddMaterials()
+	/// <summary>
+	/// 自端末の視点(味方・敵・観戦者)および所属チームに基づいてアウトライン・シルエット設定を適用します。
+	/// </summary>
+	public void ApplyTeamSettings()
 	{
-		int addCount = 0;
-		if (m_StencilMaskInstance != null) addCount++;
-		if (m_SilhouetteInstance != null) addCount++;
-		if (m_OutlineInstance != null) addCount++;
+		ETeamType myTeam = m_Profile != null ? m_Profile.Team : ETeamType.None;
 
-		if (addCount == 0 || m_Renderers == null)
+		// ローカルクライアント情報の判定
+		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
+		ETeamType localPlayerTeam = ETeamType.None;
+
+		if (NetworkManager.Singleton != null &&
+			NetworkManager.Singleton.LocalClient != null &&
+			NetworkManager.Singleton.LocalClient.PlayerObject != null)
 		{
-			return;
+			var localProfile = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerNetworkProfile>();
+			if (localProfile != null)
+			{
+				localPlayerTeam = localProfile.Team;
+			}
 		}
 
-		foreach (var renderer in m_Renderers)
+		// 遮蔽シルエットの表示可否: 観戦者または自チーム(味方)の場合のみ有効
+		bool isAlly = (localPlayerTeam != ETeamType.None && localPlayerTeam == myTeam);
+		bool shouldShowSilhouette = isSpectator || isAlly;
+
+		// チームカラーの決定
+		Color teamColor;
+		switch (myTeam)
 		{
-			if (renderer == null) continue;
-
-			var materials = renderer.sharedMaterials;
-			var newMaterials = new Material[materials.Length + addCount];
-			materials.CopyTo(newMaterials, 0);
-
-			int index = materials.Length;
-			if (m_StencilMaskInstance != null)
-			{
-				newMaterials[index++] = m_StencilMaskInstance;
-			}
-			if (m_SilhouetteInstance != null)
-			{
-				newMaterials[index++] = m_SilhouetteInstance;
-			}
-			if (m_OutlineInstance != null)
-			{
-				newMaterials[index++] = m_OutlineInstance;
-			}
-
-			renderer.sharedMaterials = newMaterials;
+			case ETeamType.Red:
+				teamColor = m_RedTeamColor;
+				break;
+			case ETeamType.Blue:
+				teamColor = m_BlueTeamColor;
+				break;
+			default:
+				teamColor = m_DefaultOutlineColor;
+				break;
 		}
-	}
 
-	private void ApplySettings()
-	{
-		int stencilRef = m_PlayerIndex + 1; // 0はステンシル初期値のため回避
-		Color outColor = Color.white;
-		Color silColor = Color.white;
+		// ステンシル参照値(0を回避するため +1)
+		int stencilRef = m_NetworkObject != null ? ((int)(m_NetworkObject.NetworkObjectId % 250) + 1) : 1;
 
-		if (m_PlayerColors != null && m_PlayerColors.Length > 0)
+		// マテリアルパラメータの設定
+		if (m_OutlineInstance != null)
 		{
-			int colorIndex = Mathf.Clamp(m_PlayerIndex, 0, m_PlayerColors.Length - 1);
-			outColor = m_PlayerColors[colorIndex];
-			silColor = new Color(outColor.r, outColor.g, outColor.b, m_PlayerSilhouetteAlpha);
+			m_OutlineInstance.SetColor(m_OutlineColorId, teamColor);
+			m_OutlineInstance.SetFloat(m_StencilRefId, stencilRef);
 		}
 
 		if (m_StencilMaskInstance != null)
@@ -171,25 +217,52 @@ public class PlayerSilhouette : MonoBehaviour
 
 		if (m_SilhouetteInstance != null)
 		{
+			Color silColor = new Color(teamColor.r, teamColor.g, teamColor.b, m_PlayerSilhouetteAlpha);
 			m_SilhouetteInstance.SetColor(m_SilhouetteColorId, silColor);
-			// ステンシル値が 0 (道具がない領域) のみ描画し、描画済みを 1 にインクリメント
 			m_SilhouetteInstance.SetFloat(m_StencilRefId, 0f);
 			m_SilhouetteInstance.SetFloat(m_StencilCompId, (float)UnityEngine.Rendering.CompareFunction.Equal);
 			m_SilhouetteInstance.SetFloat(m_StencilPassId, (float)UnityEngine.Rendering.StencilOp.IncrementSaturate);
 		}
 
-		if (m_OutlineInstance != null)
-		{
-			m_OutlineInstance.SetColor(m_OutlineColorId, outColor);
-			m_OutlineInstance.SetFloat(m_StencilRefId, stencilRef);
-		}
+		// マテリアル配列の再構築
+		RebuildMaterials(m_UseOutline, shouldShowSilhouette);
 	}
 
-	private void OnDestroy()
+	private void RebuildMaterials(bool useOutline, bool useSilhouette)
 	{
-		if (m_OutlineInstance != null) Destroy(m_OutlineInstance);
-		if (m_StencilMaskInstance != null) Destroy(m_StencilMaskInstance);
-		if (m_SilhouetteInstance != null) Destroy(m_SilhouetteInstance);
+		if (m_Renderers == null || m_OriginalMaterials == null) return;
+
+		int extraCount = 0;
+		if (useOutline && m_StencilMaskInstance != null) extraCount++;
+		if (useSilhouette && m_SilhouetteInstance != null) extraCount++;
+		if (useOutline && m_OutlineInstance != null) extraCount++;
+
+		foreach (var r in m_Renderers)
+		{
+			if (r == null || !m_OriginalMaterials.TryGetValue(r, out var originals) || originals == null)
+			{
+				continue;
+			}
+
+			var newMaterials = new Material[originals.Length + extraCount];
+			originals.CopyTo(newMaterials, 0);
+
+			int index = originals.Length;
+			if (useOutline && m_StencilMaskInstance != null)
+			{
+				newMaterials[index++] = m_StencilMaskInstance;
+			}
+			if (useSilhouette && m_SilhouetteInstance != null)
+			{
+				newMaterials[index++] = m_SilhouetteInstance;
+			}
+			if (useOutline && m_OutlineInstance != null)
+			{
+				newMaterials[index++] = m_OutlineInstance;
+			}
+
+			r.sharedMaterials = newMaterials;
+		}
 	}
 
 #if UNITY_EDITOR
@@ -197,8 +270,9 @@ public class PlayerSilhouette : MonoBehaviour
 	{
 		if (Application.isPlaying)
 		{
-			ApplySettings();
+			ApplyTeamSettings();
 		}
 	}
 #endif
 }
+

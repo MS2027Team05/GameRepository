@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 
@@ -121,12 +121,29 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		for (int i = 0; i < m_PlayerRenderers.Length; i++)
 		{
-			// 元のマテリアルを保存
-			m_OriginalMaterials[i] = m_PlayerRenderers[i].sharedMaterials;
+			Material[] currentMaterials = m_PlayerRenderers[i].sharedMaterials;
+			List<Material> baseMaterials = new List<Material>();
+
+			for (int j = 0; j < currentMaterials.Length; j++)
+			{
+				Material mat = currentMaterials[j];
+				if (mat == null) continue;
+
+				// アウトライン・シルエット用シェーダーは半透明化の対象外とする
+				if (mat.shader != null &&
+					(mat.shader.name.Contains("PlayerOutline") || mat.shader.name.Contains("OccludedSilhouette")))
+				{
+					continue;
+				}
+
+				baseMaterials.Add(mat);
+			}
+
+			// 元の本体マテリアルを保存
+			m_OriginalMaterials[i] = baseMaterials.ToArray();
 
 			// 元のマテリアルを変更しないように複製
-			m_TransparentMaterials[i] =
-				new Material[m_OriginalMaterials[i].Length];
+			m_TransparentMaterials[i] = new Material[m_OriginalMaterials[i].Length];
 
 			for (int j = 0; j < m_OriginalMaterials[i].Length; j++)
 			{
@@ -224,17 +241,38 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 			return;
 		}
 
-		for (int i = 0; i < m_PlayerRenderers.Length; i++)
+		if (transparent)
 		{
-			if (m_PlayerRenderers[i] == null)
+			for (int i = 0; i < m_PlayerRenderers.Length; i++)
 			{
-				continue;
-			}
+				if (m_PlayerRenderers[i] == null)
+				{
+					continue;
+				}
 
-			m_PlayerRenderers[i].sharedMaterials =
-				transparent
-					? m_TransparentMaterials[i]
-					: m_OriginalMaterials[i];
+				m_PlayerRenderers[i].sharedMaterials = m_TransparentMaterials[i];
+			}
+		}
+		else
+		{
+			// エイム終了時: PlayerSilhouetteが存在する場合はアウトライン・シルエット設定を再適用して完全復元
+			var silhouette = GetComponent<PlayerSilhouette>();
+			if (silhouette != null)
+			{
+				silhouette.ApplyTeamSettings();
+			}
+			else
+			{
+				for (int i = 0; i < m_PlayerRenderers.Length; i++)
+				{
+					if (m_PlayerRenderers[i] == null)
+					{
+						continue;
+					}
+
+					m_PlayerRenderers[i].sharedMaterials = m_OriginalMaterials[i];
+				}
+			}
 		}
 	}
 

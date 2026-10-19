@@ -24,13 +24,18 @@ GameRepository/
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
 │   │   ├── Network/             # 通信接続・同期制御
 │   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
-│   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー管理・試合開始
-│   │   │   └── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
+│   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー通信同期・ゲーム開始制御
+│   │   │   ├── LobbyUIController.cs     # ロビー画面UI表示・端末ロール別パネル制御
+│   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
+│   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・シーン間データ引継ぎ管理
+│   │   │   └── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
 │   │   ├── Shader/              # シェーダー連携・描画制御スクリプト
 │   │   │   ├── PlayerOutline.cs         # アウトライン描画制御
 │   │   │   ├── PlayerSilhouette.cs      # オブジェクト遮蔽時シルエット描画制御
 │   │   │   └── ToolSilhouette.cs        # ツール類遮蔽時シルエット描画制御
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
+│   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
+│   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従制御
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
 │   │       │   ├── IAimGuide.cs         # エイム・ガイド表示制御インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
