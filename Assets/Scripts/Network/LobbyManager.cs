@@ -50,7 +50,7 @@ public class LobbyManager : NetworkBehaviour
 		? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
 		: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
 
-	private void Start()
+	private void Awake()
 	{
 		m_CurrentRequiredPlayers = m_DefaultRequiredPlayers > 0 ? m_DefaultRequiredPlayers : 4;
 	}

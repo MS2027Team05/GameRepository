@@ -364,7 +364,7 @@ public class LobbyUIController : MonoBehaviour
 
 		if (m_ReadyButtonText != null)
 		{
-			m_ReadyButtonText.text = isReady ? "準備完了解除" : "準備完了 (Ready)";
+			m_ReadyButtonText.text = isReady ? "準備完了解除" : "準備完了!";
 		}
 	}
 
