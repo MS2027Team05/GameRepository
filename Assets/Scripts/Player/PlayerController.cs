@@ -345,25 +345,57 @@ public class PlayerController : NetworkBehaviour
 		m_BallCarrier.Shoot(shootDirection);
 	}
 
+
 	/// <summary>
 	/// Rキーによる視点リセット処理。
 	/// </summary>
 	private void HandleViewReset()
 	{
+		// GravityMoverがなければ処理しない
+		if (m_GravityMover == null)
+		{
+			return;
+		}
+
+		// Idle状態は通常どおりリセット可能
+		if (CurrentState == EPlayerState.Idle)
+		{
+			// Idle状態でも、実際に接地しているか確認
+			if (!m_GravityMover.IsGrounded)
+			{
+				Debug.Log("[ViewReset] 未接地のためリセットを中止しました。");
+				return;
+			}
+		}
+		// Falling状態は、接地していて移動も終了している場合のみ許可
+		else if (CurrentState == EPlayerState.Falling)
+		{
+			if (m_GravityMover.IsFalling || !m_GravityMover.IsGrounded)
+			{
+				Debug.Log("[ViewReset] 移動中または未接地のためリセットを中止しました。");
+				return;
+			}
+		}
+		// Aiming・Stunned状態ではリセットしない
+		else
+		{
+			return;
+		}
+
 		// カメラ制御スクリプトを取得
 		PlayerCameraEffect cameraEffect =
 			GetComponent<PlayerCameraEffect>();
 
 		if (cameraEffect == null)
 		{
-			Debug.LogWarning(
-				"PlayerCameraEffect が見つかりません。");
-
+			Debug.LogWarning("[ViewReset] PlayerCameraEffect が見つかりません。");
 			return;
 		}
 
 		// 視点をプレイヤーの前方向にリセット
 		cameraEffect.ResetView();
+
+		Debug.Log("[ViewReset] 視点リセットを実行しました。");
 	}
 
 	// --- 外部モジュール連携用メソッド ---
