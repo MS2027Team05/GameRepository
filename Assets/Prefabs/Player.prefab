@@ -851,6 +851,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  m_ViewResetDuration: 0.4
 --- !u!114 &-4640382079411939406
 MonoBehaviour:
   m_ObjectHideFlags: 0
