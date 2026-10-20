@@ -277,8 +277,8 @@ MonoBehaviour:
   m_ReferenceDistance: 10
   m_MinScaleMultiplier: 0.5
   m_MaxScaleMultiplier: 1.25
-  m_RedTeamColor: {r: 1, g: 0, b: 0, a: 1}
-  m_BlueTeamColor: {r: 0, g: 0, b: 1, a: 1}
+  m_RedTeamColor: {r: 1, g: 0.15686275, b: 0.15686275, a: 1}
+  m_BlueTeamColor: {r: 0.15686275, g: 0.15686275, b: 1, a: 1}
   m_DefaultColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!23 &9135302871075836209
 MeshRenderer:
@@ -1149,13 +1149,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSilhouette
   m_UseOutline: 1
   m_OutlineMaterial: {fileID: 2100000, guid: cb11e2164cbdccc4a8f71fb348cc0744, type: 2}
-  m_StencilMaskMaterial: {fileID: 2100000, guid: 06864d2c934b20f499049f7d85c1ba13, type: 2}
+  m_StencilMaskMaterial: {fileID: 2100000, guid: 1ce1dbad7bf67e14881537f3c3e39ead, type: 2}
   m_SilhouetteMaterial: {fileID: 2100000, guid: 06864d2c934b20f499049f7d85c1ba13, type: 2}
   m_ExcludeRenderers: []
-  m_RedTeamColor: {r: 1, g: 0, b: 0, a: 0}
-  m_BlueTeamColor: {r: 0, g: 0, b: 1, a: 1}
+  m_RedTeamColor: {r: 1, g: 0.15686275, b: 0.15686275, a: 1}
+  m_BlueTeamColor: {r: 0.15686275, g: 0.15686275, b: 1, a: 1}
   m_DefaultOutlineColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
-  m_PlayerSilhouetteAlpha: 0
+  m_PlayerSilhouetteAlpha: 0.6
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0

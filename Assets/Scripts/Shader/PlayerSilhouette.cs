@@ -229,6 +229,41 @@ public class PlayerSilhouette : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 自端末のローカルプレイヤーの所属チームを取得します。
+	/// </summary>
+	private static ETeamType GetLocalPlayerTeam()
+	{
+		// 1. NGO標準のLocalClient.PlayerObjectから取得
+		if (NetworkManager.Singleton != null &&
+			NetworkManager.Singleton.LocalClient != null &&
+			NetworkManager.Singleton.LocalClient.PlayerObject != null)
+		{
+			var localProfile = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerNetworkProfile>();
+			if (localProfile != null && localProfile.Team != ETeamType.None)
+			{
+				return localProfile.Team;
+			}
+		}
+
+		Debug.Log("所属チームfallback実行");
+
+		// 2. シーン内の全インスタンスからIsOwnerであるものを探索(フォールバック)
+		for (int i = 0; i < s_Instances.Count; i++)
+		{
+			var instance = s_Instances[i];
+			if (instance != null && instance.m_NetworkObject != null && instance.m_NetworkObject.IsOwner)
+			{
+				if (instance.m_Profile != null && instance.m_Profile.Team != ETeamType.None)
+				{
+					return instance.m_Profile.Team;
+				}
+			}
+		}
+
+		return ETeamType.None;
+	}
+
+	/// <summary>
 	/// 自端末の視点(味方・敵・観戦者)および所属チームに基づいてアウトライン・シルエット設定を適用します。
 	/// </summary>
 	public void ApplyTeamSettings()
@@ -239,21 +274,21 @@ public class PlayerSilhouette : MonoBehaviour
 
 		// ローカルクライアント情報の判定
 		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
-		ETeamType localPlayerTeam = ETeamType.None;
-
-		if (NetworkManager.Singleton != null &&
-			NetworkManager.Singleton.LocalClient != null &&
-			NetworkManager.Singleton.LocalClient.PlayerObject != null)
-		{
-			var localProfile = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerNetworkProfile>();
-			if (localProfile != null)
-			{
-				localPlayerTeam = localProfile.Team;
-			}
-		}
+		ETeamType localPlayerTeam = GetLocalPlayerTeam();
 
 		// 遮蔽シルエットの表示可否: 観戦者または自チーム(味方)の場合のみ有効
-		bool isAlly = (localPlayerTeam != ETeamType.None && localPlayerTeam == myTeam);
+		// 自端末のチームが確定している場合、敵チーム(myTeam != localPlayerTeam)は完全に除外
+		bool isAlly;
+		if (localPlayerTeam != ETeamType.None && myTeam != ETeamType.None)
+		{
+			isAlly = (localPlayerTeam == myTeam);
+		}
+		else
+		{
+			// ローカルプレイヤーまたは自身の所属チームが未定の段階(エディタ単体テスト等)は表示を許可
+			isAlly = true;
+		}
+
 		bool shouldShowSilhouette = isSpectator || isAlly;
 
 		// チームカラーの決定
@@ -288,7 +323,9 @@ public class PlayerSilhouette : MonoBehaviour
 
 		if (m_SilhouetteInstance != null)
 		{
-			Color silColor = new Color(teamColor.r, teamColor.g, teamColor.b, m_PlayerSilhouetteAlpha);
+			// Inspectorで0設定の場合の保護(未設定時でも最低限の視認性を確保)
+			float alpha = m_PlayerSilhouetteAlpha > 0.001f ? m_PlayerSilhouetteAlpha : 0.6f;
+			Color silColor = new Color(teamColor.r, teamColor.g, teamColor.b, alpha);
 			m_SilhouetteInstance.SetColor(m_SilhouetteColorId, silColor);
 			// 遮蔽時は壁の奥のメッシュを無条件描画するためCompareFunction.Alwaysに設定
 			m_SilhouetteInstance.SetFloat(m_StencilCompId, (float)UnityEngine.Rendering.CompareFunction.Always);
@@ -314,6 +351,23 @@ public class PlayerSilhouette : MonoBehaviour
 
 		if (renderers == null || transparentMaterials == null) return;
 
+		// 遮蔽シルエットの表示可否を判定
+		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
+		ETeamType localPlayerTeam = GetLocalPlayerTeam();
+		ETeamType myTeam = m_Profile != null ? m_Profile.Team : ETeamType.None;
+
+		bool isAlly;
+		if (localPlayerTeam != ETeamType.None && myTeam != ETeamType.None)
+		{
+			isAlly = (localPlayerTeam == myTeam);
+		}
+		else
+		{
+			isAlly = true;
+		}
+
+		bool shouldShowSilhouette = isSpectator || isAlly;
+
 		for (int i = 0; i < renderers.Length; i++)
 		{
 			var r = renderers[i];
@@ -325,6 +379,7 @@ public class PlayerSilhouette : MonoBehaviour
 			// 半透明マテリアルの末尾にアウトライン・シルエット用マテリアルを付与
 			int extraCount = 0;
 			if (m_UseOutline && m_StencilMaskInstance != null) extraCount++;
+			if (shouldShowSilhouette && m_SilhouetteInstance != null) extraCount++;
 			if (m_UseOutline && m_OutlineInstance != null) extraCount++;
 
 			var newMats = new Material[baseMats.Length + extraCount];
@@ -334,6 +389,10 @@ public class PlayerSilhouette : MonoBehaviour
 			if (m_UseOutline && m_StencilMaskInstance != null)
 			{
 				newMats[idx++] = m_StencilMaskInstance;
+			}
+			if (shouldShowSilhouette && m_SilhouetteInstance != null)
+			{
+				newMats[idx++] = m_SilhouetteInstance;
 			}
 			if (m_UseOutline && m_OutlineInstance != null)
 			{

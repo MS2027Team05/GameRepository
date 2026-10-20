@@ -186,18 +186,7 @@ public class PlayerNamePlate : MonoBehaviour
 		}
 
 		// ローカルクライアントの所属チームを取得
-		ETeamType localPlayerTeam = ETeamType.None;
-		if (NetworkManager.Singleton != null &&
-			NetworkManager.Singleton.LocalClient != null &&
-			NetworkManager.Singleton.LocalClient.PlayerObject != null)
-		{
-			var localProfile = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerNetworkProfile>();
-			if (localProfile != null)
-			{
-				localPlayerTeam = localProfile.Team;
-			}
-		}
-
+		ETeamType localPlayerTeam = GetLocalPlayerTeam();
 		ETeamType targetTeam = m_Profile != null ? m_Profile.Team : ETeamType.None;
 
 		// 敵プレイヤーの名前は見えないように制御(味方のみ表示)
@@ -211,5 +200,38 @@ public class PlayerNamePlate : MonoBehaviour
 			// ローカルプレイヤーの所属が未定の段階では一旦表示(確定時にRefreshAllで再評価)
 			m_NameText.gameObject.SetActive(true);
 		}
+	}
+
+	/// <summary>
+	/// 自端末のローカルプレイヤーの所属チームを取得します。
+	/// </summary>
+	private static ETeamType GetLocalPlayerTeam()
+	{
+		// 1. NGO標準のLocalClient.PlayerObjectから取得
+		if (NetworkManager.Singleton != null &&
+			NetworkManager.Singleton.LocalClient != null &&
+			NetworkManager.Singleton.LocalClient.PlayerObject != null)
+		{
+			var localProfile = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerNetworkProfile>();
+			if (localProfile != null && localProfile.Team != ETeamType.None)
+			{
+				return localProfile.Team;
+			}
+		}
+
+		// 2. シーン内の全インスタンスからIsOwnerであるものを探索(フォールバック)
+		for (int i = 0; i < s_Instances.Count; i++)
+		{
+			var instance = s_Instances[i];
+			if (instance != null && instance.m_NetworkObject != null && instance.m_NetworkObject.IsOwner)
+			{
+				if (instance.m_Profile != null && instance.m_Profile.Team != ETeamType.None)
+				{
+					return instance.m_Profile.Team;
+				}
+			}
+		}
+
+		return ETeamType.None;
 	}
 }

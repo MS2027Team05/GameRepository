@@ -137,7 +137,9 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 				// アウトライン・シルエット用シェーダーは半透明化の対象外とする
 				if (mat.shader != null &&
-					(mat.shader.name.Contains("PlayerOutline") || mat.shader.name.Contains("OccludedSilhouette")))
+					(mat.shader.name.Contains("PlayerOutline") ||
+					 mat.shader.name.Contains("OccludedSilhouette") ||
+					 mat.shader.name.Contains("ToolOccludedMask")))
 				{
 					continue;
 				}

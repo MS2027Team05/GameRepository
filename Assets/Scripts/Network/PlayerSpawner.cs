@@ -82,8 +82,8 @@ public class PlayerSpawner : NetworkBehaviour
 
 			if (networkObject != null)
 			{
-				// 各クライアントに所有権(Ownership)を付与してネットワーク生成
-				networkObject.SpawnWithOwnership(clientId);
+				// 各クライアントのPlayerObjectとしてネットワーク生成
+				networkObject.SpawnAsPlayerObject(clientId);
 				m_SpawnedPlayerObjects.Add(playerInstance);
 
 				// プレイヤープロファイルの初期化
