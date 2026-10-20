@@ -26,6 +26,7 @@ GameRepository/
 │   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
 │   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー通信同期・ゲーム開始制御
 │   │   │   ├── LobbyUIController.cs     # ロビー画面UI表示・端末ロール別パネル制御
+│   │   │   ├── LobbyCharacterDisplayManager.cs # ロビー内3Dモデル表示・台座同期制御
 │   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
 │   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・シーン間データ引継ぎ管理
 │   │   │   └── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御

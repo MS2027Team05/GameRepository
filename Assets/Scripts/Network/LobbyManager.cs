@@ -235,6 +235,16 @@ public class LobbyManager : NetworkBehaviour
 		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, (EHighlightColor)nextColorIndex);
 	}
 
+	/// <summary>
+	/// 指定したハイライトカラーをローカルプレイヤーに設定します。
+	/// </summary>
+	public void SetHighlightColor(EHighlightColor highlightColor)
+	{
+		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
+
+		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, highlightColor);
+	}
+
 	public void ToggleReady()
 	{
 		if (!TryGetLocalPlayerData(out var localPlayer) || NetworkManager.Singleton == null) return;

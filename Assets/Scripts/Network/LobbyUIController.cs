@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -41,6 +42,28 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private Button m_ReadyButton;
 	[SerializeField] private TextMeshProUGUI m_ReadyButtonText;
 	[SerializeField] private Button m_ClientLeaveLobbyButton;
+
+	[Serializable]
+	public struct ColorPaletteItem
+	{
+		[Tooltip("対象のハイライトカラー種別")]
+		public EHighlightColor ColorType;
+		[Tooltip("クリック可能なボタン")]
+		public Button Button;
+		[Tooltip("カラープレビュー用のImage(任意)")]
+		public Image ColorImage;
+		[Tooltip("現在選択中を示す枠線やアイコン(任意)")]
+		public GameObject SelectedIndicator;
+	}
+
+	[Header("サブカラーパレットUI参照(案B)")]
+	[SerializeField] private ColorPaletteItem[] m_ColorPaletteItems;
+
+	[Header("台座スロットUI参照(画面上でのチーム参加)")]
+	[SerializeField] private Button[] m_RedSlotButtons = new Button[LobbyManager.MaxTeamMembers];
+	[SerializeField] private Button[] m_BlueSlotButtons = new Button[LobbyManager.MaxTeamMembers];
+	[SerializeField] private TextMeshProUGUI[] m_RedSlotTexts = new TextMeshProUGUI[LobbyManager.MaxTeamMembers];
+	[SerializeField] private TextMeshProUGUI[] m_BlueSlotTexts = new TextMeshProUGUI[LobbyManager.MaxTeamMembers];
 
 	[Header("デバッグ操作UI参照")]
 	[SerializeField] private Button m_DebugCycleMinPlayersButton;
@@ -162,6 +185,42 @@ public class LobbyUIController : MonoBehaviour
 			m_CycleColorButton.onClick.AddListener(() => m_LobbyManager?.CycleHighlightColor());
 		}
 
+		// カラーパレットボタン(案B)のリスナー設定
+		if (m_ColorPaletteItems != null)
+		{
+			for (int i = 0; i < m_ColorPaletteItems.Length; i++)
+			{
+				var item = m_ColorPaletteItems[i];
+				if (item.Button != null)
+				{
+					item.Button.onClick.AddListener(() => m_LobbyManager?.SetHighlightColor(item.ColorType));
+				}
+			}
+		}
+
+		// 2D台座スロットボタンのリスナー設定
+		if (m_RedSlotButtons != null)
+		{
+			for (int i = 0; i < m_RedSlotButtons.Length; i++)
+			{
+				if (m_RedSlotButtons[i] != null)
+				{
+					m_RedSlotButtons[i].onClick.AddListener(() => m_LobbyManager?.JoinTeam(ETeamType.Red));
+				}
+			}
+		}
+
+		if (m_BlueSlotButtons != null)
+		{
+			for (int i = 0; i < m_BlueSlotButtons.Length; i++)
+			{
+				if (m_BlueSlotButtons[i] != null)
+				{
+					m_BlueSlotButtons[i].onClick.AddListener(() => m_LobbyManager?.JoinTeam(ETeamType.Blue));
+				}
+			}
+		}
+
 		if (m_ReadyButton != null)
 		{
 			m_ReadyButton.onClick.AddListener(() => m_LobbyManager?.ToggleReady());
@@ -197,6 +256,7 @@ public class LobbyUIController : MonoBehaviour
 		UpdatePlayerControls();
 		UpdateHostControls();
 		UpdateDebugControls();
+		UpdateSlotButtons();
 	}
 
 	private void UpdateSharedInfo()
@@ -358,6 +418,23 @@ public class LobbyUIController : MonoBehaviour
 			m_ColorText.text = $"カラー: {localPlayer.HighlightColor}";
 		}
 
+		// カラーパレットボタン状態更新
+		if (m_ColorPaletteItems != null)
+		{
+			for (int i = 0; i < m_ColorPaletteItems.Length; i++)
+			{
+				var item = m_ColorPaletteItems[i];
+				if (item.Button != null)
+				{
+					item.Button.interactable = !isReady && isSeated;
+				}
+				if (item.SelectedIndicator != null)
+				{
+					item.SelectedIndicator.SetActive(isSeated && item.ColorType == localPlayer.HighlightColor);
+				}
+			}
+		}
+
 		if (m_ReadyButton != null)
 		{
 			m_ReadyButton.interactable = isSeated;
@@ -366,6 +443,91 @@ public class LobbyUIController : MonoBehaviour
 		if (m_ReadyButtonText != null)
 		{
 			m_ReadyButtonText.text = isReady ? "準備完了解除" : "準備完了!";
+		}
+	}
+
+	/// <summary>
+	/// 画面上の台座スロットボタンの表示状態(プレイヤー名、空席表示、ボタン有効化)を更新します。
+	/// </summary>
+	private void UpdateSlotButtons()
+	{
+		if (m_LobbyManager == null) return;
+
+		bool hasLocal = m_LobbyManager.TryGetLocalPlayerData(out var localPlayer);
+		bool localReady = hasLocal && localPlayer.IsReady;
+
+		var players = m_LobbyManager.LobbyPlayers;
+		int redCount = 0;
+		int blueCount = 0;
+
+		LobbyPlayerData[] redSlotPlayers = new LobbyPlayerData[LobbyManager.MaxTeamMembers];
+		LobbyPlayerData[] blueSlotPlayers = new LobbyPlayerData[LobbyManager.MaxTeamMembers];
+
+		for (int i = 0; i < players.Count; i++)
+		{
+			var p = players[i];
+			if (p.Team == ETeamType.Red && redCount < redSlotPlayers.Length)
+			{
+				redSlotPlayers[redCount++] = p;
+			}
+			else if (p.Team == ETeamType.Blue && blueCount < blueSlotPlayers.Length)
+			{
+				blueSlotPlayers[blueCount++] = p;
+			}
+		}
+
+		// RedスロットUIの更新
+		if (m_RedSlotButtons != null)
+		{
+			for (int i = 0; i < m_RedSlotButtons.Length; i++)
+			{
+				bool isOccupied = i < redCount;
+				if (m_RedSlotButtons[i] != null)
+				{
+					m_RedSlotButtons[i].interactable = !localReady;
+				}
+
+				if (m_RedSlotTexts != null && i < m_RedSlotTexts.Length && m_RedSlotTexts[i] != null)
+				{
+					if (isOccupied)
+					{
+						var p = redSlotPlayers[i];
+						string readyStr = p.IsReady ? "<color=green>[READY]</color>" : "";
+						m_RedSlotTexts[i].text = $"{p.PlayerName} {readyStr}";
+					}
+					else
+					{
+						m_RedSlotTexts[i].text = "空席 (参加)";
+					}
+				}
+			}
+		}
+
+		// BlueスロットUIの更新
+		if (m_BlueSlotButtons != null)
+		{
+			for (int i = 0; i < m_BlueSlotButtons.Length; i++)
+			{
+				bool isOccupied = i < blueCount;
+				if (m_BlueSlotButtons[i] != null)
+				{
+					m_BlueSlotButtons[i].interactable = !localReady;
+				}
+
+				if (m_BlueSlotTexts != null && i < m_BlueSlotTexts.Length && m_BlueSlotTexts[i] != null)
+				{
+					if (isOccupied)
+					{
+						var p = blueSlotPlayers[i];
+						string readyStr = p.IsReady ? "<color=green>[READY]</color>" : "";
+						m_BlueSlotTexts[i].text = $"{p.PlayerName} {readyStr}";
+					}
+					else
+					{
+						m_BlueSlotTexts[i].text = "空席 (参加)";
+					}
+				}
+			}
 		}
 	}
 
