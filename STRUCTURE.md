@@ -52,6 +52,8 @@ GameRepository/
 │   │       ├── PlayerInputReceiver.cs   # 入力検知・視点操作・カーソルロック管理
 │   │       ├── PlayerSurfaceMover.cs    # 地上/曲面歩行移動・運動量転送・ダウンフォース・姿勢回転制御
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
+│   │   └── UI/                  # 汎用・共通UI制御
+│   │       └── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定
 │   ├── Shader/                  # カスタムシェーダー格納 (アウトライン・遮蔽シルエット等)
 │   ├── TextMesh Pro/            # TextMesh Pro関連リソース

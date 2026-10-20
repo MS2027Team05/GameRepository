@@ -173,12 +173,33 @@ public class LobbyManager : NetworkBehaviour
 		OnLobbyDataChanged?.Invoke();
 	}
 
+	public const int MaxPlayerNameLength = 12;
+
+	/// <summary>
+	/// プレイヤーネームが有効な形式(1文字以上、最大文字数以内、空白のみでない)かを判定します。
+	/// </summary>
+	public static bool IsValidPlayerName(string name)
+	{
+		if (string.IsNullOrWhiteSpace(name)) return false;
+		string trimmed = name.Trim();
+		return trimmed.Length >= 1 && trimmed.Length <= MaxPlayerNameLength;
+	}
+
 	// --- 外部公開API (UIControllerから呼び出し) ---
 
 	public void SetPlayerName(string newName)
 	{
-		if (string.IsNullOrWhiteSpace(newName) || NetworkManager.Singleton == null) return;
-		RequestUpdatePlayerNameServerRpc(NetworkManager.Singleton.LocalClientId, newName.Trim());
+		if (NetworkManager.Singleton == null) return;
+
+		string trimmed = newName != null ? newName.Trim() : string.Empty;
+		if (!IsValidPlayerName(trimmed))
+		{
+			// 不正な入力の場合はUI側を元の正常値に戻すため再通知
+			NotifyDataChanged();
+			return;
+		}
+
+		RequestUpdatePlayerNameServerRpc(NetworkManager.Singleton.LocalClientId, trimmed);
 	}
 
 	public void JoinTeam(ETeamType team)
@@ -216,6 +237,12 @@ public class LobbyManager : NetworkBehaviour
 	{
 		if (!TryGetLocalPlayerData(out var localPlayer) || NetworkManager.Singleton == null) return;
 		if (localPlayer.Team == ETeamType.None) return;
+
+		// プレイヤーネームが不正な場合はReady状態への移行をブロック
+		if (!IsValidPlayerName(localPlayer.PlayerName.ToString()))
+		{
+			return;
+		}
 
 		RequestToggleReadyServerRpc(NetworkManager.Singleton.LocalClientId);
 	}
@@ -295,15 +322,17 @@ public class LobbyManager : NetworkBehaviour
 
 		bool allSeated = true;
 		bool allReady = true;
+		bool allNamesValid = true;
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
 			var p = m_LobbyPlayers[i];
 			if (p.Team == ETeamType.None) allSeated = false;
 			if (!p.IsReady) allReady = false;
+			if (!IsValidPlayerName(p.PlayerName.ToString())) allNamesValid = false;
 		}
 
-		bool canStart = (connectedCount >= m_CurrentRequiredPlayers) && allSeated && allReady;
+		bool canStart = (connectedCount >= m_CurrentRequiredPlayers) && allSeated && allReady && allNamesValid;
 
 		if (canStart)
 		{
@@ -312,6 +341,10 @@ public class LobbyManager : NetworkBehaviour
 		else if (connectedCount < m_CurrentRequiredPlayers)
 		{
 			statusMessage = $"待機中: あと {m_CurrentRequiredPlayers - connectedCount} 台の接続が必要です";
+		}
+		else if (!allNamesValid)
+		{
+			statusMessage = "プレイヤー名が未入力または不正なプレイヤーがいます";
 		}
 		else if (!allSeated)
 		{
@@ -380,6 +413,9 @@ public class LobbyManager : NetworkBehaviour
 	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
 	private void RequestUpdatePlayerNameServerRpc(ulong clientId, FixedString32Bytes newName)
 	{
+		string nameStr = newName.ToString().Trim();
+		if (!IsValidPlayerName(nameStr)) return;
+
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
 			if (m_LobbyPlayers[i].ClientId == clientId)
@@ -387,7 +423,7 @@ public class LobbyManager : NetworkBehaviour
 				var data = m_LobbyPlayers[i];
 				if (data.IsReady) return;
 
-				data.PlayerName = newName;
+				data.PlayerName = nameStr;
 				m_LobbyPlayers[i] = data;
 				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;

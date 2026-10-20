@@ -133,6 +133,7 @@ public class LobbyUIController : MonoBehaviour
 		// プレイヤー操作
 		if (m_PlayerNameInput != null)
 		{
+			m_PlayerNameInput.characterLimit = 12;
 			m_PlayerNameInput.onEndEdit.AddListener(name => m_LobbyManager?.SetPlayerName(name));
 		}
 
