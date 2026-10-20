@@ -9,7 +9,7 @@ using UnityEngine;
 /// </summary>
 public class PlayerNetworkProfile : NetworkBehaviour
 {
-	private readonly NetworkVariable<FixedString32Bytes> m_PlayerName = new NetworkVariable<FixedString32Bytes>(
+	private readonly NetworkVariable<FixedString64Bytes> m_PlayerName = new NetworkVariable<FixedString64Bytes>(
 		default,
 		NetworkVariableReadPermission.Everyone,
 		NetworkVariableWritePermission.Server);
@@ -69,7 +69,7 @@ public class PlayerNetworkProfile : NetworkBehaviour
 		m_HighlightColor.Value = data.HighlightColor;
 	}
 
-	private void HandleNameChanged(FixedString32Bytes previousValue, FixedString32Bytes newValue)
+	private void HandleNameChanged(FixedString64Bytes previousValue, FixedString64Bytes newValue)
 	{
 		OnProfileChanged?.Invoke();
 	}

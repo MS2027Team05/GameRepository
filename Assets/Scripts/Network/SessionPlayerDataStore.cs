@@ -78,7 +78,7 @@ public class SessionPlayerDataStore : MonoBehaviour
 		}
 
 		// デフォルト生成: Player {clientId}
-		FixedString32Bytes defaultName = $"Player {clientId}";
+		FixedString64Bytes defaultName = $"Player {clientId}";
 		var defaultData = new LobbyPlayerData(
 			clientId,
 			defaultName,

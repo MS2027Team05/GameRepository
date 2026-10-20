@@ -41,7 +41,7 @@ public enum EHighlightColor : byte
 public struct LobbyPlayerData : INetworkSerializable, IEquatable<LobbyPlayerData>
 {
 	private ulong m_ClientId;
-	private FixedString32Bytes m_PlayerName;
+	private FixedString64Bytes m_PlayerName;
 	private ETeamType m_Team;
 	private ECharacterType m_CharacterType;
 	private EHighlightColor m_HighlightColor;
@@ -53,7 +53,7 @@ public struct LobbyPlayerData : INetworkSerializable, IEquatable<LobbyPlayerData
 		set => m_ClientId = value;
 	}
 
-	public FixedString32Bytes PlayerName
+	public FixedString64Bytes PlayerName
 	{
 		get => m_PlayerName;
 		set => m_PlayerName = value;
@@ -85,7 +85,7 @@ public struct LobbyPlayerData : INetworkSerializable, IEquatable<LobbyPlayerData
 
 	public LobbyPlayerData(
 		ulong clientId,
-		FixedString32Bytes playerName,
+		FixedString64Bytes playerName,
 		ETeamType team = ETeamType.None,
 		ECharacterType characterType = ECharacterType.ModelA,
 		EHighlightColor highlightColor = EHighlightColor.Default,

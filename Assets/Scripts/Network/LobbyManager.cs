@@ -138,7 +138,7 @@ public class LobbyManager : NetworkBehaviour
 		}
 		else
 		{
-			FixedString32Bytes defaultName = $"Player {clientId}";
+			FixedString64Bytes defaultName = $"Player {clientId}";
 			initialData = new LobbyPlayerData(clientId, defaultName);
 		}
 
@@ -174,15 +174,17 @@ public class LobbyManager : NetworkBehaviour
 	}
 
 	public const int MaxPlayerNameLength = 12;
+	public const int MaxPlayerNameBytes = 60;
 
 	/// <summary>
-	/// プレイヤーネームが有効な形式(1文字以上、最大文字数以内、空白のみでない)かを判定します。
+	/// プレイヤーネームが有効な形式(1文字以上、最大文字数以内、UTF-8バイト数上限以内、空白のみでない)かを判定します。
 	/// </summary>
 	public static bool IsValidPlayerName(string name)
 	{
 		if (string.IsNullOrWhiteSpace(name)) return false;
 		string trimmed = name.Trim();
-		return trimmed.Length >= 1 && trimmed.Length <= MaxPlayerNameLength;
+		if (trimmed.Length < 1 || trimmed.Length > MaxPlayerNameLength) return false;
+		return System.Text.Encoding.UTF8.GetByteCount(trimmed) <= MaxPlayerNameBytes;
 	}
 
 	// --- 外部公開API (UIControllerから呼び出し) ---
@@ -411,7 +413,7 @@ public class LobbyManager : NetworkBehaviour
 	}
 
 	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-	private void RequestUpdatePlayerNameServerRpc(ulong clientId, FixedString32Bytes newName)
+	private void RequestUpdatePlayerNameServerRpc(ulong clientId, FixedString64Bytes newName)
 	{
 		string nameStr = newName.ToString().Trim();
 		if (!IsValidPlayerName(nameStr)) return;
