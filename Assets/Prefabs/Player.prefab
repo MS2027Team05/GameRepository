@@ -680,6 +680,7 @@ GameObject:
   - component: {fileID: 3112936510738658285}
   - component: {fileID: 936729834740044593}
   - component: {fileID: 5433142072243466315}
+  - component: {fileID: 6206248664396906086}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -806,7 +807,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4273467025
+  GlobalObjectIdHash: 4203264452
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -1103,8 +1104,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   m_EnableEdgeGroundedAssist: 1
-  m_EdgeSearchRadius: 0.6
-  m_EnableDebugDraw: 1
+  m_EdgeSearchRadius: 1
+  m_EnableDebugDraw: 0
 --- !u!114 &3112936510738658285
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1156,6 +1157,32 @@ MonoBehaviour:
   m_BlueTeamColor: {r: 0.15686275, g: 0.15686275, b: 1, a: 1}
   m_DefaultOutlineColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   m_PlayerSilhouetteAlpha: 0.6
+--- !u!114 &6206248664396906086
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77523f70ee577ea418ac0e8dbc4adac6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerEdgeDiagnostics
+  m_EnableDiagnostics: 0
+  m_ShowOnScreenHUD: 1
+  m_GroundLayerMask:
+    serializedVersion: 2
+    m_Bits: 128
+  m_DrawSceneLabels: 1
+  m_DrawGhostCapsule: 1
+  m_DrawVectors: 1
+  m_DrawClosestSurface: 1
+  m_DrawAllRays: 1
+  m_DrawTrail: 0
+  m_AutoInputMode: 0
+  m_SlowForwardSpeedRatio: 0
+  m_WiggleSwitchInterval: 0
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0

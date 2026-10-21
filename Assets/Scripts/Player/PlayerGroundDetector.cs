@@ -28,24 +28,31 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 	private CapsuleCollider m_CapsuleCollider;
 	private bool m_IsGrounded;
 	private Vector3 m_CurrentGroundNormal = Vector3.up;
+	private Vector3 m_TargetGroundNormal = Vector3.up;
+	private float m_NormalHysteresisTimer;
 	private float m_GroundGap;
 	private float m_LandingSnapTimer;
 
-	private struct DebugRayInfo
+	public struct DebugRayInfo
 	{
 		public Vector3 Origin;
 		public Vector3 Direction;
 		public float Distance;
 		public bool Hit;
 		public Vector3 HitPoint;
+		public Vector3 HitNormal;
 	}
 
 	private readonly List<DebugRayInfo> m_DebugRays = new List<DebugRayInfo>();
+	private readonly Collider[] m_OverlapColliderBuffer = new Collider[16];
 	private Vector3 m_DebugSphereCastOrigin;
 	private Vector3 m_DebugSphereCastEnd;
 	private float m_DebugSphereCastRadius;
 	private bool m_DebugSphereCastHit;
 	private Vector3 m_DebugSphereCastHitPoint;
+	private Vector3 m_LastDetectedNormal = Vector3.up;
+	private Vector3 m_LastDetectedPoint;
+	private int m_LastDetectionStep; // 0:なし, 1:凹角壁, 2:真下SphereCast, 3:角近傍幾何学的面検知
 
 	/// <summary>
 	/// 地面または壁面に接地しているかを取得します。
@@ -61,6 +68,26 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 	/// 足元理想位置と地面接触点との高低差(浮きギャップ)を取得します。
 	/// </summary>
 	public float GroundGap => m_GroundGap;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームで実行されたRaycast一覧を取得します。
+	/// </summary>
+	public IReadOnlyList<DebugRayInfo> DebugRays => m_DebugRays;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームで接地を検出した判定ステップ(0:なし, 1:凹角壁, 2:足元SphereCast, 3:角近傍Ray)を取得します。
+	/// </summary>
+	public int LastDetectionStep => m_LastDetectionStep;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームで検出された面の法線を取得します。
+	/// </summary>
+	public Vector3 LastDetectedNormal => m_LastDetectedNormal;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームで検出された面の接触点を取得します。
+	/// </summary>
+	public Vector3 LastDetectedPoint => m_LastDetectedPoint;
 
 	private void Awake()
 	{
@@ -90,10 +117,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 		float checkDist = footDist + (m_GroundCheckDistance > 0f ? m_GroundCheckDistance : 1.5f);
 		int layerMask = m_GroundLayerMask.value == 0 ? ~0 : m_GroundLayerMask.value;
 
-		if (m_EnableDebugDraw)
-		{
-			m_DebugRays.Clear();
-		}
+		m_DebugRays.Clear();
 
 		bool foundGround = false;
 		Vector3 detectedNormal = m_CurrentGroundNormal;
@@ -113,6 +137,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 			foundGround = true;
 			detectedNormal = wallHit.normal;
 			detectedPoint = wallHit.point;
+			m_LastDetectionStep = 1;
 		}
 
 		// 2. 通常足元検知: SphereCastにより角の縁や曲面でも確実に接地を捕捉
@@ -135,80 +160,91 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 				foundGround = true;
 				detectedNormal = downHit.normal;
 				detectedPoint = downHit.point;
+				m_LastDetectionStep = 2;
 			}
 		}
 
-		// 3. 角・エッジ近傍マルチアングル検知: 足元真下が空中に抜けた際、近接する角の上面・側面・真横・背面を捉えて接地維持
+		// 3. 角・エッジ近傍の幾何学的最近接面検知 (ClosestPoint方式)
+		// 足元が空中の場合、周囲のGroundコライダーから足元までの最短表面座標を算出して接地を維持する
+		// 接地面の取得にRaycastを廃止しClosestPoint(GJK/EPA)を採用して信頼できるように
 		if (!foundGround && m_EnableEdgeGroundedAssist && m_CapsuleCollider != null)
 		{
-			Vector3 footOrigin = transform.position - transform.up * (footDist - 0.2f);
-			Vector3 centerOrigin = transform.position;
-			float edgeCheckDist = m_EdgeSearchRadius > 0f ? m_EdgeSearchRadius : 0.6f;
+			Vector3 footBottom = transform.position - transform.up * footDist;
+			float searchRadius = m_EdgeSearchRadius;
 
-			// 加速・高速移動時でも通り過ぎた角を確実に捉えられるよう、背面探索距離を速度連動で拡張
-			float backCheckDist = Mathf.Max(edgeCheckDist, speed * Time.fixedDeltaTime * 3.0f);
-
-			// 足元および腰(中心)からの多方向Ray(斜め下・周囲・真横・背面引き戻し)
-			(Vector3 origin, Vector3 dir, float dist)[] checkRays = new (Vector3 origin, Vector3 dir, float dist)[]
-			{
-				// 足元から斜め下・周囲
-				(footOrigin, (-transform.up + currentMoveDir).normalized, edgeCheckDist),
-				(footOrigin, (-transform.up - currentMoveDir * 0.6f).normalized, edgeCheckDist),
-				(footOrigin, (-transform.up + transform.right * 0.8f).normalized, edgeCheckDist),
-				(footOrigin, (-transform.up - transform.right * 0.8f).normalized, edgeCheckDist),
-				(footOrigin, -m_CurrentGroundNormal, edgeCheckDist),
-
-				// 背面への引き戻し探索(加速・高速移動時の角飛び出し防止)
-				(footOrigin, -currentMoveDir, backCheckDist),
-				(footOrigin, (-currentMoveDir - transform.up * 0.5f).normalized, backCheckDist),
-
-				// 腰・中心から水平四方(カス当たりした真横の壁面を捕捉)
-				(centerOrigin, transform.right, edgeCheckDist),
-				(centerOrigin, -transform.right, edgeCheckDist),
-				(centerOrigin, currentMoveDir, edgeCheckDist),
-				(centerOrigin, -currentMoveDir, backCheckDist),
-				(centerOrigin, (transform.right - transform.up * 0.5f).normalized, edgeCheckDist),
-				(centerOrigin, (-transform.right - transform.up * 0.5f).normalized, edgeCheckDist),
-			};
+			int hitCount = Physics.OverlapSphereNonAlloc(footBottom, searchRadius, m_OverlapColliderBuffer, layerMask, QueryTriggerInteraction.Ignore);
 
 			float closestDist = float.MaxValue;
-			RaycastHit bestHit = default;
-			bool foundEdge = false;
+			Collider bestCollider = null;
+			Vector3 bestClosestPoint = Vector3.zero;
 
-			for (int i = 0; i < checkRays.Length; i++)
+			for (int i = 0; i < hitCount; i++)
 			{
-				Vector3 origin = checkRays[i].origin;
-				Vector3 dir = checkRays[i].dir;
-				float dist = checkRays[i].dist;
-				bool isHit = Physics.Raycast(origin, dir, out RaycastHit hit, dist, layerMask, QueryTriggerInteraction.Ignore);
-
-				if (m_EnableDebugDraw)
+				Collider col = m_OverlapColliderBuffer[i];
+				if (col == null || col == m_CapsuleCollider || col.gameObject == gameObject)
 				{
-					m_DebugRays.Add(new DebugRayInfo
-					{
-						Origin = origin,
-						Direction = dir,
-						Distance = dist,
-						Hit = isHit,
-						HitPoint = isHit ? hit.point : Vector3.zero
-					});
+					continue;
 				}
 
-				if (isHit && hit.distance < closestDist)
+				Vector3 closest = col.ClosestPoint(footBottom);
+				float dist = Vector3.Distance(footBottom, closest);
+				if (dist < closestDist)
 				{
-					closestDist = hit.distance;
-					bestHit = hit;
-					foundEdge = true;
+					closestDist = dist;
+					bestCollider = col;
+					bestClosestPoint = closest;
 				}
 			}
 
-			if (foundEdge)
+			if (bestCollider != null && closestDist <= searchRadius)
 			{
+				Vector3 toFoot = footBottom - bestClosestPoint;
+				Vector3 surfaceNormal = Vector3.up;
+
+				// 最近接点の正確な面法線を取得 (外側から微小Raycastを照射してポリゴン面法線を特定)
+				if (toFoot.sqrMagnitude > 0.0001f)
+				{
+					Vector3 rayDir = -toFoot.normalized;
+					Vector3 rayOrigin = bestClosestPoint + toFoot.normalized * 0.15f;
+					if (bestCollider.Raycast(new Ray(rayOrigin, rayDir), out RaycastHit surfaceHit, 0.35f))
+					{
+						surfaceNormal = surfaceHit.normal;
+					}
+					else
+					{
+						surfaceNormal = toFoot.normalized;
+					}
+				}
+				else
+				{
+					surfaceNormal = bestCollider.transform.up;
+				}
+
 				foundGround = true;
-				detectedNormal = bestHit.normal;
-				detectedPoint = bestHit.point;
+				detectedNormal = surfaceNormal;
+				detectedPoint = bestClosestPoint;
+				m_LastDetectionStep = 3;
+
+				// 診断およびデバッグ用可視化情報
+				m_DebugRays.Add(new DebugRayInfo
+				{
+					Origin = footBottom,
+					Direction = (bestClosestPoint - footBottom).normalized,
+					Distance = closestDist,
+					Hit = true,
+					HitPoint = bestClosestPoint,
+					HitNormal = surfaceNormal
+				});
 			}
 		}
+
+		if (!foundGround)
+		{
+			m_LastDetectionStep = 0;
+		}
+
+		m_LastDetectedNormal = detectedNormal;
+		m_LastDetectedPoint = detectedPoint;
 
 		// デバッグ表示: 現在の法線(緑線)と進行方向(青線)
 		if (m_EnableDebugDraw)
@@ -217,7 +253,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 			Debug.DrawRay(transform.position, currentMoveDir * 1.0f, Color.blue, 0f);
 		}
 
-		// 接地状態と目標法線の更新
+		// 接地状態と目標法線の更新 (ヒステリシス・ダンピングアルゴリズム)
 		if (foundGround)
 		{
 			m_IsGrounded = true;
@@ -227,10 +263,32 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 			Vector3 footPos = transform.position - transform.up * footDist;
 			m_GroundGap = Vector3.Dot(footPos - detectedPoint, m_CurrentGroundNormal);
 
-			// 角を乗り越える際(法線角度差大)でもカクつかず滑らかな円弧を描いて追従
-			float dot = Vector3.Dot(m_CurrentGroundNormal, detectedNormal);
-			float normalAlignSpeed = dot < 0.7f ? 20.0f : 15.0f;
-			m_CurrentGroundNormal = Vector3.Slerp(m_CurrentGroundNormal, detectedNormal, normalAlignSpeed * Time.fixedDeltaTime).normalized;
+			// 【アルゴリズム: 法線遷移ヒステリシス (Normal Transition Hysteresis)】
+			// 直方体の稜線上において、上面(Step 2)と側面(Step 3)が微小な位置揺らぎで
+			// 毎フレーム交互に切り替わるチャタリング振動を防止します。
+			// 新たに検出された面が直前の面と大きく異なる(内積 dot < 0.75f = 角度差約41度以上)場合、
+			// 0.12秒間のヒステリシスホールド時間を設定し、過渡期における古い面への急な跳ね返りを抑制します。
+			float dotNewTarget = Vector3.Dot(m_TargetGroundNormal, detectedNormal);
+			if (dotNewTarget < 0.75f)
+			{
+				m_NormalHysteresisTimer = 0.12f;
+				m_TargetGroundNormal = detectedNormal;
+			}
+			else if (m_NormalHysteresisTimer > 0f)
+			{
+				m_NormalHysteresisTimer -= Time.fixedDeltaTime;
+			}
+			else
+			{
+				m_TargetGroundNormal = detectedNormal;
+			}
+
+			// 【アルゴリズム: 二乗イージング法線Slerp (Adaptive Slerp Damping)】
+			// 法線角度差が大きい過渡期はダンピングを効かせて急激な姿勢反転を抑え、
+			// 平坦面付近では即座に追従する可変レートを適用してカクつきのない円弧軌道を描きます。
+			float dotCurrent = Vector3.Dot(m_CurrentGroundNormal, m_TargetGroundNormal);
+			float normalAlignSpeed = dotCurrent < 0.7f ? 16.0f : 20.0f;
+			m_CurrentGroundNormal = Vector3.Slerp(m_CurrentGroundNormal, m_TargetGroundNormal, normalAlignSpeed * Time.fixedDeltaTime).normalized;
 		}
 		else
 		{

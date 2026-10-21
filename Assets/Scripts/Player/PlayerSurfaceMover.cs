@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// 地上・曲面・壁面でのカメラ基準歩行移動・運動量転送・ダウンフォース・姿勢回転を担当するコンポーネント。
@@ -30,6 +30,9 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 	private float m_SpeedMultiplier = 1.0f;
 	private Vector3 m_LastMoveDirection = Vector3.forward;
 	private float m_LastPlaneSpeed;
+	private Vector3 m_LastSnapVelocity;
+	private Vector3 m_LastDownforce;
+	private float m_LastNormalDiff;
 
 	/// <summary>
 	/// 現在の接平面進行方向ベクトルを取得します。
@@ -40,6 +43,26 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 	/// 現在の接平面走破速度の絶対値を取得します。
 	/// </summary>
 	public float CurrentPlaneSpeed => m_LastPlaneSpeed;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームで適用されたスナップ速度を取得します。
+	/// </summary>
+	public Vector3 LastSnapVelocity => m_LastSnapVelocity;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームで適用されたダウンフォースを取得します。
+	/// </summary>
+	public Vector3 LastDownforce => m_LastDownforce;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームの法線角度差(0:平坦〜1:直角)を取得します。
+	/// </summary>
+	public float LastNormalDiff => m_LastNormalDiff;
+
+	/// <summary>
+	/// 診断・検証用: 直近フレームの入力ベクトル(WASD)を取得します。
+	/// </summary>
+	public Vector2 CurrentMoveInput => m_MoveInput;
 
 	private void Awake()
 	{
@@ -116,7 +139,31 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 				rightOnPlane.Normalize();
 			}
 
-			moveDir = (forwardOnPlane * m_MoveInput.y + rightOnPlane * m_MoveInput.x).normalized;
+			Vector3 rawMoveDir = (forwardOnPlane * m_MoveInput.y + rightOnPlane * m_MoveInput.x).normalized;
+
+			// 【アルゴリズム: 接平面移動ベクトルの慣性平滑化 (Tangent Plane Inertial Smoothing)】
+			// 角を回り込む際、法線の回転に伴ってカメラの投影ベクトルが直角にねじれてガタつくのを防止します。
+			// 直前の進行方向 m_LastMoveDirection を現在の新法線接平面上に再投影(ProjectOnPlane)して基準を保ち、
+			// 急角を跨ぐ過渡期(normalDiff > 0.05f)は角速度制限(Slerp)をかけて滑らかに進行ベクトルを追従させます。
+			if (m_LastMoveDirection.sqrMagnitude > 0.001f)
+			{
+				Vector3 lastOnPlane = Vector3.ProjectOnPlane(m_LastMoveDirection, groundNormal).normalized;
+				if (lastOnPlane.sqrMagnitude > 0.001f)
+				{
+					// 平坦地では素早いレスポンス(40.0f)、角回り込み過渡期は滑らかな円弧補間(18.0f)を適用
+					float turnRate = m_LastNormalDiff > 0.05f ? 18.0f : 40.0f;
+					moveDir = Vector3.Slerp(lastOnPlane, rawMoveDir, turnRate * Time.fixedDeltaTime).normalized;
+				}
+				else
+				{
+					moveDir = rawMoveDir;
+				}
+			}
+			else
+			{
+				moveDir = rawMoveDir;
+			}
+
 			if (moveDir.sqrMagnitude > 0.001f)
 			{
 				m_LastMoveDirection = moveDir;
@@ -155,24 +202,29 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 		// 速度に連動した適度な向心力を持たせつつ、急激な階段状付与を抑えて滑らかな円弧軌道を描く
 		float currentSpeed = newPlaneVel.magnitude;
 		float normalDiff = 1.0f - Mathf.Clamp01(Vector3.Dot(transform.up, groundNormal)); // 0(平坦)〜1(直角)
+		m_LastNormalDiff = normalDiff;
 		float maxSnapSpeed = Mathf.Max(15.0f, currentSpeed * 1.5f);
 
 		float snapRate = 22.0f;
 		float snapSpeed = Mathf.Clamp(groundGap * snapRate, -2.5f, maxSnapSpeed);
 
 		// 角を跨ぐ過渡期(浮き上がり防止)は、法線差に応じて緩やかに向心引き込みをアシスト
-		if (normalDiff > 0.05f && currentSpeed > 0.5f)
+		// 低速移動時でも角から空中に抜け出さないよう、法線差に応じた最低限のベース向心吸着力を保証
+		if (normalDiff > 0.05f)
 		{
-			// 二乗イージングにより、微小角では影響を与えず、急角になるにつれて滑らかに引き込みを強化
-			float smoothCentripetal = currentSpeed * (normalDiff * normalDiff) * 0.5f;
+			float baseCentripetal = normalDiff * 4.5f;
+			// 二乗イージングにより、高速時は速度連動で引き込みを強化
+			float smoothCentripetal = Mathf.Max(baseCentripetal, currentSpeed * (normalDiff * normalDiff) * 0.5f);
 			snapSpeed = Mathf.Max(snapSpeed, smoothCentripetal);
 		}
 
 		Vector3 snapVelocity = -groundNormal * snapSpeed;
+		m_LastSnapVelocity = snapVelocity;
 
 		// 地面への安定吸着力(ダウンフォース)
 		float stickForce = m_GroundStickForce > 0f ? m_GroundStickForce : 15.0f;
 		Vector3 downforce = -groundNormal * stickForce;
+		m_LastDownforce = downforce;
 
 		m_Rigidbody.linearVelocity = newPlaneVel + snapVelocity + downforce * Time.fixedDeltaTime;
 	}
