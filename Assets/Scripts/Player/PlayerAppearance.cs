@@ -13,10 +13,8 @@ public sealed class PlayerAppearance : MonoBehaviour
 	[Header("モデル")]
 	[SerializeField] private GameObject m_ManModel;
 	[SerializeField] private GameObject m_WomanModel;
-	[SerializeField] private GameObject m_CommonModel;
 	[SerializeField] private Renderer[] m_ManRenderers;
 	[SerializeField] private Renderer[] m_WomanRenderers;
-	[SerializeField] private Renderer[] m_CommonRenderers;
 
 	[Header("デバッグ設定")]
 	[SerializeField] private bool m_UseDebugAppearance;
@@ -60,9 +58,9 @@ public sealed class PlayerAppearance : MonoBehaviour
 	// 取得元を選択し、性別に応じて表示モデルを切り替える。
 	public void SetGender()
 	{
-		if (m_ManModel == null || m_WomanModel == null || m_CommonModel == null)
+		if (m_ManModel == null || m_WomanModel == null)
 		{
-			Debug.LogWarning("男性・女性・共通モデルの参照が設定されていません。", this);
+			Debug.LogWarning("男性・女性モデルの参照が設定されていません。", this);
 			return;
 		}
 
@@ -70,13 +68,12 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 		m_ManModel.SetActive(gender == EPlayerGender.Man);
 		m_WomanModel.SetActive(gender == EPlayerGender.Woman);
-		m_CommonModel.SetActive(true);
 
 		m_CurrentGender = gender;
 		m_HasGender = true;
 	}
 
-	// 取得元を選択し、受け取ったマテリアルを全モデルに反映する。
+	// 取得元を選択し、受け取ったマテリアルを両モデルに反映する。
 	public void SetColor()
 	{
 		Material selectedMaterial = m_UseDebugAppearance ? SetColorForDebug() : GetColor();
@@ -89,20 +86,12 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 		ApplyMaterial(m_ManRenderers, selectedMaterial);
 		ApplyMaterial(m_WomanRenderers, selectedMaterial);
-		ApplyMaterial(m_CommonRenderers, selectedMaterial);
 
 		m_CurrentMaterial = selectedMaterial;
 		m_HasColor = true;
 	}
 
-	// Inspectorで設定したデバッグ値を使用する場合、外見を反映する。
-	[ContextMenu("外見を反映")]
-	private void ApplyAppearance()
-	{
-		SetGender();
-		SetColor();
-	}
-
+	// 指定されたRendererにマテリアルを反映する。
 	private static void ApplyMaterial(Renderer[] renderers, Material material)
 	{
 		if (renderers == null)
@@ -118,4 +107,33 @@ public sealed class PlayerAppearance : MonoBehaviour
 			}
 		}
 	}
+
+#if UNITY_EDITOR
+	// Inspectorの設定が変更された際、外見更新を遅延登録する。
+	private void OnValidate()
+	{
+		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
+		UnityEditor.EditorApplication.delayCall += ApplyAppearanceDelayed;
+	}
+
+	// OnValidateの処理終了後にデバッグ用の外見を反映する。
+	private void ApplyAppearanceDelayed()
+	{
+		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
+
+		if (this == null || !m_UseDebugAppearance)
+		{
+			return;
+		}
+
+		SetGender();
+		SetColor();
+	}
+
+	// コンポーネントが破棄される際、遅延登録を解除する。
+	private void OnDestroy()
+	{
+		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
+	}
+#endif
 }
