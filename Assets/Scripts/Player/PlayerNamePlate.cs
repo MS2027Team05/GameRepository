@@ -30,7 +30,7 @@ public class PlayerNamePlate : MonoBehaviour
 	[FormerlySerializedAs("defaultColor")]
 	[SerializeField] private Color m_DefaultColor;
 
-	private static readonly List<PlayerNamePlate> s_Instances = new List<PlayerNamePlate>();
+	private static readonly List<PlayerNamePlate> m_Instances = new List<PlayerNamePlate>();
 
 	private PlayerNetworkProfile m_Profile;
 	private NetworkObject m_NetworkObject;
@@ -51,15 +51,15 @@ public class PlayerNamePlate : MonoBehaviour
 
 	private void OnEnable()
 	{
-		if (!s_Instances.Contains(this))
+		if (!m_Instances.Contains(this))
 		{
-			s_Instances.Add(this);
+			m_Instances.Add(this);
 		}
 	}
 
 	private void OnDisable()
 	{
-		s_Instances.Remove(this);
+		m_Instances.Remove(this);
 	}
 
 	private void Start()
@@ -98,11 +98,11 @@ public class PlayerNamePlate : MonoBehaviour
 	/// </summary>
 	public static void RefreshAll()
 	{
-		for (int i = 0; i < s_Instances.Count; i++)
+		for (int i = 0; i < m_Instances.Count; i++)
 		{
-			if (s_Instances[i] != null)
+			if (m_Instances[i] != null)
 			{
-				s_Instances[i].UpdateVisibility();
+				m_Instances[i].UpdateVisibility();
 			}
 		}
 	}
@@ -220,9 +220,9 @@ public class PlayerNamePlate : MonoBehaviour
 		}
 
 		// 2. シーン内の全インスタンスからIsOwnerであるものを探索(フォールバック)
-		for (int i = 0; i < s_Instances.Count; i++)
+		for (int i = 0; i < m_Instances.Count; i++)
 		{
-			var instance = s_Instances[i];
+			var instance = m_Instances[i];
 			if (instance != null && instance.m_NetworkObject != null && instance.m_NetworkObject.IsOwner)
 			{
 				if (instance.m_Profile != null && instance.m_Profile.Team != ETeamType.None)

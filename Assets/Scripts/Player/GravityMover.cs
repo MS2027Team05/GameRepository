@@ -50,7 +50,7 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	/// <summary>
 	/// 現在等速直線移動(落下)中であるかを取得します。
 	/// </summary>
-	public bool IsFalling => m_IsFalling;
+	public bool IsFalling { get => m_IsFalling; }
 
 	private void Awake()
 	{

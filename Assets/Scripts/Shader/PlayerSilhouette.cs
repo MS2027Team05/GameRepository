@@ -45,7 +45,7 @@ public class PlayerSilhouette : MonoBehaviour
 	private const int m_SilhouetteQueue = 3010;
 	private const int m_OutlineQueue = 2020;
 
-	private static readonly List<PlayerSilhouette> s_Instances = new List<PlayerSilhouette>();
+	private static readonly List<PlayerSilhouette> m_Instances = new List<PlayerSilhouette>();
 
 	private Renderer[] m_Renderers;
 	private Dictionary<Renderer, Material[]> m_OriginalMaterials;
@@ -70,15 +70,15 @@ public class PlayerSilhouette : MonoBehaviour
 
 	private void OnEnable()
 	{
-		if (!s_Instances.Contains(this))
+		if (!m_Instances.Contains(this))
 		{
-			s_Instances.Add(this);
+			m_Instances.Add(this);
 		}
 	}
 
 	private void OnDisable()
 	{
-		s_Instances.Remove(this);
+		m_Instances.Remove(this);
 	}
 
 	private void Start()
@@ -122,11 +122,11 @@ public class PlayerSilhouette : MonoBehaviour
 	/// </summary>
 	public static void RefreshAll()
 	{
-		for (int i = 0; i < s_Instances.Count; i++)
+		for (int i = 0; i < m_Instances.Count; i++)
 		{
-			if (s_Instances[i] != null)
+			if (m_Instances[i] != null)
 			{
-				s_Instances[i].ApplyTeamSettings();
+				m_Instances[i].ApplyTeamSettings();
 			}
 		}
 	}
@@ -248,9 +248,9 @@ public class PlayerSilhouette : MonoBehaviour
 		Debug.Log("所属チームfallback実行");
 
 		// 2. シーン内の全インスタンスからIsOwnerであるものを探索(フォールバック)
-		for (int i = 0; i < s_Instances.Count; i++)
+		for (int i = 0; i < m_Instances.Count; i++)
 		{
-			var instance = s_Instances[i];
+			var instance = m_Instances[i];
 			if (instance != null && instance.m_NetworkObject != null && instance.m_NetworkObject.IsOwner)
 			{
 				if (instance.m_Profile != null && instance.m_Profile.Team != ETeamType.None)

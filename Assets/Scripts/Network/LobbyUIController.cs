@@ -3,6 +3,7 @@ using System.Text;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -47,13 +48,17 @@ public class LobbyUIController : MonoBehaviour
 	public struct ColorPaletteItem
 	{
 		[Tooltip("対象のハイライトカラー種別")]
-		public EHighlightColor ColorType;
+		[FormerlySerializedAs("ColorType")]
+		public EHighlightColor m_ColorType;
 		[Tooltip("クリック可能なボタン")]
-		public Button Button;
+		[FormerlySerializedAs("Button")]
+		public Button m_Button;
 		[Tooltip("カラープレビュー用のImage(任意)")]
-		public Image ColorImage;
+		[FormerlySerializedAs("ColorImage")]
+		public Image m_ColorImage;
 		[Tooltip("現在選択中を示す枠線やアイコン(任意)")]
-		public GameObject SelectedIndicator;
+		[FormerlySerializedAs("SelectedIndicator")]
+		public GameObject m_SelectedIndicator;
 	}
 
 	[Header("サブカラーパレットUI参照(案B)")]
@@ -191,9 +196,9 @@ public class LobbyUIController : MonoBehaviour
 			for (int i = 0; i < m_ColorPaletteItems.Length; i++)
 			{
 				var item = m_ColorPaletteItems[i];
-				if (item.Button != null)
+				if (item.m_Button != null)
 				{
-					item.Button.onClick.AddListener(() => m_LobbyManager?.SetHighlightColor(item.ColorType));
+					item.m_Button.onClick.AddListener(() => m_LobbyManager?.SetHighlightColor(item.m_ColorType));
 				}
 			}
 		}
@@ -424,13 +429,13 @@ public class LobbyUIController : MonoBehaviour
 			for (int i = 0; i < m_ColorPaletteItems.Length; i++)
 			{
 				var item = m_ColorPaletteItems[i];
-				if (item.Button != null)
+				if (item.m_Button != null)
 				{
-					item.Button.interactable = !isReady && isSeated;
+					item.m_Button.interactable = !isReady && isSeated;
 				}
-				if (item.SelectedIndicator != null)
+				if (item.m_SelectedIndicator != null)
 				{
-					item.SelectedIndicator.SetActive(isSeated && item.ColorType == localPlayer.HighlightColor);
+					item.m_SelectedIndicator.SetActive(isSeated && item.m_ColorType == localPlayer.HighlightColor);
 				}
 			}
 		}

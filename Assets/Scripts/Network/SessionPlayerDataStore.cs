@@ -14,7 +14,7 @@ public class SessionPlayerDataStore : MonoBehaviour
 	// サーバー上で各ClientIdの設定データを保持するキャッシュ
 	private readonly Dictionary<ulong, LobbyPlayerData> m_PlayerDataCache = new Dictionary<ulong, LobbyPlayerData>();
 
-	private bool IsServer => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
+	private bool IsServer { get => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer; }
 
 	private void Awake()
 	{

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 地上・曲面・壁面でのカメラ基準歩行移動・運動量転送・ダウンフォース・姿勢回転を担当するコンポーネント。
@@ -37,32 +37,32 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 	/// <summary>
 	/// 現在の接平面進行方向ベクトルを取得します。
 	/// </summary>
-	public Vector3 CurrentMoveDirection => m_LastMoveDirection;
+	public Vector3 CurrentMoveDirection { get => m_LastMoveDirection; }
 
 	/// <summary>
 	/// 現在の接平面走破速度の絶対値を取得します。
 	/// </summary>
-	public float CurrentPlaneSpeed => m_LastPlaneSpeed;
+	public float CurrentPlaneSpeed { get => m_LastPlaneSpeed; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームで適用されたスナップ速度を取得します。
 	/// </summary>
-	public Vector3 LastSnapVelocity => m_LastSnapVelocity;
+	public Vector3 LastSnapVelocity { get => m_LastSnapVelocity; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームで適用されたダウンフォースを取得します。
 	/// </summary>
-	public Vector3 LastDownforce => m_LastDownforce;
+	public Vector3 LastDownforce { get => m_LastDownforce; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームの法線角度差(0:平坦〜1:直角)を取得します。
 	/// </summary>
-	public float LastNormalDiff => m_LastNormalDiff;
+	public float LastNormalDiff { get => m_LastNormalDiff; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームの入力ベクトル(WASD)を取得します。
 	/// </summary>
-	public Vector2 CurrentMoveInput => m_MoveInput;
+	public Vector2 CurrentMoveInput { get => m_MoveInput; }
 
 	private void Awake()
 	{

@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// ロビー画面において、各チームの台座(ペデスタル)上にキャラクター3Dモデルを表示・同期制御するマネージャークラス。
@@ -40,8 +41,8 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 		private MaterialPropertyBlock m_ModelPropertyBlock;
 		private MaterialPropertyBlock m_PedestalPropertyBlock;
 
-		public Transform SpawnPoint => m_SpawnPoint;
-		public Renderer PedestalRenderer => m_PedestalRenderer;
+		public Transform SpawnPoint { get => m_SpawnPoint; }
+		public Renderer PedestalRenderer { get => m_PedestalRenderer; }
 
 		/// <summary>
 		/// スロットのモデル表示状態および台座演出を更新します。
@@ -194,13 +195,16 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 	public struct HighlightColorMaterialMapping
 	{
 		[Tooltip("対象のカラー種別")]
-		public EHighlightColor ColorType;
+		[FormerlySerializedAs("ColorType")]
+		public EHighlightColor m_ColorType;
 
 		[Tooltip("ModelAに適用する専用マテリアル(未設定時はフォールバックカラーを使用)")]
-		public Material MaterialModelA;
+		[FormerlySerializedAs("MaterialModelA")]
+		public Material m_MaterialModelA;
 
 		[Tooltip("ModelBに適用する専用マテリアル(未設定時はフォールバックカラーを使用)")]
-		public Material MaterialModelB;
+		[FormerlySerializedAs("MaterialModelB")]
+		public Material m_MaterialModelB;
 	}
 
 	[Header("マネージャー参照")]
@@ -319,10 +323,10 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 
 		for (int i = 0; i < m_HighlightMaterials.Length; i++)
 		{
-			if (m_HighlightMaterials[i].ColorType == colorType)
+			if (m_HighlightMaterials[i].m_ColorType == colorType)
 			{
-				matA = m_HighlightMaterials[i].MaterialModelA;
-				matB = m_HighlightMaterials[i].MaterialModelB;
+				matA = m_HighlightMaterials[i].m_MaterialModelA;
+				matB = m_HighlightMaterials[i].m_MaterialModelB;
 				return;
 			}
 		}

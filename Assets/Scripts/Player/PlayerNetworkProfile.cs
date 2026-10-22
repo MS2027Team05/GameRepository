@@ -29,10 +29,10 @@ public class PlayerNetworkProfile : NetworkBehaviour
 		NetworkVariableReadPermission.Everyone,
 		NetworkVariableWritePermission.Server);
 
-	public string PlayerName => m_PlayerName.Value.ToString();
-	public ETeamType Team => m_Team.Value;
-	public ECharacterType CharacterType => m_CharacterType.Value;
-	public EHighlightColor HighlightColor => m_HighlightColor.Value;
+	public string PlayerName { get => m_PlayerName.Value.ToString(); }
+	public ETeamType Team { get => m_Team.Value; }
+	public ECharacterType CharacterType { get => m_CharacterType.Value; }
+	public EHighlightColor HighlightColor { get => m_HighlightColor.Value; }
 
 	/// <summary>プロファイル(名前・チーム・カラー等)が変更された際に発火するイベント</summary>
 	public event Action OnProfileChanged;

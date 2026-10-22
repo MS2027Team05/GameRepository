@@ -40,15 +40,15 @@ public class LobbyManager : NetworkBehaviour
 	// 参加者情報のネットワーク同期リスト
 	private readonly NetworkList<LobbyPlayerData> m_LobbyPlayers = new NetworkList<LobbyPlayerData>();
 
-	public NetworkList<LobbyPlayerData> LobbyPlayers => m_LobbyPlayers;
-	public int ConnectedPlayerCount => m_LobbyPlayers.Count;
-	public int RequiredPlayerCount => m_CurrentRequiredPlayers;
-	public bool UseLevelDesignScene => m_UseLevelDesignScene;
-	public string HostIpAddress => m_CachedHostIp;
+	public NetworkList<LobbyPlayerData> LobbyPlayers { get => m_LobbyPlayers; }
+	public int ConnectedPlayerCount { get => m_LobbyPlayers.Count; }
+	public int RequiredPlayerCount { get => m_CurrentRequiredPlayers; }
+	public bool UseLevelDesignScene { get => m_UseLevelDesignScene; }
+	public string HostIpAddress { get => m_CachedHostIp; }
 
-	public string TargetSceneName => m_UseLevelDesignScene
+	public string TargetSceneName { get => m_UseLevelDesignScene
 		? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
-		: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
+		: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)"); }
 
 	private void Awake()
 	{

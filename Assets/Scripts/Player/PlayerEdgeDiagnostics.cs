@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 
@@ -43,30 +43,30 @@ public class PlayerEdgeDiagnostics : MonoBehaviour
 	// 履歴・スナップショット用構造体
 	public struct SnapshotData
 	{
-		public float Time;
-		public Vector3 Position;
-		public Quaternion Rotation;
-		public Vector3 Up;
-		public Vector3 Velocity;
-		public Vector3 MoveDirection;
-		public Vector2 Input;
-		public bool IsGrounded;
-		public Vector3 CurrentGroundNormal;
-		public int LastDetectionStep;
-		public Vector3 LastDetectedNormal;
-		public Vector3 LastDetectedPoint;
-		public float GroundGap;
-		public float NormalDiff;
-		public Vector3 SnapVelocity;
-		public List<PlayerGroundDetector.DebugRayInfo> Rays;
+		public float Time { get; set; }
+		public Vector3 Position { get; set; }
+		public Quaternion Rotation { get; set; }
+		public Vector3 Up { get; set; }
+		public Vector3 Velocity { get; set; }
+		public Vector3 MoveDirection { get; set; }
+		public Vector2 Input { get; set; }
+		public bool IsGrounded { get; set; }
+		public Vector3 CurrentGroundNormal { get; set; }
+		public int LastDetectionStep { get; set; }
+		public Vector3 LastDetectedNormal { get; set; }
+		public Vector3 LastDetectedPoint { get; set; }
+		public float GroundGap { get; set; }
+		public float NormalDiff { get; set; }
+		public Vector3 SnapVelocity { get; set; }
+		public List<PlayerGroundDetector.DebugRayInfo> Rays { get; set; }
 
 		// 脱落時の最寄りコライダー解析
-		public bool HasClosestCollider;
-		public string ClosestColliderName;
-		public Vector3 ClosestPoint;
-		public Vector3 ClosestNormal;
-		public float DistanceToClosest;
-		public Vector3 ClosestObjectRotation;
+		public bool HasClosestCollider { get; set; }
+		public string ClosestColliderName { get; set; }
+		public Vector3 ClosestPoint { get; set; }
+		public Vector3 ClosestNormal { get; set; }
+		public float DistanceToClosest { get; set; }
+		public Vector3 ClosestObjectRotation { get; set; }
 	}
 
 	private readonly Queue<SnapshotData> m_HistoryBuffer = new Queue<SnapshotData>();
@@ -80,8 +80,8 @@ public class PlayerEdgeDiagnostics : MonoBehaviour
 
 	private readonly StringBuilder m_LogBuilder = new StringBuilder(512);
 
-	public SnapshotData LastFalloffSnapshot => m_LastFalloffSnapshot;
-	public bool HasFalloffSnapshot => m_HasFalloffSnapshot;
+	public SnapshotData LastFalloffSnapshot { get => m_LastFalloffSnapshot; }
+	public bool HasFalloffSnapshot { get => m_HasFalloffSnapshot; }
 
 	private void Awake()
 	{

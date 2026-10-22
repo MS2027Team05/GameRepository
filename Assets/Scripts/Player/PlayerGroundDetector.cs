@@ -35,12 +35,12 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 
 	public struct DebugRayInfo
 	{
-		public Vector3 Origin;
-		public Vector3 Direction;
-		public float Distance;
-		public bool Hit;
-		public Vector3 HitPoint;
-		public Vector3 HitNormal;
+		public Vector3 Origin { get; set; }
+		public Vector3 Direction { get; set; }
+		public float Distance { get; set; }
+		public bool Hit { get; set; }
+		public Vector3 HitPoint { get; set; }
+		public Vector3 HitNormal { get; set; }
 	}
 
 	private readonly List<DebugRayInfo> m_DebugRays = new List<DebugRayInfo>();
@@ -57,37 +57,37 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 	/// <summary>
 	/// 地面または壁面に接地しているかを取得します。
 	/// </summary>
-	public bool IsGrounded => m_IsGrounded;
+	public bool IsGrounded { get => m_IsGrounded; }
 
 	/// <summary>
 	/// 現在の接地面法線ベクトルを取得します。
 	/// </summary>
-	public Vector3 CurrentGroundNormal => m_CurrentGroundNormal;
+	public Vector3 CurrentGroundNormal { get => m_CurrentGroundNormal; }
 
 	/// <summary>
 	/// 足元理想位置と地面接触点との高低差(浮きギャップ)を取得します。
 	/// </summary>
-	public float GroundGap => m_GroundGap;
+	public float GroundGap { get => m_GroundGap; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームで実行されたRaycast一覧を取得します。
 	/// </summary>
-	public IReadOnlyList<DebugRayInfo> DebugRays => m_DebugRays;
+	public IReadOnlyList<DebugRayInfo> DebugRays { get => m_DebugRays; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームで接地を検出した判定ステップ(0:なし, 1:凹角壁, 2:足元SphereCast, 3:角近傍Ray)を取得します。
 	/// </summary>
-	public int LastDetectionStep => m_LastDetectionStep;
+	public int LastDetectionStep { get => m_LastDetectionStep; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームで検出された面の法線を取得します。
 	/// </summary>
-	public Vector3 LastDetectedNormal => m_LastDetectedNormal;
+	public Vector3 LastDetectedNormal { get => m_LastDetectedNormal; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームで検出された面の接触点を取得します。
 	/// </summary>
-	public Vector3 LastDetectedPoint => m_LastDetectedPoint;
+	public Vector3 LastDetectedPoint { get => m_LastDetectedPoint; }
 
 	private void Awake()
 	{
