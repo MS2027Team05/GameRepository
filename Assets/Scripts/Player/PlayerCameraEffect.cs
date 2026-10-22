@@ -1,4 +1,4 @@
-﻿using Unity.Cinemachine;
+using Unity.Cinemachine;
 using Unity.Netcode;
 using UnityEngine;
 using DG.Tweening;
@@ -50,7 +50,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 	private Coroutine m_FOVCoroutine;
 	private PlayerInputReceiver m_InputReceiver;
-	private IGravityMover m_GravityMover;
+	private IGroundDetector m_GroundDetector;
 	private NetworkObject m_NetworkObject;
 	private Vector3 m_PositionVelocity;
 	private Vector3 m_CurrentUp = Vector3.up;
@@ -67,7 +67,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	private void Awake()
 	{
 		m_InputReceiver = GetComponent<PlayerInputReceiver>();
-		m_GravityMover = GetComponent<IGravityMover>();
+		m_GroundDetector = GetComponent<IGroundDetector>();
 		m_NetworkObject = GetComponent<NetworkObject>();
 
 		if (m_CameraPivot == null && m_CinemachineCamera != null)
@@ -89,8 +89,8 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			// 親(Player)の回転に引きずられないよう階層を独立化
 			m_CameraPivot.SetParent(null);
 
-			m_CurrentUp = (m_GravityMover != null && m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
-				? m_GravityMover.CurrentGroundNormal
+			m_CurrentUp = (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
+				? m_GroundDetector.CurrentGroundNormal
 				: transform.up;
 
 			m_PlanarForward = Vector3.ProjectOnPlane(transform.forward, m_CurrentUp);
@@ -124,66 +124,33 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		if (!m_IsResettingView)
 		{
 			// 目標とする接地面法線(未接地時はtransform.up)
-			Vector3 targetUp =
-				(m_GravityMover != null &&
-				 m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
-				? m_GravityMover.CurrentGroundNormal
+			Vector3 targetUp = (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
+				? m_GroundDetector.CurrentGroundNormal
 				: transform.up;
 
-			// カメラのUpベクトルを滑らかに追従させる
-			float maxDegPerSec =
-				m_MaxNormalDegreesPerSecond > 0f
-				? m_MaxNormalDegreesPerSecond
-				: 90.0f;
+			// カメラのUpベクトル追従: RotateTowardsによる角速度上限で初速スパイクを排除しふわりと追従
+			float maxDegPerSec = m_MaxNormalDegreesPerSecond > 0f ? m_MaxNormalDegreesPerSecond : 90.0f;
+			float alignSpeed = m_NormalAlignSpeed > 0f ? m_NormalAlignSpeed : 5.0f;
+			Vector3 slerpedUp = Vector3.Slerp(m_CurrentUp, targetUp, alignSpeed * Time.deltaTime);
+			Vector3 newUp = Vector3.RotateTowards(m_CurrentUp, slerpedUp, maxDegPerSec * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
 
-			float alignSpeed =
-				m_NormalAlignSpeed > 0f
-				? m_NormalAlignSpeed
-				: 5.0f;
-
-			Vector3 slerpedUp =
-				Vector3.Slerp(
-					m_CurrentUp,
-					targetUp,
-					alignSpeed * Time.deltaTime);
-
-			Vector3 newUp =
-				Vector3.RotateTowards(
-					m_CurrentUp,
-					slerpedUp,
-					maxDegPerSec * Mathf.Deg2Rad * Time.deltaTime,
-					0f).normalized;
-
-			// 接地面の変化に合わせて前方向を回転
-			Quaternion upRotation =
-				Quaternion.FromToRotation(m_CurrentUp, newUp);
-
-			m_PlanarForward =
-				(upRotation * m_PlanarForward).normalized;
-
+			// 法線の変化に合わせて水平視線ベクトル(m_PlanarForward)を回転追従
+			Quaternion upRotation = Quaternion.FromToRotation(m_CurrentUp, newUp);
+			m_PlanarForward = (upRotation * m_PlanarForward).normalized;
 			m_CurrentUp = newUp;
 
-			// マウス操作による視点回転
-			if (m_InputReceiver != null &&
-				Cursor.lockState == CursorLockMode.Locked)
+			// マウス操作によるYaw(水平旋回)・Pitch(垂直仰角)の更新
+			if (m_InputReceiver != null && Cursor.lockState == CursorLockMode.Locked)
 			{
 				Vector2 look = m_InputReceiver.LookInput;
 
-				// 水平旋回
+				// 水平旋回: 現在のUp(法線)を軸として接平面上の前方ベクトルを回転
 				float yawAngle = look.x * m_MouseSensitivity;
+				m_PlanarForward = (Quaternion.AngleAxis(yawAngle, m_CurrentUp) * m_PlanarForward).normalized;
 
-				m_PlanarForward =
-					(Quaternion.AngleAxis(
-						yawAngle,
-						m_CurrentUp) * m_PlanarForward).normalized;
-
-				// 上下の視点操作
+				// 垂直仰角: 接平面に対するチルト角を更新
 				m_Pitch -= look.y * m_MouseSensitivity;
-
-				m_Pitch = Mathf.Clamp(
-					m_Pitch,
-					m_MinPitchAngle,
-					m_MaxPitchAngle);
+				m_Pitch = Mathf.Clamp(m_Pitch, m_MinPitchAngle, m_MaxPitchAngle);
 			}
 		}
 		// 水平基底姿勢の決定
@@ -305,9 +272,9 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 		// 接地面の法線を取得
 		Vector3 upDirection =
-			(m_GravityMover != null &&
-			 m_GravityMover.CurrentGroundNormal.sqrMagnitude > 0.001f)
-			? m_GravityMover.CurrentGroundNormal.normalized
+			(m_GroundDetector != null &&
+			 m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
+			? m_GroundDetector.CurrentGroundNormal.normalized
 			: transform.up;
 
 		// プレイヤーの前方向を接地面に沿わせる

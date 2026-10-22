@@ -16,10 +16,9 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	[Header("着地マーカー")]
 	[SerializeField] private GameObject m_LandingMarker;
 
-	// 追加
 	[Header("落下制御")]
-	[SerializeField]
-	private GravityMover m_GravityMover;
+	private IGravityMover m_GravityMover;
+	private IGroundDetector m_GroundDetector;
 
 	[Header("Raycast設定")]
 	[SerializeField] private LayerMask m_AimTargetLayers;
@@ -74,11 +73,8 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	private void Awake()
 	{
 		m_Rigidbody = GetComponent<Rigidbody>();
-
-		if (m_GravityMover == null)
-		{
-			m_GravityMover = GetComponent<GravityMover>();
-		}
+		m_GravityMover = GetComponent<IGravityMover>();
+		m_GroundDetector = GetComponent<IGroundDetector>();
 
 		// カメラの通常時のローカル位置を最初に保存する
 		if (m_CinemachineCameraTransform != null)
@@ -111,8 +107,14 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		foreach (Renderer targetRenderer in allRenderers)
 		{
-			// 照準UI・予測線・着地マーカーは対象外
-			if (targetRenderer == m_AimLine ||
+			// 照準UI・予測線・着地マーカー・LineRenderer・テキスト用Rendererは対象外
+			if (targetRenderer == null ||
+				targetRenderer == m_AimLine ||
+				targetRenderer is LineRenderer ||
+				targetRenderer is TrailRenderer ||
+				targetRenderer is ParticleSystemRenderer ||
+				targetRenderer.GetComponent<TMPro.TMP_Text>() != null ||
+				targetRenderer.GetComponent<TMPro.TMP_SubMeshUI>() != null ||
 				IsChildOfObject(targetRenderer.transform, m_AimReticle) ||
 				IsChildOfObject(targetRenderer.transform, m_LandingMarker))
 			{
@@ -128,12 +130,31 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		for (int i = 0; i < m_PlayerRenderers.Length; i++)
 		{
-			// 元のマテリアルを保存
-			m_OriginalMaterials[i] = m_PlayerRenderers[i].sharedMaterials;
+			Material[] currentMaterials = m_PlayerRenderers[i].sharedMaterials;
+			List<Material> baseMaterials = new List<Material>();
+
+			for (int j = 0; j < currentMaterials.Length; j++)
+			{
+				Material mat = currentMaterials[j];
+				if (mat == null) continue;
+
+				// アウトライン・シルエット用シェーダーは半透明化の対象外とする
+				if (mat.shader != null &&
+					(mat.shader.name.Contains("PlayerOutline") ||
+					 mat.shader.name.Contains("OccludedSilhouette") ||
+					 mat.shader.name.Contains("ToolOccludedMask")))
+				{
+					continue;
+				}
+
+				baseMaterials.Add(mat);
+			}
+
+			// 元の本体マテリアルを保存
+			m_OriginalMaterials[i] = baseMaterials.ToArray();
 
 			// 元のマテリアルを変更しないように複製
-			m_TransparentMaterials[i] =
-				new Material[m_OriginalMaterials[i].Length];
+			m_TransparentMaterials[i] = new Material[m_OriginalMaterials[i].Length];
 
 			for (int j = 0; j < m_OriginalMaterials[i].Length; j++)
 			{
@@ -231,17 +252,47 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 			return;
 		}
 
-		for (int i = 0; i < m_PlayerRenderers.Length; i++)
-		{
-			if (m_PlayerRenderers[i] == null)
-			{
-				continue;
-			}
+		var silhouette = GetComponent<PlayerSilhouette>();
 
-			m_PlayerRenderers[i].sharedMaterials =
-				transparent
-					? m_TransparentMaterials[i]
-					: m_OriginalMaterials[i];
+		if (transparent)
+		{
+			// PlayerSilhouetteが存在する場合はアウトラインを合成して半透明化
+			if (silhouette != null)
+			{
+				silhouette.ApplyAimTransparentState(true, m_PlayerRenderers, m_TransparentMaterials);
+			}
+			else
+			{
+				for (int i = 0; i < m_PlayerRenderers.Length; i++)
+				{
+					if (m_PlayerRenderers[i] == null)
+					{
+						continue;
+					}
+
+					m_PlayerRenderers[i].sharedMaterials = m_TransparentMaterials[i];
+				}
+			}
+		}
+		else
+		{
+			// エイム終了時: PlayerSilhouetteが存在する場合はエイム状態解除で完全復元
+			if (silhouette != null)
+			{
+				silhouette.ApplyAimTransparentState(false, null, null);
+			}
+			else
+			{
+				for (int i = 0; i < m_PlayerRenderers.Length; i++)
+				{
+					if (m_PlayerRenderers[i] == null)
+					{
+						continue;
+					}
+
+					m_PlayerRenderers[i].sharedMaterials = m_OriginalMaterials[i];
+				}
+			}
 		}
 	}
 
@@ -277,8 +328,8 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		m_AimStartPosition = transform.position;
 
 		// 現在立っている面の法線方向を取得
-		Vector3 groundNormal = m_GravityMover != null
-			? m_GravityMover.CurrentGroundNormal
+		Vector3 groundNormal = m_GroundDetector != null
+			? m_GroundDetector.CurrentGroundNormal
 			: transform.up;
 
 		// 法線が取得できない場合はPlayerの上方向を使用
@@ -636,7 +687,7 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		rayDirection.Normalize();
 
-		// カメラ中央からRaycast
+		// 1. カメラ中央からRaycast
 		bool hasHit = Physics.Raycast(
 			rayOrigin,
 			rayDirection,
@@ -652,8 +703,46 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 			return;
 		}
 
+		Vector3 targetPoint = hit.point;
+		Vector3 targetNormal = hit.normal;
+
+		// 2. 角(エッジ)のフチを狙った際、足元が安全に乗るように面の内側へ安全インセット
+		// 接平面上で、カメラ視線の射影方向(面の奥側)に向かって安全マージン分(0.35m)シフトを試みる
+		Vector3 forwardOnPlane = Vector3.ProjectOnPlane(rayDirection, targetNormal);
+		if (forwardOnPlane.sqrMagnitude > 0.001f)
+		{
+			forwardOnPlane.Normalize();
+			Vector3 testPoint = targetPoint + forwardOnPlane * 0.35f;
+			// シフト先にも同じ面(地面)が存在するかチェック
+			if (Physics.Raycast(testPoint + targetNormal * 0.5f, -targetNormal, out RaycastHit insetHit, 1.0f, m_AimTargetLayers, QueryTriggerInteraction.Ignore))
+			{
+				if (Vector3.Dot(insetHit.normal, targetNormal) > 0.8f)
+				{
+					// 安全な面の内側が確認できた場合、着地点を面の内側に補正
+					targetPoint = insetHit.point;
+					targetNormal = insetHit.normal;
+				}
+			}
+		}
+
+		// 3. プレイヤー本体から目標地点への直進ライン上に手前の角が干渉していないか検証
+		Vector3 playerPos = transform.position;
+		Vector3 toTarget = targetPoint - playerPos;
+		float targetDist = toTarget.magnitude;
+		if (targetDist > 0.2f)
+		{
+			Vector3 flyDir = toTarget / targetDist;
+			// プレイヤーの足元・カプセル厚み(0.25m半径)を考慮したSphereCastで手前角の干渉をチェック
+			if (Physics.SphereCast(playerPos, 0.25f, flyDir, out RaycastHit obstacleHit, targetDist - 0.1f, m_AimTargetLayers, QueryTriggerInteraction.Ignore))
+			{
+				// 手前の角や側面に引っかかる場合、手前の接触面を実際の着地点として適用
+				targetPoint = obstacleHit.point;
+				targetNormal = obstacleHit.normal;
+			}
+		}
+
 		// 予測線の終点へ向かう方向を計算
-		m_AimTargetPoint = hit.point;
+		m_AimTargetPoint = targetPoint;
 
 		Vector3 moveDirection = m_AimTargetPoint - transform.position;
 
@@ -663,15 +752,15 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		}
 
 		// Playerの位置から着地点まで予測線を描画
-		UpdateAimLine(transform.position, hit.point);
+		UpdateAimLine(transform.position, targetPoint);
 
 		// 着地点にマーカーを表示
-		UpdateLandingMarker(hit.point, hit.normal);
+		UpdateLandingMarker(targetPoint, targetNormal);
 
 		// 着地点と法線をGravityMoverへ渡す
 		if (m_GravityMover != null)
 		{
-			m_GravityMover.SetFallingTarget(hit.point, hit.normal);
+			m_GravityMover.SetFallingTarget(targetPoint, targetNormal);
 		}
 	}
 
