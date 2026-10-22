@@ -183,13 +183,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private void RotatePlayerTowardAim(Vector3 aimDirection)
 	{
 		// 現在立っている面の法線を取得
-		Vector3 surfaceNormal = m_GravityMover.CurrentGroundNormal;
-
-		// 法線が無効な場合は、プレイヤーの上方向を使用
-		if (surfaceNormal.sqrMagnitude < 0.001f)
-		{
-			surfaceNormal = transform.up;
-		}
+		Vector3 surfaceNormal = (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
+			? m_GroundDetector.CurrentGroundNormal
+			: transform.up;
 
 		surfaceNormal.Normalize();
 
@@ -401,7 +397,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (CurrentState == EPlayerState.Idle)
 		{
 			// Idle状態でも、実際に接地しているか確認
-			if (!m_GravityMover.IsGrounded)
+			if (m_GroundDetector == null || !m_GroundDetector.IsGrounded)
 			{
 				Debug.Log("[ViewReset] 未接地のためリセットを中止しました。");
 				return;
@@ -410,7 +406,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		// Falling状態は、接地していて移動も終了している場合のみ許可
 		else if (CurrentState == EPlayerState.Falling)
 		{
-			if (m_GravityMover.IsFalling || !m_GravityMover.IsGrounded)
+			if (m_GravityMover.IsFalling || m_GroundDetector == null || !m_GroundDetector.IsGrounded)
 			{
 				Debug.Log("[ViewReset] 移動中または未接地のためリセットを中止しました。");
 				return;
