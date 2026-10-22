@@ -332,11 +332,6 @@ MonoBehaviour:
   m_AttachSurfaceMask:
     serializedVersion: 2
     m_Bits: 128
-  m_BounceSpeedThreshold: 5
-  m_BounceNormalRetention: 0.8
-  m_BounceTangentialRetention: 0.8
-  m_MinBounceNormalSpeed: 3
-  m_MaxBounceNormalSpeed: 20
   m_AttractStartSpeed: 35
   m_AttractSearchDistance: 10
   m_AttractReleaseDistance: 15
@@ -346,8 +341,18 @@ MonoBehaviour:
   m_AttractAccelerationCurve: 2
   m_AttractDeceleration: 0.5
   m_AttractMaxSpeed: 50
-  m_SurfaceMoveDeceleration: 4
-  m_SurfaceStopSpeedThreshold: 1
+  m_CollisionNormalRetention: 0.8
+  m_CollisionTangentialRetention: 0.8
+  m_MinCollisionNormalSpeed: 3
+  m_MaxCollisionNormalSpeed: 20
+  m_SurfaceGravityAcceleration: 30
+  m_SurfaceBounceSpeedThreshold: 3
+  m_SurfaceBounceNormalRetention: 0.65
+  m_SurfaceBounceTangentialRetention: 0.85
+  m_SurfaceMinBounceNormalSpeed: 2
+  m_SurfaceMaxBounceNormalSpeed: 15
+  m_SurfaceGroundDeceleration: 3
+  m_SurfaceStopSpeedThreshold: 0.2
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4

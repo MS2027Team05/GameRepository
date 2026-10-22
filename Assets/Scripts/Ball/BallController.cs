@@ -374,11 +374,19 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		m_Rigidbody.linearVelocity =
-			Vector3.zero;
+		// Dynamic状態の場合だけ速度を停止します。
+		//
+		// Surface Physics中は既にKinematicなので、
+		// Kinematic RigidbodyへlinearVelocity / angularVelocityを
+		// 設定するとUnityから警告が発生します。
+		if (!m_Rigidbody.isKinematic)
+		{
+			m_Rigidbody.linearVelocity =
+				Vector3.zero;
 
-		m_Rigidbody.angularVelocity =
-			Vector3.zero;
+			m_Rigidbody.angularVelocity =
+				Vector3.zero;
+		}
 
 		m_Rigidbody.isKinematic =
 			true;
@@ -422,6 +430,7 @@ public class BallController : NetworkBehaviour
 
 		return true;
 	}
+
 
 	/// <summary>
 	/// Host上でボールと所持者の親子関係を解除し、
