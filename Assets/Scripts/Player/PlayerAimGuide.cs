@@ -66,6 +66,9 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	// 予測線に沿った実際の移動方向
 	public Vector3 AimMoveDirection { get; private set; }
 
+	// 移動中専用のエイムかどうか
+	private bool m_IsMidFallAimGuide;
+
 	private Rigidbody m_Rigidbody;
 
 	private void Awake()
@@ -362,6 +365,54 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		ClearAimLine();
 	}
 
+	/// <summary>
+	/// 移動中専用のエイムを開始します。
+	/// Playerを浮上させず、物理移動も停止しません。
+	/// </summary>
+	public void StartMidFallAimGuide()
+	{
+		// すでにエイム中、または戻るアニメーション中なら開始しない
+		if (m_IsAiming || m_IsReturning)
+		{
+			return;
+		}
+
+		// 通常のエイムと区別する
+		m_IsMidFallAimGuide = true;
+		m_IsAiming = true;
+
+		// 移動中エイム開始時のカメラ位置を保存
+		if (m_CinemachineCameraTransform != null)
+		{
+			m_AimStartCameraLocalPosition =
+				m_CinemachineCameraTransform.localPosition;
+
+			// カメラの右・上・前方向を基準に肩越し位置を計算
+			Vector3 shoulderWorldOffset =
+				m_CinemachineCameraTransform.right * m_AimCameraShoulderOffset.x
+				+ m_CinemachineCameraTransform.up * m_AimCameraShoulderOffset.y
+				+ m_CinemachineCameraTransform.forward * m_AimCameraShoulderOffset.z;
+
+			Transform cameraParent = m_CinemachineCameraTransform.parent;
+
+			Vector3 localShoulderOffset = cameraParent != null
+				? cameraParent.InverseTransformVector(shoulderWorldOffset)
+				: shoulderWorldOffset;
+
+			Vector3 targetCameraLocalPosition =
+				m_AimStartCameraLocalPosition + localShoulderOffset;
+
+			// カメラだけを肩越し位置へ移動
+			m_CinemachineCameraTransform.DOLocalMove(
+				targetCameraLocalPosition,
+				Mathf.Max(0.01f, m_AimFloatDuration))
+				.SetEase(Ease.OutCubic);
+		}
+
+		// 移動中はPlayerの透明化もしない
+		SetAimGuideActive(true);
+		ClearAimLine();
+	}
 
 	/// <summary>
 	/// 移動キャンセル時のエイム解除です。
@@ -479,6 +530,37 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		m_IsAiming = false;
 
+		SetAimGuideActive(false);
+		ClearAimLine();
+	}
+
+	/// <summary>
+	/// 移動中専用のエイムを終了します。
+	/// 移動を停止せず、カメラだけを通常位置へ戻します。
+	/// </summary>
+	public void EndMidFallAimGuide()
+	{
+		if (!m_IsMidFallAimGuide)
+		{
+			return;
+		}
+
+		// カメラの移動アニメーションがあれば停止
+		if (m_CinemachineCameraTransform != null)
+		{
+			m_CinemachineCameraTransform.DOKill();
+
+			// カメラだけを通常位置へ戻す
+			m_CinemachineCameraTransform.localPosition =
+				m_AimStartCameraLocalPosition;
+		}
+
+		// エイム状態を解除
+		m_IsMidFallAimGuide = false;
+		m_IsAiming = false;
+		m_IsReturning = false;
+
+		// 予測線・マーカーを消す
 		SetAimGuideActive(false);
 		ClearAimLine();
 	}

@@ -598,7 +598,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4203264452
+  GlobalObjectIdHash: 4273467025
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -704,6 +704,7 @@ MonoBehaviour:
   m_ConfirmAction: {fileID: 0}
   m_BrakeAction: {fileID: 0}
   m_ShootAction: {fileID: 0}
+  m_ViewResetAction: {fileID: 0}
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -719,6 +720,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_PlayerCameraObject: {fileID: 6176978571518227029}
   m_InputReceiver: {fileID: 60831561983994870}
+  m_CinemachineCameraTransform: {fileID: 5892072697104370858}
 --- !u!114 &6506262699355711857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -849,6 +851,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  m_ViewResetDuration: 0.4
 --- !u!114 &-4640382079411939406
 MonoBehaviour:
   m_ObjectHideFlags: 0

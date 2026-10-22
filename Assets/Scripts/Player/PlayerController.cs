@@ -14,6 +14,8 @@ public class PlayerController : NetworkBehaviour
 	[SerializeField] private GameObject m_PlayerCameraObject;
 	[FormerlySerializedAs("inputReceiver")]
 	[SerializeField] private PlayerInputReceiver m_InputReceiver;
+	[FormerlySerializedAs("CinemachineCameraTransform")]
+	[SerializeField] private Transform m_CinemachineCameraTransform;
 
 	// 各担当者が実装するインターフェース・コンポーネント参照
 	private IGravityMover m_GravityMover;
@@ -26,6 +28,12 @@ public class PlayerController : NetworkBehaviour
 	public EPlayerState CurrentState { get; private set; } = EPlayerState.Idle;
 
 	private Coroutine m_StunCoroutine;
+
+	// 今回の移動中にエイムを使用したか
+	private bool m_UsedMidFallAim;
+
+	// 現在、移動中エイムを行っているか
+	private bool m_IsMidFallAiming;
 
 	private void Awake()
 	{
@@ -75,6 +83,7 @@ public class PlayerController : NetworkBehaviour
 		m_InputReceiver.OnConfirmPressed += HandleConfirm;
 		m_InputReceiver.OnBrakePressed += HandleBrake;
 		m_InputReceiver.OnShootPressed += HandleShoot;
+		m_InputReceiver.OnViewResetPressed += HandleViewReset;
 	}
 
 	private void UnbindInputEvents()
@@ -85,18 +94,31 @@ public class PlayerController : NetworkBehaviour
 		m_InputReceiver.OnConfirmPressed -= HandleConfirm;
 		m_InputReceiver.OnBrakePressed -= HandleBrake;
 		m_InputReceiver.OnShootPressed -= HandleShoot;
+		m_InputReceiver.OnViewResetPressed -= HandleViewReset;
 	}
 
 	private void Update()
 	{
 		if (!IsOwner) return;
 
-		// エイム中のみ、実際に画面を描画しているカメラの
-		// 正面ベクトルを照準・予測線へ渡します。
+		// 着地などで移動が終了したら使用回数をリセット
+		if (CurrentState != EPlayerState.Aiming &&
+			(m_GravityMover == null || !m_GravityMover.IsFalling))
+		{
+			m_UsedMidFallAim = false;
+			m_IsMidFallAiming = false;
+		}
+
+		// エイム中のみ、照準方向を更新する
 		if (CurrentState == EPlayerState.Aiming && m_AimGuide != null)
 		{
 			Vector3 aimDirection = GetAimDirection();
+
+			// 照準・予測線を更新
 			m_AimGuide.UpdateAimDirection(aimDirection);
+
+			// 【変更】現在の立ち面に合わせてプレイヤーを回転させる
+			RotatePlayerTowardAim(aimDirection);
 		}
 
 		// 地上移動入力のルーティング(スタン中やエイム中でない場合に伝達)
@@ -112,6 +134,69 @@ public class PlayerController : NetworkBehaviour
 
 			m_GravityMover.SetMoveInput(moveInput, camTransform);
 		}
+	}
+
+	/// <summary>
+	/// 現在の立ち面に沿って、プレイヤーを照準方向へ回転させます。
+	/// 床・壁・斜面のいずれでも、立ち面の法線を軸に回転します。
+	/// </summary>
+	private void RotatePlayerTowardAim(Vector3 aimDirection)
+	{
+		// 現在立っている面の法線を取得
+		Vector3 surfaceNormal = m_GravityMover.CurrentGroundNormal;
+
+		// 法線が無効な場合は、プレイヤーの上方向を使用
+		if (surfaceNormal.sqrMagnitude < 0.001f)
+		{
+			surfaceNormal = transform.up;
+		}
+
+		surfaceNormal.Normalize();
+
+		// 照準方向を立ち面に沿う平面へ投影
+		Vector3 projectedAim = Vector3.ProjectOnPlane(
+			aimDirection,
+			surfaceNormal
+		);
+
+		// 照準が立ち面に対してほぼ垂直なら回転しない
+		if (projectedAim.sqrMagnitude < 0.001f)
+		{
+			return;
+		}
+
+		// 現在のプレイヤーの正面方向も、同じ平面へ投影
+		Vector3 projectedForward = Vector3.ProjectOnPlane(
+			transform.forward,
+			surfaceNormal
+		);
+
+		// 現在の正面方向が取得できない場合は回転しない
+		if (projectedForward.sqrMagnitude < 0.001f)
+		{
+			return;
+		}
+
+		projectedAim.Normalize();
+		projectedForward.Normalize();
+
+		// 立ち面の法線を軸に、現在の正面から照準方向までの角度を取得
+		float angle = Vector3.SignedAngle(
+			projectedForward,
+			projectedAim,
+			surfaceNormal
+		);
+
+		// 立ち面の法線を軸として回転
+		Quaternion targetRotation =
+			Quaternion.AngleAxis(angle, surfaceNormal) * transform.rotation;
+
+		// 滑らかに回転
+		transform.rotation = Quaternion.Slerp(
+			transform.rotation,
+			targetRotation,
+			Time.deltaTime * 100.0f
+		);
 	}
 
 	/// <summary>
@@ -138,19 +223,50 @@ public class PlayerController : NetworkBehaviour
 	{
 		if (CurrentState == EPlayerState.Stunned) return;
 
-		//↓落下中にエイムが不可能になるコード。着地先ミスったら一生飛ぶので、時が来るまでコメントアウト
-		//if (CurrentState != EPlayerState.Aiming && !m_GravityMover.IsFalling)
+		// エイム開始
 		if (CurrentState != EPlayerState.Aiming)
 		{
+			// 移動中の場合
+			if (m_GravityMover != null && m_GravityMover.IsFalling)
+			{
+				// 今回の移動中にすでに使っていたら開始しない
+				if (m_UsedMidFallAim) return;
+
+				m_UsedMidFallAim = true;
+				m_IsMidFallAiming = true;
+				CurrentState = EPlayerState.Aiming;
+
+				// 移動中専用のエイムを開始
+				if (m_AimGuide is PlayerAimGuide playerAimGuide)
+				{
+					playerAimGuide.StartMidFallAimGuide();
+				}
+
+				return;
+			}
+
+			// 通常時のエイム開始
+			m_IsMidFallAiming = false;
 			CurrentState = EPlayerState.Aiming;
-			m_GravityMover?.StopFalling();
 			m_AimGuide?.ShowAimGuide(true);
 		}
 		else
 		{
-			CurrentState = EPlayerState.Idle;
+			// 移動中エイムのキャンセル
+			if (m_IsMidFallAiming)
+			{
+				if (m_AimGuide is PlayerAimGuide playerAimGuide)
+				{
+					playerAimGuide.EndMidFallAimGuide();
+				}
 
-			// 右クリックによるエイム解除ではPlayerとCameraを元の位置に戻す
+				m_IsMidFallAiming = false;
+				CurrentState = EPlayerState.Falling;
+				return;
+			}
+
+			// 通常エイムのキャンセル
+			CurrentState = EPlayerState.Idle;
 			m_AimGuide?.CancelAimGuide();
 		}
 	}
@@ -159,20 +275,35 @@ public class PlayerController : NetworkBehaviour
 	{
 		if (CurrentState != EPlayerState.Aiming) return;
 
-		CurrentState = EPlayerState.Falling;
-
-		// カメラの向きではなく、予測線から求めた方向を使う
+		// エイム終了前に移動方向を取得
 		Vector3 direction = transform.forward;
 
 		if (m_AimGuide is PlayerAimGuide playerAimGuide)
 		{
 			direction = playerAimGuide.AimMoveDirection;
+
+			if (m_IsMidFallAiming)
+			{
+				// 移動中専用のエイムを終了
+				playerAimGuide.EndMidFallAimGuide();
+			}
+			else
+			{
+				// 通常エイムの終了
+				m_AimGuide?.EndAimGuideForMovement();
+			}
+		}
+		else
+		{
+			m_AimGuide?.EndAimGuideForMovement();
 		}
 
-		// 左クリックによる移動開始ではCameraだけを通常位置に戻す
-		m_AimGuide?.EndAimGuideForMovement();
+		CurrentState = EPlayerState.Falling;
+		m_IsMidFallAiming = false;
 
 		m_CameraEffect?.PlayFallEffect();
+
+		// 予測線で指定した方向・着地点へ移動
 		m_GravityMover?.StartFalling(direction);
 	}
 
@@ -182,6 +313,10 @@ public class PlayerController : NetworkBehaviour
 
 		CurrentState = EPlayerState.Idle;
 		m_GravityMover?.StopFalling();
+
+		// 移動終了時に使用回数をリセット
+		m_UsedMidFallAim = false;
+		m_IsMidFallAiming = false;
 	}
 
 	/// <summary>
@@ -199,9 +334,68 @@ public class PlayerController : NetworkBehaviour
 			return;
 		}
 
+		if (m_GravityMover.IsFalling && !m_IsMidFallAiming)
+
+		{
+			return;
+		}
+
 		Vector3 shootDirection = GetAimDirection();
 
 		m_BallCarrier.Shoot(shootDirection);
+	}
+
+
+	/// <summary>
+	/// Rキーによる視点リセット処理。
+	/// </summary>
+	private void HandleViewReset()
+	{
+		// GravityMoverがなければ処理しない
+		if (m_GravityMover == null)
+		{
+			return;
+		}
+
+		// Idle状態は通常どおりリセット可能
+		if (CurrentState == EPlayerState.Idle)
+		{
+			// Idle状態でも、実際に接地しているか確認
+			if (!m_GravityMover.IsGrounded)
+			{
+				Debug.Log("[ViewReset] 未接地のためリセットを中止しました。");
+				return;
+			}
+		}
+		// Falling状態は、接地していて移動も終了している場合のみ許可
+		else if (CurrentState == EPlayerState.Falling)
+		{
+			if (m_GravityMover.IsFalling || !m_GravityMover.IsGrounded)
+			{
+				Debug.Log("[ViewReset] 移動中または未接地のためリセットを中止しました。");
+				return;
+			}
+		}
+		// Aiming・Stunned状態ではリセットしない
+		else
+		{
+			return;
+		}
+
+		// カメラ制御スクリプトを取得
+		PlayerCameraEffect cameraEffect =
+			GetComponent<PlayerCameraEffect>();
+
+		if (cameraEffect == null)
+		{
+			Debug.LogWarning("[ViewReset] PlayerCameraEffect が見つかりません。");
+			return;
+		}
+
+		// 視点をプレイヤーの前方向にリセット
+		cameraEffect.ResetView();
+
+		Debug.Log("[ViewReset] 視点リセットを実行しました。");
 	}
 
 	// --- 外部モジュール連携用メソッド ---

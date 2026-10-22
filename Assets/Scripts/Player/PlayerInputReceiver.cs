@@ -21,7 +21,8 @@ public class PlayerInputReceiver : MonoBehaviour
 	[SerializeField] private InputActionReference m_BrakeAction;
 	[FormerlySerializedAs("shootAction")]
 	[SerializeField] private InputActionReference m_ShootAction;
-
+	[FormerlySerializedAs("viewResetAction")]
+	[SerializeField] private InputActionReference m_ViewResetAction;
 	/// <summary>地上移動入力ベクトル(WASD/左スティック)</summary>
 	public Vector2 MoveInput { get; private set; }
 
@@ -39,6 +40,9 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	/// <summary>シュートボタン押下イベント。</summary>
 	public event Action OnShootPressed;
+
+	/// <summary>視点リセットボタン押下イベント</summary>
+	public event Action OnViewResetPressed;
 
 	/// <summary>
 	/// マウスカーソルのロック状態・表示状態を設定します。
@@ -58,6 +62,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		BindAction(m_ConfirmAction, HandleConfirm);
 		BindAction(m_BrakeAction, HandleBrake);
 		BindAction(m_ShootAction, HandleShoot);
+		BindAction(m_ViewResetAction, HandleViewReset);
 	}
 
 	private void OnDisable()
@@ -68,6 +73,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		UnbindAction(m_ConfirmAction, HandleConfirm);
 		UnbindAction(m_BrakeAction, HandleBrake);
 		UnbindAction(m_ShootAction, HandleShoot);
+		UnbindAction(m_ViewResetAction, HandleViewReset);
 	}
 
 	private void Update()
@@ -208,6 +214,11 @@ public class PlayerInputReceiver : MonoBehaviour
 		OnShootPressed?.Invoke();
 	}
 
+	private void HandleViewReset(InputAction.CallbackContext context)
+	{
+		OnViewResetPressed?.Invoke();
+	}
+
 	private void HandleKeyboardFallback()
 	{
 		if (Keyboard.current == null && Gamepad.current == null) return;
@@ -260,6 +271,16 @@ public class PlayerInputReceiver : MonoBehaviour
 			if (shootPressed)
 			{
 				OnShootPressed?.Invoke();
+			}
+		}
+
+		// 視点リセット：Rキー
+		if (m_ViewResetAction == null)
+		{
+			if (Keyboard.current != null &&
+				Keyboard.current.rKey.wasPressedThisFrame)
+			{
+				OnViewResetPressed?.Invoke();
 			}
 		}
 	}
