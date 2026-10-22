@@ -7,7 +7,7 @@ using UnityEngine.Serialization;
 /// プレイヤー全体の「状態管理(ステート)」と「各専門モジュールへの命令ルーティング」を担当するクラス。
 /// 自ら物理計算や描画は行わず、インターフェース経由で各モジュールに委託します。
 /// </summary>
-public class PlayerController : NetworkBehaviour
+public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 {
 	[Header("自端末専用オブジェクト")]
 	[FormerlySerializedAs("playerCameraObject")]
@@ -399,6 +399,37 @@ public class PlayerController : NetworkBehaviour
 	}
 
 	// --- 外部モジュール連携用メソッド ---
+
+	/// <summary>
+	/// 場外へ出たプレイヤーを指定位置へ復帰させます。
+	/// </summary>
+	/// <param name="position">復帰先のワールド座標</param>
+	/// <param name="rotation">復帰先のワールド回転</param>
+	public void Respawn(Vector3 position, Quaternion rotation)
+	{
+		if (!IsOwner)
+		{
+			return;
+		}
+
+		if (m_StunCoroutine != null)
+		{
+			StopCoroutine(m_StunCoroutine);
+			m_StunCoroutine = null;
+		}
+
+		if (m_AimGuide is PlayerAimGuide playerAimGuide)
+		{
+			playerAimGuide.ResetAimGuideForRespawn();
+		}
+
+		m_GravityMover?.ResetMovement(position, rotation);
+		m_CameraEffect?.RestoreFOV();
+
+		CurrentState = EPlayerState.Idle;
+		m_UsedMidFallAim = false;
+		m_IsMidFallAiming = false;
+	}
 
 	/// <summary>
 	/// ボール所持状態の変化通知を受け取り、速度補正を適用します。
