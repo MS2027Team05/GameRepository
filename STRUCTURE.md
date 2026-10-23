@@ -27,6 +27,8 @@ GameRepository/
 │   │   │   ├── BallSurfaceSearch.cs     # ボール周辺の面探索制御
 │   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
+│   │   ├── Editor/              # エディタ拡張・開発支援ツール
+│   │   │   └── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   ├── Network/             # 通信接続・同期制御
 │   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
 │   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー通信同期・ゲーム開始制御
