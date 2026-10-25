@@ -12,8 +12,8 @@ GameObject:
   - component: {fileID: 225752826984861636}
   - component: {fileID: 2650085024156220174}
   - component: {fileID: 5021527418076175030}
-  - component: {fileID: 276140628081156534}
-  m_Layer: 0
+  - component: {fileID: 3912837177550422715}
+  m_Layer: 7
   m_Name: "\u7BB1_red"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -113,7 +113,7 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.020522647, y: 0.020463236, z: 0.020463238}
   m_Center: {x: -0.000029700808, y: 9.313224e-10, z: 0}
---- !u!64 &276140628081156534
+--- !u!64 &3912837177550422715
 MeshCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -130,8 +130,8 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 0
+  m_Enabled: 1
   serializedVersion: 5
   m_Convex: 0
   m_CookingOptions: 30
-  m_Mesh: {fileID: 8839458583690285578, guid: 106d7f1ac6980904da10563f1dc8b045, type: 3}
+  m_Mesh: {fileID: 0}
