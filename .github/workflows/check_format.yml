@@ -164,13 +164,13 @@ jobs:
                       $hasSerializeField = ($pendingAttributes -match 'SerializeField') -or ($codeLine -match '\[SerializeField\]')
 
                       if ($codeLine -match ';\s*$' -or $codeLine -match '=\s*[^>].*;\s*$') {
-                          $isProperty = $codeLine -match '\{\s*(get|set|init)\b'
+                          $isProperty = ($codeLine -match '\{\s*(get|set|init)\b') -or ($codeLine -match '=>')
                           $isStatement = $codeLine -match '^(using|return|throw|break|continue|yield|base|this)\b'
                           $isConstant = $codeLine -match '\bconst\b'
 
                           if (-not $isProperty -and -not $isStatement -and -not $isConstant) {
                               if ($hasSerializeField -or ($codeLine -match '^\s*(private|protected|internal|public)\s+.*')) {
-                                  if ($codeLine -match '(?:\[.*?\]\s*)*(?:private|protected|internal|public)?(?:\s+(?:readonly|volatile|static))*\s+[A-Za-z0-9_<>,\[\]\?]+\s+([A-Za-z0-9_]+)\s*(?:=|;)') {
+                                  if ($codeLine -match '(?:\[.*?\]\s*)*(?:private|protected|internal|public)?(?:\s+(?:readonly|volatile|static|new))*\s+[A-Za-z0-9_<>,\[\]\?\.]+\s+([A-Za-z0-9_]+)\s*(?:=(?!>)|;)') {
                                       $varName = $Matches[1]
                                       if ($codeLine -notmatch '\bevent\b') {
                                           if ($varName -notmatch '^m_[A-Z][a-zA-Z0-9]*$') {
