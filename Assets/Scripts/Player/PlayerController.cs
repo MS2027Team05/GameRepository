@@ -58,19 +58,33 @@ public class PlayerController : NetworkBehaviour
 		}
 	}
 
+
 	public override void OnNetworkSpawn()
 	{
-		// 他人の画面なら、自機カメラ・入力を切って処理を終える
+		// Inspectorで未設定の場合も、Player自身から取得する
+		if (m_InputReceiver == null)
+		{
+			m_InputReceiver = GetComponent<PlayerInputReceiver>();
 		if (!IsOwner)
 		{
 			if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(false);
 			if (m_InputReceiver != null) m_InputReceiver.enabled = false;
+			// 【変更】コンポーネント自体は無効にせず、入力だけを禁止する
+			m_InputReceiver?.SetInputAllowed(false);
+
 			m_AimGuide?.ShowAimGuide(false);
 			return;
 		}
 
-		// 自分のキャラならカメラを有効化し、入力をバインドする
-		if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(true);
+		// 自分のプレイヤーなら、カメラと入力を有効にする
+		if (m_PlayerCameraObject != null)
+		{
+			m_PlayerCameraObject.SetActive(true);
+		}
+
+		// 【変更】コンポーネント自体を有効化するのではなく、入力を許可する
+		m_InputReceiver?.SetInputAllowed(true);
+
 		BindInputEvents();
 		PlayerInputReceiver.SetCursorLocked(true);
 	}

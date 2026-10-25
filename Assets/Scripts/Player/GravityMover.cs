@@ -645,7 +645,6 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		m_IsGrounded = false;
 	}
 
-	// 追加
 	private void UpdateFallingRotation()
 	{
 		if (!m_HasFallingTargetNormal)

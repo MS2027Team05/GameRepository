@@ -698,13 +698,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a72940de5571044d99be82d535c95e2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInputReceiver
-  m_MoveAction: {fileID: 0}
-  m_LookAction: {fileID: 0}
-  m_AimToggleAction: {fileID: 0}
-  m_ConfirmAction: {fileID: 0}
-  m_BrakeAction: {fileID: 0}
-  m_ShootAction: {fileID: 0}
-  m_ViewResetAction: {fileID: 0}
+  m_MoveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_LookAction: {fileID: -5630151704836100654, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_AimToggleAction: {fileID: 1638713662840094422, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_ConfirmAction: {fileID: 347373098050079721, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_BrakeAction: {fileID: 4505039029517225548, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_ShootAction: {fileID: 41435168702994022, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_ViewResetAction: {fileID: 8129071423441501024, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_IsRuntimeInstance: 0
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
