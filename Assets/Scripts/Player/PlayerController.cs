@@ -70,19 +70,47 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 	}
 
+
 	public override void OnNetworkSpawn()
 	{
-		// 他人の画面なら、自機カメラ・入力を切って処理を終える
+		// Inspectorで未設定の場合も、Player自身から取得する
+		if (m_InputReceiver == null)
+		{
+			m_InputReceiver = GetComponent<PlayerInputReceiver>();
+		}
+
+		if (m_InputReceiver == null)
+		{
+			Debug.LogError(
+				"[PlayerController] PlayerInputReceiverが見つかりません。"
+				+ " Playerにアタッチされているか確認してください。"
+			);
+		}
+
+		// 他人のプレイヤーなら、自機カメラ・入力を無効にする
 		if (!IsOwner)
 		{
-			if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(false);
-			if (m_InputReceiver != null) m_InputReceiver.enabled = false;
+			if (m_PlayerCameraObject != null)
+			{
+				m_PlayerCameraObject.SetActive(false);
+			}
+
+			// コンポーネント自体は無効にせず、入力だけを禁止する
+			m_InputReceiver?.SetInputAllowed(false);
+
 			m_AimGuide?.ShowAimGuide(false);
 			return;
 		}
 
-		// 自分のキャラならカメラを有効化し、入力をバインドする
-		if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(true);
+		// 自分のプレイヤーなら、カメラと入力を有効にする
+		if (m_PlayerCameraObject != null)
+		{
+			m_PlayerCameraObject.SetActive(true);
+		}
+
+		// コンポーネント自体を有効化するのではなく、入力を許可する
+		m_InputReceiver?.SetInputAllowed(true);
+
 		BindInputEvents();
 		PlayerInputReceiver.SetCursorLocked(true);
 
@@ -126,6 +154,12 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	{
 		if (!IsOwner) return;
 
+		// 着地した場合、EPlayerStateをIdleに戻す
+		if (CurrentState == EPlayerState.Falling && m_GroundDetector != null && m_GroundDetector.IsGrounded && (m_GravityMover == null || !m_GravityMover.IsFalling))
+		{
+			CurrentState = EPlayerState.Idle;
+		}
+
 		// 着地などで移動が終了したら使用回数をリセット
 		if (CurrentState != EPlayerState.Aiming &&
 			(m_GravityMover == null || !m_GravityMover.IsFalling))
@@ -142,7 +176,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			// 照準・予測線を更新
 			m_AimGuide.UpdateAimDirection(aimDirection);
 
-			// 【変更】現在の立ち面に合わせてプレイヤーを回転させる
+			// 現在の立ち面に合わせてプレイヤーを回転させる
 			RotatePlayerTowardAim(aimDirection);
 		}
 
@@ -311,6 +345,13 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	{
 		if (CurrentState != EPlayerState.Aiming) return;
 
+		// 【追加】射程外の場合は移動しない
+		if (m_AimGuide == null || !m_AimGuide.CanFall)
+		{
+			Debug.Log("[Move] 射程外、または着地点がないため移動を中止しました。");
+			return;
+		}
+
 		// エイム終了前に移動方向を取得
 		Vector3 direction = transform.forward;
 
@@ -387,6 +428,10 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// </summary>
 	private void HandleViewReset()
 	{
+		// [デバッグ用]
+		// 現在のEPlayerStateの状態を確認
+		Debug.Log($"[ViewReset] 現在のEPlayerState: {CurrentState}");
+
 		// GravityMoverがなければ処理しない
 		if (m_GravityMover == null)
 		{

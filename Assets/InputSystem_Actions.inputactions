@@ -50,7 +50,7 @@
                     "name": "Crouch",
                     "type": "Button",
                     "id": "27c5f898-bc57-4ee1-8800-db469aca5fe3",
-                    "expectedControlType": "Button",
+                    "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false,
@@ -110,6 +110,36 @@
                     "name": "ViewReset",
                     "type": "Button",
                     "id": "3db0ba28-3260-41b6-a239-61216f54cc7c",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "AimToggle",
+                    "type": "Button",
+                    "id": "8a0cd281-0fdc-475a-b8c6-6678b4d5d79d",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "Confirm",
+                    "type": "Button",
+                    "id": "34ca71a5-e781-4f30-ae1f-67bfed7adbc0",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "Brake",
+                    "type": "Button",
+                    "id": "56c5bb8e-3e13-49c7-a3d4-ebeb13204d9e",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -522,6 +552,39 @@
                     "processors": "",
                     "groups": ";Keyboard&Mouse",
                     "action": "ViewReset",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "55bdf45f-cfec-4f7a-aada-dc22a1bec3dd",
+                    "path": "<Mouse>/rightButton",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "AimToggle",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "749b160f-93f2-4aa4-947c-3405fadce1c0",
+                    "path": "<Mouse>/leftButton",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "Confirm",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "feebe55b-de3c-4dde-9b8f-eb7e714b11d3",
+                    "path": "<Keyboard>/space",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "Brake",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
