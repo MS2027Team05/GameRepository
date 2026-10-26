@@ -38,6 +38,20 @@ public sealed class BallSurfaceSimulation
 	private const int m_MaximumTriangleTransitionsPerStep = 128;
 	private const int m_MaximumVerticalImpactsPerStep = 8;
 
+	/// <summary>
+	/// Height方向とSurface方向を同期して進める際の
+	/// 1回あたりの最大時間です。
+	/// </summary>
+	/// <remarks>
+	/// 通常のFixedUpdate全体を先にHeight更新してから
+	/// Surface移動すると、バウンド中にSharp Edgeへ入った際、
+	/// Edge計算が「フレーム終端のHeight」を使ってしまいます。
+	///
+	/// 空中時だけ短い内部Stepへ分割することで、
+	/// Heightと角回りの円弧半径をほぼ同時刻として扱います。
+	/// </remarks>
+	private const float m_MaximumCoupledStepTime = 0.005f;
+
 	private BallSurfaceSource m_SurfaceSource;
 	private BallSurfaceMeshData m_MeshData;
 
@@ -50,6 +64,15 @@ public sealed class BallSurfaceSimulation
 	private float m_VerticalVelocity;
 
 	private bool m_IsInitialized;
+
+	/// <summary>
+	/// 今回のAdvance中にSharp Convex Edgeを1回以上通過したかどうかです。
+	/// </summary>
+	/// <remarks>
+	/// LastEdgeはAdvance中に後続のFlat / Smooth Edgeで上書きされるため、
+	/// デバッグ計測ではこのフラグを使ってConvex通過を取りこぼさないようにします。
+	/// </remarks>
+	private bool m_DidTraverseConvexEdgeThisStep;
 
 	private int m_LastEdgeTriangleIndex;
 	private int m_LastEdgeIndex;
@@ -89,6 +112,17 @@ public sealed class BallSurfaceSimulation
 		get
 		{
 			return m_IsInitialized;
+		}
+	}
+
+	/// <summary>
+	/// 直近のAdvance中にSharp Convex Edgeを通過したか取得します。
+	/// </summary>
+	public bool DidTraverseConvexEdgeThisStep
+	{
+		get
+		{
+			return m_DidTraverseConvexEdgeThisStep;
 		}
 	}
 
@@ -417,6 +451,11 @@ public sealed class BallSurfaceSimulation
 	{
 		ClearLastEdge();
 
+		// LastEdgeはAdvance中に上書きされる可能性があるため、
+		// Convex通過だけはStep単位のフラグとして別に保持します。
+		m_DidTraverseConvexEdgeThisStep =
+			false;
+
 		if (!m_IsInitialized ||
 			m_SurfaceSource == null ||
 			m_MeshData == null)
@@ -430,20 +469,64 @@ public sealed class BallSurfaceSimulation
 			return EAdvanceResult.Moved;
 		}
 
-		// 着地がFixedUpdate途中で起きた場合も、
-		// その残り時間まで同じStep内で処理します。
-		AdvanceVerticalMotion(
-			deltaTime);
+		float remainingTime =
+			deltaTime;
 
-		if (IsGrounded &&
-			!m_IsConvexEdgeTransition)
+		while (remainingTime >
+			m_MinimumCalculationValue)
 		{
-			ApplyGroundedDeceleration(
-				deltaTime);
+			// Heightが変化している最中、またはSharp Convex Edgeを
+			// 回り込んでいる最中だけ内部Stepを細かくします。
+			//
+			// 接地して普通にSurface上を進んでいるだけなら
+			// FixedUpdate全体を1回で処理するため、
+			// 常時4倍の計算量にはなりません。
+			bool requiresCoupledStep =
+				m_Height >
+					m_MinimumHeight ||
+				Mathf.Abs(
+					m_VerticalVelocity) >
+					m_MinimumCalculationValue ||
+				m_IsConvexEdgeTransition;
+
+			float stepTime =
+				requiresCoupledStep
+					? Mathf.Min(
+						remainingTime,
+						m_MaximumCoupledStepTime)
+					: remainingTime;
+
+			// 同じ短い時間幅で
+			// Height方向 → Surface方向の順に進めます。
+			//
+			// これによりSharp Edgeの円弧半径
+			// (BallRadius + Height)が、その時刻のHeightに
+			// 近い値を使用するようになります。
+			AdvanceVerticalMotion(
+				stepTime);
+
+			if (IsGrounded &&
+				!m_IsConvexEdgeTransition)
+			{
+				ApplyGroundedDeceleration(
+					stepTime);
+			}
+
+			EAdvanceResult surfaceResult =
+				AdvanceSurfaceMotion(
+					stepTime);
+
+			if (surfaceResult !=
+				EAdvanceResult.Moved)
+			{
+				return surfaceResult;
+			}
+
+			remainingTime -=
+				stepTime;
 		}
 
-		return AdvanceSurfaceMotion(
-			deltaTime);
+		return EAdvanceResult.Moved;
 	}
 
 	/// <summary>
@@ -1018,6 +1101,9 @@ public sealed class BallSurfaceSimulation
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Convex)
 			{
+				m_DidTraverseConvexEdgeThisStep =
+					true;
+
 				m_SurfacePoint =
 					crossingPoint;
 
@@ -1824,6 +1910,9 @@ public sealed class BallSurfaceSimulation
 			0.0f;
 
 		m_IsInitialized =
+			false;
+
+		m_DidTraverseConvexEdgeThisStep =
 			false;
 
 		ResetConvexEdgeTransition();

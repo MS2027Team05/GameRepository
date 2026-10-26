@@ -345,14 +345,14 @@ MonoBehaviour:
   m_CollisionTangentialRetention: 0.8
   m_MinCollisionNormalSpeed: 3
   m_MaxCollisionNormalSpeed: 20
-  m_SurfaceGravityAcceleration: 1111
-  m_SurfaceBounceSpeedThreshold: 1111
-  m_SurfaceBounceNormalRetention: 1
-  m_SurfaceBounceTangentialRetention: 1
-  m_SurfaceMinBounceNormalSpeed: 1111
-  m_SurfaceMaxBounceNormalSpeed: 1111
-  m_SurfaceGroundDeceleration: 11111
-  m_SurfaceStopSpeedThreshold: 11111
+  m_SurfaceGravityAcceleration: 30
+  m_SurfaceBounceSpeedThreshold: 0.5
+  m_SurfaceBounceNormalRetention: 0.9
+  m_SurfaceBounceTangentialRetention: 0.75
+  m_SurfaceMinBounceNormalSpeed: 0
+  m_SurfaceMaxBounceNormalSpeed: 10
+  m_SurfaceGroundDeceleration: 2.5
+  m_SurfaceStopSpeedThreshold: 0.5
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4

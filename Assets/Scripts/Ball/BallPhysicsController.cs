@@ -153,6 +153,12 @@ public class BallPhysicsController : NetworkBehaviour
 	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceStopSpeedThreshold;
 
+	[Header("Surface Physics Debug")]
+
+	[Tooltip(
+		"ONにするとSharp Convex Edge前後の実World速度をConsoleへ出力します。計測終了後はOFFにしてください。")]
+	[SerializeField] private bool m_EnableSurfaceSpeedDebug;
+
 	[Header("Stopped Ground Search")]
 
 	[Min(0.0f)]
@@ -168,6 +174,18 @@ public class BallPhysicsController : NetworkBehaviour
 	[SerializeField] private float m_SurfaceSeekAcceleration;
 
 	private const float m_MinimumCalculationDistance = 0.001f;
+
+	/// <summary>
+	/// Sharp Edge計測終了判定で、
+	/// 法線が停止したとみなす角度差です。
+	/// </summary>
+	private const float m_SurfaceSpeedDebugStableNormalAngle = 0.05f;
+
+	/// <summary>
+	/// Sharp Edge通過後、この回数だけ法線変化が止まったら
+	/// 計測ログを終了します。
+	/// </summary>
+	private const int m_SurfaceSpeedDebugStableFrameCount = 2;
 
 	private Rigidbody m_Rigidbody;
 	private SphereCollider m_BallCollider;
@@ -185,6 +203,15 @@ public class BallPhysicsController : NetworkBehaviour
 
 	private float m_NextSurfaceSearchTime;
 	private float m_NextAttractSearchTime;
+
+	private bool m_HasSurfaceSpeedDebugSample;
+	private bool m_IsSurfaceSpeedDebugTrackingSharpEdge;
+
+	private Vector3 m_PreviousSurfaceSpeedDebugPosition;
+	private Vector3 m_PreviousSurfaceSpeedDebugNormal;
+
+	private float m_PreviousSurfaceSpeedDebugWorldSpeed;
+	private int m_SurfaceSpeedDebugStableFrames;
 
 	/// <summary>
 	/// ComponentとSurface Physicsを初期化します。
@@ -530,6 +557,11 @@ public class BallPhysicsController : NetworkBehaviour
 			targetColliderCenter -
 			colliderCenterOffset;
 
+		MeasureSurfaceWorldSpeed(
+			targetRigidbodyPosition,
+			surfaceNormal,
+			immediate);
+
 		if (immediate)
 		{
 			m_Rigidbody.position =
@@ -540,6 +572,189 @@ public class BallPhysicsController : NetworkBehaviour
 			m_Rigidbody.MovePosition(
 				targetRigidbodyPosition);
 		}
+	}
+
+	/// <summary>
+	/// Surface Physicsが算出したWorld位置から、
+	/// 実際の1FixedUpdateあたりの移動速度を計測します。
+	/// </summary>
+	/// <remarks>
+	/// Sharp Convex Edgeへ入ったFrameから、
+	/// Edgeを抜けて法線変化が安定するまでだけConsoleへ出力します。
+	///
+	/// WorldSpeed:
+	/// 実際のWorld位置差から求めた速度です。
+	///
+	/// ExpectedSpeed:
+	/// SurfaceVelocityとVerticalVelocityを直交成分として
+	/// 合成した理論速度です。
+	///
+	/// Ratioが1.0付近ならWorld上でも速度はほぼ一致しています。
+	/// 角で1.0を大きく超える場合は、位置への折り戻し処理で
+	/// 実際に加速していると判断できます。
+	/// </remarks>
+	private void MeasureSurfaceWorldSpeed(
+		Vector3 targetRigidbodyPosition,
+		Vector3 surfaceNormal,
+		bool immediate)
+	{
+		if (!m_EnableSurfaceSpeedDebug)
+		{
+			ResetSurfaceSpeedDebug();
+
+			return;
+		}
+
+		if (immediate ||
+			!m_HasSurfaceSpeedDebugSample)
+		{
+			m_HasSurfaceSpeedDebugSample =
+				true;
+
+			m_PreviousSurfaceSpeedDebugPosition =
+				targetRigidbodyPosition;
+
+			m_PreviousSurfaceSpeedDebugNormal =
+				surfaceNormal;
+
+			m_PreviousSurfaceSpeedDebugWorldSpeed =
+				0.0f;
+
+			m_IsSurfaceSpeedDebugTrackingSharpEdge =
+				false;
+
+			m_SurfaceSpeedDebugStableFrames =
+				0;
+
+			return;
+		}
+
+		float deltaTime =
+			Time.fixedDeltaTime;
+
+		if (deltaTime <=
+			Mathf.Epsilon)
+		{
+			return;
+		}
+
+		float worldDistance =
+			Vector3.Distance(
+				m_PreviousSurfaceSpeedDebugPosition,
+				targetRigidbodyPosition);
+
+		float worldSpeed =
+			worldDistance /
+			deltaTime;
+
+		float surfaceSpeed =
+			m_SurfaceSimulation.SurfaceSpeed;
+
+		float verticalSpeed =
+			Mathf.Abs(
+				m_SurfaceSimulation.VerticalVelocity);
+
+		float expectedSpeed =
+			Mathf.Sqrt(
+				surfaceSpeed *
+					surfaceSpeed +
+				verticalSpeed *
+					verticalSpeed);
+
+		float speedRatio =
+			expectedSpeed >
+				Mathf.Epsilon
+				? worldSpeed /
+					expectedSpeed
+				: 0.0f;
+
+		float normalAngle =
+			Vector3.Angle(
+				m_PreviousSurfaceSpeedDebugNormal,
+				surfaceNormal);
+
+		// LastEdgeは同一Advance内の後続Edgeで上書きされるため、
+		// Step中に一度でもConvexを通ったことを保持する専用フラグを使います。
+		bool enteredConvexEdge =
+			m_SurfaceSimulation.DidTraverseConvexEdgeThisStep;
+
+		if (enteredConvexEdge)
+		{
+			m_IsSurfaceSpeedDebugTrackingSharpEdge =
+				true;
+
+			m_SurfaceSpeedDebugStableFrames =
+				0;
+		}
+
+		if (m_IsSurfaceSpeedDebugTrackingSharpEdge)
+		{
+			Debug.Log(
+				$"[SurfaceSpeedDebug] " +
+				$"Phase={(enteredConvexEdge ? "ENTER" : "TRACK")}, " +
+				$"PrevWorld={m_PreviousSurfaceSpeedDebugWorldSpeed:F3}, " +
+				$"World={worldSpeed:F3}, " +
+				$"Expected={expectedSpeed:F3}, " +
+				$"Ratio={speedRatio:F3}, " +
+				$"Surface={surfaceSpeed:F3}, " +
+				$"Vertical={verticalSpeed:F3}, " +
+				$"NormalDelta={normalAngle:F3}, " +
+				$"Height={m_SurfaceSimulation.Height:F3}, " +
+				$"Triangle={m_SurfaceSimulation.CurrentTriangleIndex}",
+				this);
+
+			if (!enteredConvexEdge &&
+				normalAngle <=
+					m_SurfaceSpeedDebugStableNormalAngle)
+			{
+				m_SurfaceSpeedDebugStableFrames++;
+			}
+			else
+			{
+				m_SurfaceSpeedDebugStableFrames =
+					0;
+			}
+
+			if (m_SurfaceSpeedDebugStableFrames >=
+				m_SurfaceSpeedDebugStableFrameCount)
+			{
+				m_IsSurfaceSpeedDebugTrackingSharpEdge =
+					false;
+			}
+		}
+
+		m_PreviousSurfaceSpeedDebugPosition =
+			targetRigidbodyPosition;
+
+		m_PreviousSurfaceSpeedDebugNormal =
+			surfaceNormal;
+
+		m_PreviousSurfaceSpeedDebugWorldSpeed =
+			worldSpeed;
+	}
+
+	/// <summary>
+	/// Surface速度計測用の一時状態を初期化します。
+	/// </summary>
+	private void ResetSurfaceSpeedDebug()
+	{
+		m_HasSurfaceSpeedDebugSample =
+			false;
+
+		m_IsSurfaceSpeedDebugTrackingSharpEdge =
+			false;
+
+		m_PreviousSurfaceSpeedDebugPosition =
+			Vector3.zero;
+
+		m_PreviousSurfaceSpeedDebugNormal =
+			Vector3.zero;
+
+		m_PreviousSurfaceSpeedDebugWorldSpeed =
+			0.0f;
+
+		m_SurfaceSpeedDebugStableFrames =
+			0;
 	}
 
 	/// <summary>
@@ -1076,6 +1291,8 @@ public class BallPhysicsController : NetworkBehaviour
 		m_SurfaceGravity.Clear();
 
 		m_SurfaceSimulation.Reset();
+
+		ResetSurfaceSpeedDebug();
 	}
 
 	/// <summary>
@@ -1109,6 +1326,8 @@ public class BallPhysicsController : NetworkBehaviour
 		m_SurfaceGravity.Clear();
 
 		m_SurfaceSimulation.Reset();
+
+		ResetSurfaceSpeedDebug();
 
 		m_NextSurfaceSearchTime =
 			0.0f;

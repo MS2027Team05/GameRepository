@@ -176,8 +176,22 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	/// </summary>
 	/// <remarks>
 	/// CollisionのContactPointにはtriangleIndexが存在しないため、
-	/// 接触地点の少し外側からMeshCollider自身へ
-	/// 短いRayを飛ばしてRaycastHit.triangleIndexを取得します。
+	/// 接触地点の両側からMeshCollider自身へ短いRayを飛ばし、
+	/// RaycastHit.triangleIndexを取得します。
+	///
+	/// Collisionから得られるContact Normalは、
+	/// Sphereの斜め接触やSharp Edge付近では
+	/// 実際のTriangle Normalと完全には一致しない場合があります。
+	///
+	/// そのため一方向だけではなく、
+	///
+	/// SurfacePoint + Normal
+	/// SurfacePoint - Normal
+	///
+	/// の両側からTriangleを探索します。
+	///
+	/// 両方のRayが成功した場合は、
+	/// 元のContactPointへ近いHitを採用します。
 	/// </remarks>
 	/// <param name="surfacePoint">
 	/// Collisionから取得したSurface接触地点です。
@@ -216,23 +230,122 @@ public sealed class BallSurfaceSource : MonoBehaviour
 		float probeOffset =
 			Mathf.Max(
 				m_SurfaceCollider.contactOffset *
-				4.0f,
+					4.0f,
 				m_MinimumProbeOffset);
-
-		Vector3 rayOrigin =
-			surfacePoint +
-			normal *
-			probeOffset;
 
 		float rayDistance =
 			probeOffset *
-			2.0f +
+				2.0f +
 			m_MinimumProbeOffset;
+
+		// Contact Normal側からSurfaceへ向けて探索します。
+		bool positiveSideHit =
+			TryRaycastSurface(
+				surfacePoint +
+					normal *
+						probeOffset,
+				-normal,
+				rayDistance,
+				out RaycastHit positiveHit);
+
+		// Contact Normalとは反対側からもSurfaceへ向けて探索します。
+		//
+		// Contact Normalの向きや接触点の数値誤差によって
+		// 片側RayがMeshを拾えないケースを補完します。
+		bool negativeSideHit =
+			TryRaycastSurface(
+				surfacePoint -
+					normal *
+						probeOffset,
+				normal,
+				rayDistance,
+				out RaycastHit negativeHit);
+
+		if (!positiveSideHit &&
+			!negativeSideHit)
+		{
+			return false;
+		}
+
+		if (positiveSideHit &&
+			!negativeSideHit)
+		{
+			surfaceHit =
+				positiveHit;
+
+			return true;
+		}
+
+		if (!positiveSideHit &&
+			negativeSideHit)
+		{
+			surfaceHit =
+				negativeHit;
+
+			return true;
+		}
+
+		// 両方向からTriangleが取得できた場合は、
+		// CollisionのContactPointに近い方を採用します。
+		float positiveDistanceSquared =
+			(
+				positiveHit.point -
+				surfacePoint
+			).sqrMagnitude;
+
+		float negativeDistanceSquared =
+			(
+				negativeHit.point -
+				surfacePoint
+			).sqrMagnitude;
+
+		surfaceHit =
+			positiveDistanceSquared <=
+				negativeDistanceSquared
+				? positiveHit
+				: negativeHit;
+
+		return true;
+	}
+
+	/// <summary>
+	/// このBallSurfaceのMeshColliderに対して
+	/// Triangle取得用Raycastを実行します。
+	/// </summary>
+	/// <param name="rayOrigin">
+	/// Rayの開始位置です。
+	/// </param>
+	/// <param name="rayDirection">
+	/// Rayの進行方向です。
+	/// </param>
+	/// <param name="rayDistance">
+	/// Rayの最大距離です。
+	/// </param>
+	/// <param name="surfaceHit">
+	/// 正常に取得できたRaycastHitです。
+	/// </param>
+	/// <returns>
+	/// 有効なTriangle Indexを持つHitを取得できた場合はtrueです。
+	/// </returns>
+	private bool TryRaycastSurface(
+		Vector3 rayOrigin,
+		Vector3 rayDirection,
+		float rayDistance,
+		out RaycastHit surfaceHit)
+	{
+		surfaceHit =
+			default;
+
+		if (rayDirection.sqrMagnitude <=
+			Mathf.Epsilon)
+		{
+			return false;
+		}
 
 		Ray ray =
 			new Ray(
 				rayOrigin,
-				-normal);
+				rayDirection.normalized);
 
 		if (!m_SurfaceCollider.Raycast(
 			ray,
