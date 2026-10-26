@@ -65,11 +65,25 @@ public class PlayerController : NetworkBehaviour
 		if (m_InputReceiver == null)
 		{
 			m_InputReceiver = GetComponent<PlayerInputReceiver>();
+		}
+
+		if (m_InputReceiver == null)
+		{
+			Debug.LogError(
+				"[PlayerController] PlayerInputReceiverが見つかりません。"
+				+ " Playerにアタッチされているか確認してください。"
+			);
+		}
+
+		// 他人のプレイヤーなら、自機カメラ・入力を無効にする
 		if (!IsOwner)
 		{
-			if (m_PlayerCameraObject != null) m_PlayerCameraObject.SetActive(false);
-			if (m_InputReceiver != null) m_InputReceiver.enabled = false;
-			// 【変更】コンポーネント自体は無効にせず、入力だけを禁止する
+			if (m_PlayerCameraObject != null)
+			{
+				m_PlayerCameraObject.SetActive(false);
+			}
+
+			// コンポーネント自体は無効にせず、入力だけを禁止する
 			m_InputReceiver?.SetInputAllowed(false);
 
 			m_AimGuide?.ShowAimGuide(false);
@@ -82,7 +96,7 @@ public class PlayerController : NetworkBehaviour
 			m_PlayerCameraObject.SetActive(true);
 		}
 
-		// 【変更】コンポーネント自体を有効化するのではなく、入力を許可する
+		// コンポーネント自体を有効化するのではなく、入力を許可する
 		m_InputReceiver?.SetInputAllowed(true);
 
 		BindInputEvents();
@@ -131,7 +145,7 @@ public class PlayerController : NetworkBehaviour
 			// 照準・予測線を更新
 			m_AimGuide.UpdateAimDirection(aimDirection);
 
-			// 【変更】現在の立ち面に合わせてプレイヤーを回転させる
+			// 現在の立ち面に合わせてプレイヤーを回転させる
 			RotatePlayerTowardAim(aimDirection);
 		}
 

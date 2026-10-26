@@ -53,10 +53,6 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>視点リセットボタン押下イベント</summary>
 	public event Action OnViewResetPressed;
 
-	// =========================================================
-	// 【追加】入力許可・イベント登録状態
-	// =========================================================
-
 	// PlayerControllerから入力を許可されたかどうか
 	private bool m_InputAllowed = false;
 
@@ -76,9 +72,9 @@ public class PlayerInputReceiver : MonoBehaviour
 		Cursor.visible = !locked;
 	}
 
-	// =========================================================
-	// 【変更】コンポーネントの有効・無効に応じて入力を管理
-	// =========================================================
+	/// <summary>
+	/// コンポーネントの有効・無効に応じて入力を管理
+	/// </summary>
 
 	private void OnEnable()
 	{
@@ -188,7 +184,7 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private void Update()
 	{
-		// 【追加】自分が操作するPlayer以外は入力処理を行わない
+		// 自分が操作するPlayer以外は入力処理を行わない
 		if (!m_InputAllowed || !isActiveAndEnabled)
 		{
 			return;
