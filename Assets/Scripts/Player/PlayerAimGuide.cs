@@ -16,7 +16,6 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	[Header("着地マーカー")]
 	[SerializeField] private GameObject m_LandingMarker;
 
-	// 追加
 	[Header("落下制御")]
 	[SerializeField]
 	private GravityMover m_GravityMover;
@@ -39,6 +38,15 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 	// エイム状態
 	private bool m_IsAiming;
+
+	// 現在の着地点へ移動できるかどうか
+	private bool m_CanFall = false;
+
+	// 他のクラスから移動可能か確認するためのプロパティ
+	public bool CanFall
+	{
+		get => m_CanFall;
+	}
 
 	// 浮上アニメーション
 	private Sequence m_AimFloatTween;
@@ -572,6 +580,7 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	{
 		if (!m_IsAiming || m_IsReturning)
 		{
+			m_CanFall = false;
 			ClearAimLine();
 			return;
 		}
@@ -598,6 +607,7 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		if (rayDirection.sqrMagnitude <= 0.0001f)
 		{
+			m_CanFall = false;
 			ClearAimLine();
 			return;
 		}
@@ -615,10 +625,16 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		if (!hasHit)
 		{
+			// 射程内に着地点がないため移動不可
+			m_CanFall = false;
+
 			// 着地点がない場合は予測線とマーカーを非表示
 			ClearAimLine();
 			return;
 		}
+
+		// Raycastが射程内に当たったため移動可能
+		m_CanFall = true;
 
 		// 予測線の終点へ向かう方向を計算
 		m_AimTargetPoint = hit.point;

@@ -309,6 +309,13 @@ public class PlayerController : NetworkBehaviour
 	{
 		if (CurrentState != EPlayerState.Aiming) return;
 
+		// 【追加】射程外の場合は移動しない
+		if (m_AimGuide == null || !m_AimGuide.CanFall)
+		{
+			Debug.Log("[Move] 射程外、または着地点がないため移動を中止しました。");
+			return;
+		}
+
 		// エイム終了前に移動方向を取得
 		Vector3 direction = transform.forward;
 

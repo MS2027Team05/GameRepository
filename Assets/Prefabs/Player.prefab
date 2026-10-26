@@ -705,7 +705,6 @@ MonoBehaviour:
   m_BrakeAction: {fileID: 4505039029517225548, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_ShootAction: {fileID: 41435168702994022, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_ViewResetAction: {fileID: 8129071423441501024, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  m_IsRuntimeInstance: 0
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
