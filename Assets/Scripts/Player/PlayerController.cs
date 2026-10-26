@@ -129,6 +129,12 @@ public class PlayerController : NetworkBehaviour
 	{
 		if (!IsOwner) return;
 
+		// 着地した場合、EPlayerStateをIdleに戻す
+		if (CurrentState == EPlayerState.Falling && m_GravityMover != null && m_GravityMover.IsGrounded)
+		{
+			CurrentState = EPlayerState.Idle;
+		}
+
 		// 着地などで移動が終了したら使用回数をリセット
 		if (CurrentState != EPlayerState.Aiming &&
 			(m_GravityMover == null || !m_GravityMover.IsFalling))
@@ -379,34 +385,26 @@ public class PlayerController : NetworkBehaviour
 	/// </summary>
 	private void HandleViewReset()
 	{
+		// [デバッグ用]
+		// 現在のEPlayerStateの状態を確認
+		Debug.Log($"[ViewReset] 現在のEPlayerState: {CurrentState}");
+
 		// GravityMoverがなければ処理しない
 		if (m_GravityMover == null)
 		{
 			return;
 		}
 
-		// Idle状態は通常どおりリセット可能
-		if (CurrentState == EPlayerState.Idle)
+		// Idle状態の場合のみ視点リセットを許可
+		if (CurrentState != EPlayerState.Idle)
 		{
-			// Idle状態でも、実際に接地しているか確認
-			if (!m_GravityMover.IsGrounded)
-			{
-				Debug.Log("[ViewReset] 未接地のためリセットを中止しました。");
-				return;
-			}
+			return;
 		}
-		// Falling状態は、接地していて移動も終了している場合のみ許可
-		else if (CurrentState == EPlayerState.Falling)
+
+		// Idle状態でも、実際に接地しているか確認
+		if (!m_GravityMover.IsGrounded)
 		{
-			if (m_GravityMover.IsFalling || !m_GravityMover.IsGrounded)
-			{
-				Debug.Log("[ViewReset] 移動中または未接地のためリセットを中止しました。");
-				return;
-			}
-		}
-		// Aiming・Stunned状態ではリセットしない
-		else
-		{
+			Debug.Log("[ViewReset] 未接地のためリセットを中止しました。");
 			return;
 		}
 
