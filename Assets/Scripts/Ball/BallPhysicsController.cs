@@ -6,18 +6,10 @@ using UnityEngine;
 /// </summary>
 /// <remarks>
 /// BallSurfaceへ接触する前はRigidbody Physicsを使用し、
-/// BallSurfaceへ実際に接触した後は
-/// BallSurfaceSimulationへ移行します。
+/// BallSurfaceへ実際に接触した後はBallSurfaceSimulationへ移行します。
 ///
 /// Surface Physicsでは、
-///
-/// SurfaceVelocity
-///     Surface上を進む速度。
-///
-/// Height / VerticalVelocity
-///     Surfaceから離れる高さ方向の運動。
-///
-/// として分離して計算します。
+/// Surface上の移動とSurface法線方向のHeightを分離して計算します。
 /// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
@@ -34,10 +26,6 @@ public class BallPhysicsController : NetworkBehaviour
 		Surface
 	}
 
-	// =====================================================================
-	// Free Flight
-	// =====================================================================
-
 	[Header("Free Flight")]
 
 	[Tooltip(
@@ -49,10 +37,6 @@ public class BallPhysicsController : NetworkBehaviour
 		"この速度以下になった場合に停止として扱います。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_StopSpeedThreshold;
-
-	// =====================================================================
-	// Free Flight Ground Search
-	// =====================================================================
 
 	[Header("Free Flight Ground Search")]
 
@@ -105,27 +89,27 @@ public class BallPhysicsController : NetworkBehaviour
 	[Min(0.0f)]
 	[SerializeField] private float m_AttractMaxSpeed;
 
-	// =====================================================================
-	// Free Flight Collision
-	// =====================================================================
-
 	[Header("Free Flight Collision")]
 
+	[Tooltip(
+		"BallSurface以外へ衝突した際の法線方向速度保持率です。")]
 	[Range(0.0f, 1.0f)]
 	[SerializeField] private float m_CollisionNormalRetention;
 
+	[Tooltip(
+		"BallSurface以外へ衝突した際の接線方向速度保持率です。")]
 	[Range(0.0f, 1.0f)]
 	[SerializeField] private float m_CollisionTangentialRetention;
 
+	[Tooltip(
+		"通常衝突時に最低限保証する法線方向速度です。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_MinCollisionNormalSpeed;
 
+	[Tooltip(
+		"通常衝突時の最大法線方向速度です。0なら制限しません。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_MaxCollisionNormalSpeed;
-
-	// =====================================================================
-	// Surface Physics
-	// =====================================================================
 
 	[Header("Surface Physics")]
 
@@ -168,10 +152,6 @@ public class BallPhysicsController : NetworkBehaviour
 		"接地中、この速度以下になればSurface方向の移動を停止します。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceStopSpeedThreshold;
-
-	// =====================================================================
-	// Stopped Ground Search
-	// =====================================================================
 
 	[Header("Stopped Ground Search")]
 
@@ -239,8 +219,7 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// InspectorのSurface Physics設定を
-	/// Simulationへ反映します。
+	/// InspectorのSurface Physics設定をSimulationへ反映します。
 	/// </summary>
 	private void ConfigureSurfaceSimulation()
 	{
@@ -252,7 +231,8 @@ public class BallPhysicsController : NetworkBehaviour
 			m_SurfaceMinBounceNormalSpeed,
 			m_SurfaceMaxBounceNormalSpeed,
 			m_SurfaceGroundDeceleration,
-			m_SurfaceStopSpeedThreshold);
+			m_SurfaceStopSpeedThreshold,
+			GetBallWorldRadius());
 	}
 
 	public override void OnNetworkSpawn()
@@ -283,6 +263,9 @@ public class BallPhysicsController : NetworkBehaviour
 			HandleReleased;
 	}
 
+	/// <summary>
+	/// Host側でボール物理を更新します。
+	/// </summary>
 	private void FixedUpdate()
 	{
 		if (!IsServer)
@@ -344,6 +327,9 @@ public class BallPhysicsController : NetworkBehaviour
 			m_Rigidbody.linearVelocity;
 	}
 
+	/// <summary>
+	/// Colliderへ接触した瞬間の処理です。
+	/// </summary>
 	private void OnCollisionEnter(
 		Collision collision)
 	{
@@ -428,8 +414,8 @@ public class BallPhysicsController : NetworkBehaviour
 			return false;
 		}
 
-		// Play中にInspectorを調整した場合にも
-		// 最新値を反映できるよう、Surface開始時に再設定します。
+		// Transform Scaleなどが変わった場合にも
+		// 現在のBall半径をSurface Simulationへ反映します。
 		ConfigureSurfaceSimulation();
 
 		if (!m_SurfaceSimulation.TryInitialize(
@@ -468,6 +454,9 @@ public class BallPhysicsController : NetworkBehaviour
 		return true;
 	}
 
+	/// <summary>
+	/// Surface Physicsを1Physics Step進めます。
+	/// </summary>
 	private void UpdateSurfaceSimulation()
 	{
 		if (!m_SurfaceSimulation.IsInitialized)
@@ -491,7 +480,6 @@ public class BallPhysicsController : NetworkBehaviour
 			case BallSurfaceSimulation.EAdvanceResult.ConcaveEdgeReached:
 			case BallSurfaceSimulation.EAdvanceResult.BoundaryEdgeReached:
 			case BallSurfaceSimulation.EAdvanceResult.UnsupportedEdgeReached:
-
 				ApplySurfacePosition(
 					false);
 				break;
@@ -502,7 +490,6 @@ public class BallPhysicsController : NetworkBehaviour
 
 			case BallSurfaceSimulation.EAdvanceResult.InvalidGeometry:
 			case BallSurfaceSimulation.EAdvanceResult.TransitionLimitReached:
-
 				Debug.LogWarning(
 					$"{name}: Surface Physicsを継続できませんでした。 Result={result}",
 					this);
@@ -555,6 +542,9 @@ public class BallPhysicsController : NetworkBehaviour
 		}
 	}
 
+	/// <summary>
+	/// SphereColliderの実ワールド半径を取得します。
+	/// </summary>
 	private float GetBallWorldRadius()
 	{
 		Vector3 lossyScale =
@@ -573,6 +563,9 @@ public class BallPhysicsController : NetworkBehaviour
 			maximumScale;
 	}
 
+	/// <summary>
+	/// BallSurface以外のColliderへ衝突した際の反射処理です。
+	/// </summary>
 	private void HandleNormalCollision(
 		ContactPoint contact,
 		Vector3 incomingVelocity)
@@ -597,6 +590,9 @@ public class BallPhysicsController : NetworkBehaviour
 		}
 	}
 
+	/// <summary>
+	/// 衝突直前の速度を取得します。
+	/// </summary>
 	private Vector3 GetIncomingVelocity(
 		Collision collision)
 	{
@@ -631,6 +627,9 @@ public class BallPhysicsController : NetworkBehaviour
 			relativeSpeed;
 	}
 
+	/// <summary>
+	/// 通常Rigidbody反射速度を設定します。
+	/// </summary>
 	private void ApplyBounceVelocity(
 		Vector3 bounceVelocity)
 	{
@@ -658,6 +657,9 @@ public class BallPhysicsController : NetworkBehaviour
 		}
 	}
 
+	/// <summary>
+	/// シュート開始通知を受け取ります。
+	/// </summary>
 	private void HandleShot()
 	{
 		if (!IsServer)
@@ -696,6 +698,9 @@ public class BallPhysicsController : NetworkBehaviour
 			EBallMotionState.Flying);
 	}
 
+	/// <summary>
+	/// 強制解放通知を受け取ります。
+	/// </summary>
 	private void HandleReleased()
 	{
 		if (!IsServer)
@@ -708,6 +713,9 @@ public class BallPhysicsController : NetworkBehaviour
 		BeginSurfaceSeeking();
 	}
 
+	/// <summary>
+	/// 通常飛行中の減速とGround探索開始判定を行います。
+	/// </summary>
 	private void UpdateFlying()
 	{
 		float currentSpeed =
@@ -751,6 +759,9 @@ public class BallPhysicsController : NetworkBehaviour
 		}
 	}
 
+	/// <summary>
+	/// 飛行中に近くのGroundを探索して、固定点疑似重力を開始します。
+	/// </summary>
 	private void TryBeginSurfaceAttraction()
 	{
 		if (Time.time <
@@ -780,6 +791,9 @@ public class BallPhysicsController : NetworkBehaviour
 			EBallMotionState.AttractingSurface);
 	}
 
+	/// <summary>
+	/// 接触前の固定点疑似重力を更新します。
+	/// </summary>
 	private void UpdateSurfaceAttraction()
 	{
 		if (!m_SurfaceGravity.IsTargetValid())
@@ -852,6 +866,9 @@ public class BallPhysicsController : NetworkBehaviour
 			nextVelocity;
 	}
 
+	/// <summary>
+	/// Surfaceまでの距離から疑似重力加速度を計算します。
+	/// </summary>
 	private float CalculateAttractionAcceleration(
 		float distance)
 	{
@@ -882,6 +899,9 @@ public class BallPhysicsController : NetworkBehaviour
 			curvedProximity);
 	}
 
+	/// <summary>
+	/// 固定点疑似重力を解除して通常飛行へ戻します。
+	/// </summary>
 	private void ReleaseSurfaceAttraction()
 	{
 		Vector3 currentVelocity =
@@ -904,6 +924,9 @@ public class BallPhysicsController : NetworkBehaviour
 			EBallMotionState.Flying);
 	}
 
+	/// <summary>
+	/// 停止後のGround探索状態へ移行します。
+	/// </summary>
 	private void BeginSurfaceSeeking()
 	{
 		m_SurfaceSimulation.Reset();
@@ -932,6 +955,9 @@ public class BallPhysicsController : NetworkBehaviour
 			EBallMotionState.SeekingSurface);
 	}
 
+	/// <summary>
+	/// 停止後にGroundを探索します。
+	/// </summary>
 	private void UpdateSurfaceSeeking()
 	{
 		if (!m_SurfaceGravity.IsTargetValid())
@@ -968,6 +994,9 @@ public class BallPhysicsController : NetworkBehaviour
 		MoveTowardTargetSurface();
 	}
 
+	/// <summary>
+	/// 探索で発見したGroundへボールを移動させます。
+	/// </summary>
 	private void MoveTowardTargetSurface()
 	{
 		float surfaceTrackDistance =
@@ -1049,6 +1078,9 @@ public class BallPhysicsController : NetworkBehaviour
 		m_SurfaceSimulation.Reset();
 	}
 
+	/// <summary>
+	/// デバッグリスポーン時などに通常のフリー状態へ戻します。
+	/// </summary>
 	public void ResetMotionState()
 	{
 		if (!IsServer)

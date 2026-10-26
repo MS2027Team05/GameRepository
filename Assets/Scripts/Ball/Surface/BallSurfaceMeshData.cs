@@ -37,25 +37,19 @@ public sealed class BallSurfaceMeshData
 		Flat,
 
 		/// <summary>
-		/// Triangle同士の角度が小さい、
+		/// Triangle同士の角度が小さく、
 		/// 滑らかな曲面を構成するEdgeです。
-		///
-		/// SphereやTorusなどの曲面では、
-		/// Convex / Concave方向に関係なく
-		/// このEdgeとして連続移動します。
 		/// </summary>
 		Smooth,
 
 		/// <summary>
-		/// Surface外側へ張り出している
-		/// 明確な凸Edgeです。
+		/// Surface外側へ張り出している凸Edgeです。
 		/// Cubeの外側の角などが該当します。
 		/// </summary>
 		Convex,
 
 		/// <summary>
-		/// Surface内側へ入り込んでいる
-		/// 明確な凹Edgeです。
+		/// Surface内側へ入り込んでいる凹Edgeです。
 		/// L字形状の内角などが該当します。
 		/// </summary>
 		Concave,
@@ -89,10 +83,6 @@ public sealed class BallSurfaceMeshData
 	/// この角度以下のTriangle間Edgeを
 	/// 滑らかな曲面として扱います。
 	/// </summary>
-	/// <remarks>
-	/// SphereやTorusのような細かく分割された曲面を、
-	/// L字の内角などのSharp Edgeと区別するために使用します。
-	/// </remarks>
 	private const float m_SmoothEdgeMaximumAngle = 30.0f;
 
 	/// <summary>
@@ -123,6 +113,13 @@ public sealed class BallSurfaceMeshData
 	private readonly Vector3[] m_TriangleNormals;
 
 	/// <summary>
+	/// 各Triangleの各頂点に対応する、
+	/// Sharp Edgeを跨がずに平均したローカルSmooth Normalです。
+	/// 3要素で1Triangleを表します。
+	/// </summary>
+	private readonly Vector3[] m_TriangleCornerNormals;
+
+	/// <summary>
 	/// 各Triangleの各Edgeに接続されている
 	/// 隣接TriangleのIndexです。
 	///
@@ -145,7 +142,6 @@ public sealed class BallSurfaceMeshData
 	private readonly int m_BoundaryEdgeCount;
 	private readonly int m_NonManifoldEdgeCount;
 	private readonly int m_DegenerateTriangleCount;
-
 	private readonly int m_InvalidEdgeCount;
 	private readonly int m_FlatEdgeCount;
 	private readonly int m_SmoothEdgeCount;
@@ -331,6 +327,9 @@ public sealed class BallSurfaceMeshData
 		m_TriangleNormals =
 			new Vector3[triangleCount];
 
+		m_TriangleCornerNormals =
+			new Vector3[triangleCount * 3];
+
 		m_NeighborTriangleIndices =
 			new int[triangleCount * 3];
 
@@ -450,6 +449,8 @@ public sealed class BallSurfaceMeshData
 
 		m_ConcaveEdgeCount =
 			concaveEdgeCount;
+
+		BuildSmoothCornerNormals();
 	}
 
 	/// <summary>
@@ -489,6 +490,32 @@ public sealed class BallSurfaceMeshData
 	{
 		return m_TriangleNormals[
 			triangleIndex];
+	}
+
+	/// <summary>
+	/// 指定Triangleの3頂点に対応する
+	/// Smooth Normalをローカル座標で取得します。
+	/// </summary>
+	public void GetTriangleLocalCornerNormals(
+		int triangleIndex,
+		out Vector3 normalA,
+		out Vector3 normalB,
+		out Vector3 normalC)
+	{
+		int triangleStartIndex =
+			triangleIndex * 3;
+
+		normalA =
+			m_TriangleCornerNormals[
+				triangleStartIndex];
+
+		normalB =
+			m_TriangleCornerNormals[
+				triangleStartIndex + 1];
+
+		normalC =
+			m_TriangleCornerNormals[
+				triangleStartIndex + 2];
 	}
 
 	/// <summary>
@@ -860,19 +887,19 @@ public sealed class BallSurfaceMeshData
 	/// 2つのTriangleが共有しているEdgeの形状を判定します。
 	/// </summary>
 	/// <remarks>
-	/// 判定は2段階で行います。
+	/// Edge方向と法線のCross Productによる符号判定は、
+	/// Triangleの頂点配置やEdge方向に影響されやすいため使用しません。
 	///
-	/// 1. Triangle法線同士の角度が小さい場合
-	///    FlatまたはSmoothとして扱います。
+	/// 代わりに、それぞれのTriangle Planeに対して
+	/// 相手Triangleの反対側頂点がどちら側に存在するかを調べます。
 	///
-	/// 2. 一定以上曲がっている場合
-	///    相手Triangleの反対側頂点がPlaneの
-	///    どちら側に存在するかによって
-	///    Convex / Concaveを判定します。
+	/// Outward Windingされた閉じたMeshでは、
 	///
-	/// この方法により、SphereやTorusなどに存在する
-	/// 微小なConcave方向の折れをSharp Concaveとして
-	/// 誤判定することを防ぎます。
+	/// ・両方の反対頂点がSurface内部側 → Convex
+	/// ・両方がほぼPlane上              → Flat
+	/// ・両方がSurface外部側            → Concave
+	///
+	/// となります。
 	/// </remarks>
 	private EEdgeType CalculateSharedEdgeType(
 		int firstTriangleIndex,
@@ -904,10 +931,6 @@ public sealed class BallSurfaceMeshData
 				-1.0f,
 				1.0f);
 
-		// ほぼ完全に同一平面ならFlatです。
-		//
-		// Cubeの1面を2枚のTriangleへ分割した際の
-		// 対角Edgeなどがこれに該当します。
 		if (normalDot >=
 			m_FlatNormalDotThreshold)
 		{
@@ -919,12 +942,6 @@ public sealed class BallSurfaceMeshData
 				normalDot) *
 			Mathf.Rad2Deg;
 
-		// SphereやTorusのように、
-		// 多数のTriangleで滑らかな曲面を近似している場合、
-		// ごく浅いConcave方向のEdgeが発生することがあります。
-		//
-		// 一定角度以下ならSharp Edgeとはみなさず、
-		// Surface上をそのまま通過できるSmooth Edgeとします。
 		if (normalAngle <=
 			m_SmoothEdgeMaximumAngle)
 		{
@@ -947,25 +964,18 @@ public sealed class BallSurfaceMeshData
 				secondTriangleIndex,
 				secondEdgeIndex);
 
-		// Triangle AのPlaneから見た、
-		// Triangle Bの反対側頂点の符号付き距離です。
 		float secondVertexPlaneDistance =
 			Vector3.Dot(
 				secondOppositeVertex -
 					edgeStart,
 				firstNormal);
 
-		// Triangle BのPlaneから見た、
-		// Triangle Aの反対側頂点の符号付き距離です。
 		float firstVertexPlaneDistance =
 			Vector3.Dot(
 				firstOppositeVertex -
 					edgeStart,
 				secondNormal);
 
-		// Outward Windingされた閉じたMeshで、
-		// 両方の反対側頂点がSurface Planeの
-		// 内側へ存在する場合はSharp Convexです。
 		if (firstVertexPlaneDistance <=
 				m_EdgePlaneTolerance &&
 			secondVertexPlaneDistance <=
@@ -974,8 +984,6 @@ public sealed class BallSurfaceMeshData
 			return EEdgeType.Convex;
 		}
 
-		// 逆に両方がSurface Planeの外側なら、
-		// L字の内角などに相当するSharp Concaveです。
 		if (firstVertexPlaneDistance >=
 				-m_EdgePlaneTolerance &&
 			secondVertexPlaneDistance >=
@@ -984,9 +992,255 @@ public sealed class BallSurfaceMeshData
 			return EEdgeType.Concave;
 		}
 
-		// 一方が内側、一方が外側の場合は
-		// Winding不整合などが考えられます。
 		return EEdgeType.Invalid;
+	}
+
+	/// <summary>
+	/// Flat / Smooth Edgeだけを辿ってTriangle法線を平均し、
+	/// 各Triangle頂点の連続したSurface Normalを構築します。
+	/// </summary>
+	private void BuildSmoothCornerNormals()
+	{
+		int[] visitStamps =
+			new int[TriangleCount];
+
+		int[] triangleQueue =
+			new int[TriangleCount];
+
+		int visitStamp =
+			0;
+
+		for (int triangleIndex = 0;
+			triangleIndex < TriangleCount;
+			triangleIndex++)
+		{
+			GetTriangleLocalVertices(
+				triangleIndex,
+				out Vector3 vertexA,
+				out Vector3 vertexB,
+				out Vector3 vertexC);
+
+			BuildSmoothCornerNormal(
+				triangleIndex,
+				0,
+				vertexA,
+				visitStamps,
+				triangleQueue,
+				ref visitStamp);
+
+			BuildSmoothCornerNormal(
+				triangleIndex,
+				1,
+				vertexB,
+				visitStamps,
+				triangleQueue,
+				ref visitStamp);
+
+			BuildSmoothCornerNormal(
+				triangleIndex,
+				2,
+				vertexC,
+				visitStamps,
+				triangleQueue,
+				ref visitStamp);
+		}
+	}
+
+	/// <summary>
+	/// 1つのTriangle頂点について、
+	/// Sharp Edgeを越えずに接続しているTriangle法線を平均します。
+	/// </summary>
+	private void BuildSmoothCornerNormal(
+		int sourceTriangleIndex,
+		int sourceCornerIndex,
+		Vector3 vertexPosition,
+		int[] visitStamps,
+		int[] triangleQueue,
+		ref int visitStamp)
+	{
+		visitStamp++;
+
+		if (visitStamp == int.MaxValue)
+		{
+			Array.Clear(
+				visitStamps,
+				0,
+				visitStamps.Length);
+
+			visitStamp =
+				1;
+		}
+
+		int queueReadIndex =
+			0;
+
+		int queueWriteIndex =
+			0;
+
+		triangleQueue[
+			queueWriteIndex++] =
+				sourceTriangleIndex;
+
+		visitStamps[
+			sourceTriangleIndex] =
+			visitStamp;
+
+		Vector3 accumulatedNormal =
+			Vector3.zero;
+
+		while (queueReadIndex <
+			queueWriteIndex)
+		{
+			int triangleIndex =
+				triangleQueue[
+					queueReadIndex++];
+
+			GetTriangleLocalVertices(
+				triangleIndex,
+				out Vector3 triangleVertexA,
+				out Vector3 triangleVertexB,
+				out Vector3 triangleVertexC);
+
+			// 面積の大きいTriangleほど寄与を大きくするため、
+			// 正規化前のCross Productを加算します。
+			Vector3 weightedNormal =
+				Vector3.Cross(
+					triangleVertexB -
+						triangleVertexA,
+					triangleVertexC -
+						triangleVertexA);
+
+			if (weightedNormal.sqrMagnitude >
+				Mathf.Epsilon)
+			{
+				accumulatedNormal +=
+					weightedNormal;
+			}
+
+			for (int edgeIndex = 0;
+				edgeIndex < 3;
+				edgeIndex++)
+			{
+				EEdgeType edgeType =
+					GetEdgeType(
+						triangleIndex,
+						edgeIndex);
+
+				if (edgeType !=
+						EEdgeType.Flat &&
+					edgeType !=
+						EEdgeType.Smooth)
+				{
+					continue;
+				}
+
+				GetEdgeLocalVertices(
+					triangleIndex,
+					edgeIndex,
+					out Vector3 edgeStart,
+					out Vector3 edgeEnd);
+
+				if (!IsSameVertexPosition(
+						vertexPosition,
+						edgeStart) &&
+					!IsSameVertexPosition(
+						vertexPosition,
+						edgeEnd))
+				{
+					continue;
+				}
+
+				if (!TryGetNeighbor(
+					triangleIndex,
+					edgeIndex,
+					out int neighborTriangleIndex,
+					out _))
+				{
+					continue;
+				}
+
+				if (visitStamps[
+					neighborTriangleIndex] ==
+					visitStamp)
+				{
+					continue;
+				}
+
+				if (!TriangleContainsVertexPosition(
+					neighborTriangleIndex,
+					vertexPosition))
+				{
+					continue;
+				}
+
+				visitStamps[
+					neighborTriangleIndex] =
+					visitStamp;
+
+				triangleQueue[
+					queueWriteIndex++] =
+					neighborTriangleIndex;
+			}
+		}
+
+		if (accumulatedNormal.sqrMagnitude <=
+			Mathf.Epsilon)
+		{
+			accumulatedNormal =
+				m_TriangleNormals[
+					sourceTriangleIndex];
+		}
+		else
+		{
+			accumulatedNormal.Normalize();
+		}
+
+		m_TriangleCornerNormals[
+			sourceTriangleIndex * 3 +
+			sourceCornerIndex] =
+			accumulatedNormal;
+	}
+
+	/// <summary>
+	/// Triangleが指定位置の頂点を持っているか確認します。
+	/// </summary>
+	private bool TriangleContainsVertexPosition(
+		int triangleIndex,
+		Vector3 vertexPosition)
+	{
+		GetTriangleLocalVertices(
+			triangleIndex,
+			out Vector3 vertexA,
+			out Vector3 vertexB,
+			out Vector3 vertexC);
+
+		return IsSameVertexPosition(
+				vertexPosition,
+				vertexA) ||
+			IsSameVertexPosition(
+				vertexPosition,
+				vertexB) ||
+			IsSameVertexPosition(
+				vertexPosition,
+				vertexC);
+	}
+
+	/// <summary>
+	/// 2頂点をSurface Mesh用の位置許容値で比較します。
+	/// </summary>
+	private bool IsSameVertexPosition(
+		Vector3 first,
+		Vector3 second)
+	{
+		float toleranceSquared =
+			m_VertexPositionTolerance *
+			m_VertexPositionTolerance;
+
+		return (
+			first -
+			second
+		).sqrMagnitude <=
+			toleranceSquared;
 	}
 
 
