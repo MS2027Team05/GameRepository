@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace StageEditor
@@ -173,6 +174,9 @@ namespace StageEditor
 			EnsureDirectoryExists(m_SaveDirectoryPath);
 
 			Dictionary<GameObject, GameObject> sourceToTargetPrefabMap = new Dictionary<GameObject, GameObject>();
+			HashSet<GameObject> oldSelectedObjects = new HashSet<GameObject>(Selection.gameObjects);
+			List<GameObject> newSelectedObjects = new List<GameObject>();
+			HashSet<UnityEngine.SceneManagement.Scene> affectedScenes = new HashSet<UnityEngine.SceneManagement.Scene>();
 			int replacedCount = 0;
 
 			Undo.IncrementCurrentGroup();
@@ -216,15 +220,56 @@ namespace StageEditor
 						continue;
 					}
 
+					bool isTargetSelected = oldSelectedObjects.Contains(target);
+					bool isTargetRoot = (m_TargetRoot == target);
+
 					// Transform・階層情報を保持して置換
-					ReplaceInstance(target, unifiedPrefab);
-					replacedCount++;
+					GameObject newInstance = ReplaceInstance(target, unifiedPrefab);
+					if (newInstance != null)
+					{
+						replacedCount++;
+						affectedScenes.Add(newInstance.scene);
+
+						if (isTargetSelected)
+						{
+							newSelectedObjects.Add(newInstance);
+						}
+
+						if (isTargetRoot)
+						{
+							m_TargetRoot = newInstance;
+						}
+					}
 				}
 			}
 			finally
 			{
 				EditorUtility.ClearProgressBar();
 				Undo.CollapseUndoOperations(undoGroup);
+
+				// 破棄されたオブジェクトがSelectionに残りInspectorで例外が出るのを防止
+				if (newSelectedObjects.Count > 0)
+				{
+					Selection.objects = newSelectedObjects.ToArray();
+				}
+				else
+				{
+					Selection.objects = Array.Empty<UnityEngine.Object>();
+				}
+
+				if (m_TargetRoot == null)
+				{
+					m_TargetRoot = null;
+				}
+
+				foreach (UnityEngine.SceneManagement.Scene scene in affectedScenes)
+				{
+					if (scene.IsValid() && scene.isLoaded)
+					{
+						EditorSceneManager.MarkSceneDirty(scene);
+					}
+				}
+
 				AssetDatabase.SaveAssets();
 				AssetDatabase.Refresh();
 			}
@@ -522,7 +567,7 @@ namespace StageEditor
 		/// <summary>
 		/// Transformと階層位置を保持してPrefabインスタンスに置き換えます。
 		/// </summary>
-		private static void ReplaceInstance(GameObject oldInstance, GameObject prefabAsset)
+		private static GameObject ReplaceInstance(GameObject oldInstance, GameObject prefabAsset)
 		{
 			Transform oldTransform = oldInstance.transform;
 			Transform parent = oldTransform.parent;
@@ -540,7 +585,7 @@ namespace StageEditor
 			GameObject newInstance = (GameObject)PrefabUtility.InstantiatePrefab(prefabAsset, parent);
 			if (newInstance == null)
 			{
-				return;
+				return null;
 			}
 
 			Undo.RegisterCreatedObjectUndo(newInstance, "Instantiate Regular Prefab");
@@ -559,6 +604,7 @@ namespace StageEditor
 
 			// 古いオブジェクトの破棄をUndoに登録
 			Undo.DestroyObjectImmediate(oldInstance);
+			return newInstance;
 		}
 
 		/// <summary>
