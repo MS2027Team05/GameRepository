@@ -67,7 +67,7 @@ namespace StageEditor
 				m_SaveDirectoryPath);
 
 			m_CreateRegularPrefab = EditorGUILayout.Toggle(
-				new GUIContent("完全な通常Prefabにする", "Variantではなく完全な青アイコンの通常Prefab(Regular Prefab)として生成します。インスペクターの青いオーバーライド表示を解消できます。"),
+				new GUIContent("通常Prefabにする", "Variantではなく完全な青アイコンの通常Prefab(Regular Prefab)として生成します。インスペクターの青いオーバーライド表示を解消できます。"),
 				m_CreateRegularPrefab);
 
 			m_OverwriteExisting = EditorGUILayout.Toggle(
@@ -96,7 +96,7 @@ namespace StageEditor
 			EditorGUILayout.Space();
 
 			GUI.backgroundColor = new Color(0.4f, 0.8f, 1f);
-			if (GUILayout.Button("一括置換を実行 (Undo対応)", GUILayout.Height(40f)))
+			if (GUILayout.Button("一括置換を実行", GUILayout.Height(40f)))
 			{
 				ExecuteReplacement();
 			}
@@ -162,7 +162,7 @@ namespace StageEditor
 
 			bool confirmed = EditorUtility.DisplayDialog(
 				"実行確認",
-				$"{targets.Count} 件のオブジェクトを指定フォルダの通常Prefabに置換します。\nよろしいですか？(Undoで元に戻せます)",
+				$"{targets.Count} 件のオブジェクトを指定フォルダの通常Prefabに置換します。\nよろしいですか？",
 				"実行",
 				"キャンセル");
 
@@ -276,7 +276,7 @@ namespace StageEditor
 
 			EditorUtility.DisplayDialog(
 				"置換完了",
-				$"正常に {replacedCount} 件のオブジェクトを集約通常Prefabに置換しました。\n保存先: {m_SaveDirectoryPath}",
+				$"{replacedCount} 件のオブジェクトを集約通常Prefabに置換しました。\n保存先: {m_SaveDirectoryPath}",
 				"OK");
 		}
 
