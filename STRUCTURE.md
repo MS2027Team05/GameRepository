@@ -11,7 +11,8 @@ GameRepository/
 │   ├── Fonts/                   # フォントリソース格納 (AI学習対象外)
 │   ├── haikei/                  # 背景モデル・マテリアル・テクスチャ・Prefab格納
 │   ├── Materials/               # マテリアル・シェーダー関連格納
-│   │   └── Ball/                # ボール描画用マテリアル (通常・透過X-Ray等)
+│   │   ├── Ball/                # ボール描画用マテリアル (通常・透過X-Ray等)
+│   │   └── Player/              # プレイヤー用マテリアル格納 (性別・チームカラー別)
 │   ├── Meshes/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
 │   ├── Models/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
 │   ├── Plugins/                 # 外部プラグインライブラリ格納 (DOTween等)
@@ -58,6 +59,7 @@ GameRepository/
 │   │       ├── GravityMover.cs          # 等速直線移動(落下)・空中ホバリング・着地衝突制御
 │   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
 │   │       ├── PlayerAimGuide.cs        # レティクル表示・軌道予測線の描画およびエイム照準制御
+│   │       ├── PlayerAppearance.cs      # プレイヤー外見(性別モデル・マテリアル・カラー)管理制御
 │   │       ├── PlayerBallCarrier.cs     # プレイヤーのボール所持・キャッチ・投擲(シュート)制御
 │   │       ├── PlayerCameraEffect.cs    # 三人称視点カメラ旋回(接地面法線追従)・高速移動時FOV変更・カメラシェイク制御・視点リセット
 │   │       ├── PlayerEdgeDiagnostics.cs # 角部・接地境界脱落時の挙動解析・診断HUD描画制御
