@@ -21,8 +21,9 @@ public class PlayerInputReceiver : MonoBehaviour
 	[SerializeField] private InputActionReference m_BrakeAction;
 	[FormerlySerializedAs("shootAction")]
 	[SerializeField] private InputActionReference m_ShootAction;
-	[FormerlySerializedAs("viewResetAction")]
-	[SerializeField] private InputActionReference m_ViewResetAction;
+
+	[SerializeField] private InputActionReference m_LockOnAction;
+
 	/// <summary>地上移動入力ベクトル(WASD/左スティック)</summary>
 	public Vector2 MoveInput { get; private set; }
 
@@ -41,8 +42,12 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>シュートボタン押下イベント。</summary>
 	public event Action OnShootPressed;
 
-	/// <summary>視点リセットボタン押下イベント</summary>
+
+	/// <summary>ロックオンボタン押下イベント。</summary>
+	public event Action OnLockOnPressed;
+
 	public event Action OnViewResetPressed;
+
 
 	/// <summary>
 	/// マウスカーソルのロック状態・表示状態を設定します。
@@ -62,7 +67,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		BindAction(m_ConfirmAction, HandleConfirm);
 		BindAction(m_BrakeAction, HandleBrake);
 		BindAction(m_ShootAction, HandleShoot);
-		BindAction(m_ViewResetAction, HandleViewReset);
+		BindAction(m_LockOnAction, HandleLockOn);
 	}
 
 	private void OnDisable()
@@ -73,7 +78,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		UnbindAction(m_ConfirmAction, HandleConfirm);
 		UnbindAction(m_BrakeAction, HandleBrake);
 		UnbindAction(m_ShootAction, HandleShoot);
-		UnbindAction(m_ViewResetAction, HandleViewReset);
+		UnbindAction(m_LockOnAction, HandleLockOn);
 	}
 
 	private void Update()
@@ -214,9 +219,10 @@ public class PlayerInputReceiver : MonoBehaviour
 		OnShootPressed?.Invoke();
 	}
 
-	private void HandleViewReset(InputAction.CallbackContext context)
+	//
+	private void HandleLockOn(InputAction.CallbackContext context)
 	{
-		OnViewResetPressed?.Invoke();
+		OnLockOnPressed?.Invoke();
 	}
 
 	private void HandleKeyboardFallback()
@@ -274,13 +280,20 @@ public class PlayerInputReceiver : MonoBehaviour
 			}
 		}
 
-		// 視点リセット：Rキー
-		if (m_ViewResetAction == null)
+		// ロックオン：Lキー または Qキー または ゲームパッドL1
+		if (m_LockOnAction == null)
 		{
-			if (Keyboard.current != null &&
-				Keyboard.current.rKey.wasPressedThisFrame)
+			bool lockOnPressed =
+				(Keyboard.current != null &&
+				 (Keyboard.current.lKey.wasPressedThisFrame ||
+				  Keyboard.current.qKey.wasPressedThisFrame))
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.leftShoulder.wasPressedThisFrame);
+
+			if (lockOnPressed)
 			{
-				OnViewResetPressed?.Invoke();
+				OnLockOnPressed?.Invoke();
 			}
 		}
 	}

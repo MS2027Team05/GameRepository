@@ -682,9 +682,10 @@ GameObject:
   - component: {fileID: 936729834740044593}
   - component: {fileID: 5433142072243466315}
   - component: {fileID: 6206248664396906086}
+  - component: {fileID: 85954177905002492}
   m_Layer: 6
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: Ally
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -914,7 +915,7 @@ MonoBehaviour:
   m_ConfirmAction: {fileID: 0}
   m_BrakeAction: {fileID: 0}
   m_ShootAction: {fileID: 0}
-  m_ViewResetAction: {fileID: 0}
+  m_LockOnAction: {fileID: 0}
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1203,6 +1204,21 @@ MonoBehaviour:
   m_AutoInputMode: 0
   m_SlowForwardSpeedRatio: 0
   m_WiggleSwitchInterval: 0
+--- !u!114 &85954177905002492
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc2e9822b6bccda4ca45755608a1f70b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LockOnManager
+  targetCamera: {fileID: 0}
+  allyTag: Ally
+  ballTag: Ball
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0

@@ -1601,7 +1601,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 561607405
+  GlobalObjectIdHash: 2238693639
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -1663,7 +1663,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3706687999057599681, guid: 582e34ceeee946740a2945aef5a91976, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2497184546
+      value: 836628274
       objectReference: {fileID: 0}
     - target: {fileID: 3706687999057599681, guid: 582e34ceeee946740a2945aef5a91976, type: 3}
       propertyPath: InScenePlacedSourceGlobalObjectIdHash
@@ -1711,6 +1711,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7223661482325723954, guid: 582e34ceeee946740a2945aef5a91976, type: 3}
       propertyPath: m_Name
+      value: Ball
+      objectReference: {fileID: 0}
+    - target: {fileID: 7223661482325723954, guid: 582e34ceeee946740a2945aef5a91976, type: 3}
+      propertyPath: m_TagString
       value: Ball
       objectReference: {fileID: 0}
     m_RemovedComponents: []
