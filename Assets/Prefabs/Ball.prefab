@@ -348,11 +348,12 @@ MonoBehaviour:
   m_SurfaceGravityAcceleration: 30
   m_SurfaceBounceSpeedThreshold: 0.5
   m_SurfaceBounceNormalRetention: 0.9
-  m_SurfaceBounceTangentialRetention: 0.75
+  m_SurfaceBounceTangentialRetention: 0.7
   m_SurfaceMinBounceNormalSpeed: 0
   m_SurfaceMaxBounceNormalSpeed: 10
-  m_SurfaceGroundDeceleration: 2.5
-  m_SurfaceStopSpeedThreshold: 0.5
+  m_SurfaceGroundDeceleration: 10
+  m_SurfaceStopSpeedThreshold: 1
+  m_EnableBounceDistanceDebug: 1
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4

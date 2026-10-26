@@ -68,6 +68,51 @@ public sealed class BallSurfaceMeshData
 	}
 
 	/// <summary>
+	/// 1つのMesh頂点へ接続しているConvex Edge情報です。
+	/// </summary>
+	public readonly struct ConvexEdgeReference
+	{
+		/// <summary>
+		/// Edgeを保持しているTriangle Indexです。
+		/// </summary>
+		public int TriangleIndex
+		{
+			get;
+		}
+
+		/// <summary>
+		/// Triangle内のEdge Indexです。
+		/// </summary>
+		public int EdgeIndex
+		{
+			get;
+		}
+
+		/// <summary>
+		/// 基準頂点とは反対側にあるEdge端点のローカル座標です。
+		/// </summary>
+		public Vector3 OtherLocalVertex
+		{
+			get;
+		}
+
+		public ConvexEdgeReference(
+			int triangleIndex,
+			int edgeIndex,
+			Vector3 otherLocalVertex)
+		{
+			TriangleIndex =
+				triangleIndex;
+
+			EdgeIndex =
+				edgeIndex;
+
+			OtherLocalVertex =
+				otherLocalVertex;
+		}
+	}
+
+	/// <summary>
 	/// 同じ位置に存在する頂点を
 	/// 同一頂点として扱う際の許容誤差です。
 	/// </summary>
@@ -138,6 +183,19 @@ public sealed class BallSurfaceMeshData
 	/// Triangleごとの各Edge形状です。
 	/// </summary>
 	private readonly EEdgeType[] m_EdgeTypes;
+
+	/// <summary>
+	/// 頂点位置ごとに接続している物理Convex Edgeを保持します。
+	/// </summary>
+	/// <remarks>
+	/// UV Seam等で同位置に重複頂点が存在しても、
+	/// VertexPositionKeyによって同一頂点として扱います。
+	///
+	/// Vertex Crossing時にMesh全体を走査せず、
+	/// その頂点へ接続しているEdgeだけ取得するためのCacheです。
+	/// </remarks>
+	private readonly Dictionary<VertexPositionKey, ConvexEdgeReference[]>
+		m_ConvexEdgesByVertex;
 
 	private readonly int m_BoundaryEdgeCount;
 	private readonly int m_NonManifoldEdgeCount;
@@ -450,6 +508,9 @@ public sealed class BallSurfaceMeshData
 		m_ConcaveEdgeCount =
 			concaveEdgeCount;
 
+		m_ConvexEdgesByVertex =
+			BuildConvexEdgesByVertex();
+
 		BuildSmoothCornerNormals();
 	}
 
@@ -606,6 +667,139 @@ public sealed class BallSurfaceMeshData
 				throw new ArgumentOutOfRangeException(
 					nameof(edgeIndex));
 		}
+	}
+
+	/// <summary>
+	/// 指定ローカル頂点へ接続しているConvex Edge一覧を取得します。
+	/// </summary>
+	/// <remarks>
+	/// 返される配列はMesh構築時に生成されたCacheです。
+	/// 呼び出しごとの新規配列生成やMesh全走査は行いません。
+	/// </remarks>
+	public bool TryGetIncidentConvexEdges(
+		Vector3 localVertexPosition,
+		out ConvexEdgeReference[] convexEdges)
+	{
+		VertexPositionKey vertexKey =
+			new VertexPositionKey(
+				localVertexPosition);
+
+		return m_ConvexEdgesByVertex.TryGetValue(
+			vertexKey,
+			out convexEdges);
+	}
+
+	/// <summary>
+	/// Convex Edgeを頂点位置ごとに事前Cacheします。
+	/// </summary>
+	private Dictionary<VertexPositionKey, ConvexEdgeReference[]>
+		BuildConvexEdgesByVertex()
+	{
+		Dictionary<VertexPositionKey, List<ConvexEdgeReference>> buildMap =
+			new Dictionary<VertexPositionKey, List<ConvexEdgeReference>>();
+
+		HashSet<EdgeKey> registeredEdges =
+			new HashSet<EdgeKey>();
+
+		for (int triangleIndex = 0;
+			triangleIndex < TriangleCount;
+			triangleIndex++)
+		{
+			for (int edgeIndex = 0;
+				edgeIndex < 3;
+				edgeIndex++)
+			{
+				if (GetEdgeType(
+						triangleIndex,
+						edgeIndex) !=
+					EEdgeType.Convex)
+				{
+					continue;
+				}
+
+				GetEdgeLocalVertices(
+					triangleIndex,
+					edgeIndex,
+					out Vector3 edgeStart,
+					out Vector3 edgeEnd);
+
+				VertexPositionKey startKey =
+					new VertexPositionKey(
+						edgeStart);
+
+				VertexPositionKey endKey =
+					new VertexPositionKey(
+						edgeEnd);
+
+				EdgeKey edgeKey =
+					new EdgeKey(
+						startKey,
+						endKey);
+
+				// 同じ物理Edgeは隣接する2Triangleから見えるため、
+				// 1本として1回だけ登録します。
+				if (!registeredEdges.Add(
+					edgeKey))
+				{
+					continue;
+				}
+
+				AddConvexEdgeReference(
+					buildMap,
+					startKey,
+					new ConvexEdgeReference(
+						triangleIndex,
+						edgeIndex,
+						edgeEnd));
+
+				AddConvexEdgeReference(
+					buildMap,
+					endKey,
+					new ConvexEdgeReference(
+						triangleIndex,
+						edgeIndex,
+						edgeStart));
+			}
+		}
+
+		Dictionary<VertexPositionKey, ConvexEdgeReference[]> result =
+			new Dictionary<VertexPositionKey, ConvexEdgeReference[]>(
+				buildMap.Count);
+
+		foreach (KeyValuePair<VertexPositionKey, List<ConvexEdgeReference>> pair
+			in buildMap)
+		{
+			result.Add(
+				pair.Key,
+				pair.Value.ToArray());
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Convex Edgeの頂点Cacheへ1件追加します。
+	/// </summary>
+	private void AddConvexEdgeReference(
+		Dictionary<VertexPositionKey, List<ConvexEdgeReference>> buildMap,
+		VertexPositionKey vertexKey,
+		ConvexEdgeReference edgeReference)
+	{
+		if (!buildMap.TryGetValue(
+			vertexKey,
+			out List<ConvexEdgeReference> edgeList))
+		{
+			edgeList =
+				new List<ConvexEdgeReference>(
+					4);
+
+			buildMap.Add(
+				vertexKey,
+				edgeList);
+		}
+
+		edgeList.Add(
+			edgeReference);
 	}
 
 	/// <summary>

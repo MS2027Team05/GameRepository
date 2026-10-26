@@ -52,6 +52,48 @@ public sealed class BallSurfaceSimulation
 	/// </remarks>
 	private const float m_MaximumCoupledStepTime = 0.005f;
 
+	/// <summary>
+	/// Sharp Convex Edgeへ入った瞬間に残すSurface速度の割合です。
+	/// </summary>
+	/// <remarks>
+	/// 円弧を回っている最中に毎Frame減速するのではなく、
+	/// Convex Edgeへ入った瞬間に1回だけ適用します。
+	///
+	/// 0.85なら、角へ入る直前のSurface速度の85%を残します。
+	/// </remarks>
+	private const float m_ConvexEdgeSpeedRetention = 0.85f;
+
+	/// <summary>
+	/// Sharp Convex Edgeの表示カーブを円弧からどれだけ潰すかを表します。
+	/// </summary>
+	/// <remarks>
+	/// 1.0なら通常の円弧に近いBezierカーブです。
+	/// 1.0より小さくすると角の中央がEdge側へ寄り、
+	/// World上の軌道が短くなります。
+	///
+	/// 今回は0.70として、円弧の自然な入り方を残しつつ
+	/// 中央だけ少し潰します。
+	/// </remarks>
+	private const float m_ConvexCurveFlatten = 0.70f;
+
+	/// <summary>
+	/// 2本のEdge Crossingを同時到達として扱う
+	/// Crossing Fractionの許容差です。
+	/// </summary>
+	private const float m_VertexCrossingFractionTolerance = 0.001f;
+
+	/// <summary>
+	/// 現在面の角度二等分線へ向かっていると判定する
+	/// 最大角度差です。
+	/// </summary>
+	private const float m_VertexBisectorMaximumAngle = 8.0f;
+
+	/// <summary>
+	/// Vertexから見て現在面上に存在するEdge方向と判定する
+	/// Surface Normalとの内積許容値です。
+	/// </summary>
+	private const float m_VertexFaceEdgeNormalDotTolerance = 0.02f;
+
 	private BallSurfaceSource m_SurfaceSource;
 	private BallSurfaceMeshData m_MeshData;
 
@@ -73,6 +115,31 @@ public sealed class BallSurfaceSimulation
 	/// デバッグ計測ではこのフラグを使ってConvex通過を取りこぼさないようにします。
 	/// </remarks>
 	private bool m_DidTraverseConvexEdgeThisStep;
+
+	/// <summary>
+	/// 今回のAdvance中にSurface方向へ進んだ距離です。
+	/// </summary>
+	private float m_SurfaceDistanceTravelledThisStep;
+
+	/// <summary>
+	/// 今回のAdvance中にSurfaceへ着地したかどうかです。
+	/// </summary>
+	private bool m_DidSurfaceImpactThisStep;
+
+	/// <summary>
+	/// Surface Physics開始後に成立したバウンド番号です。
+	/// </summary>
+	private int m_BounceSequence;
+
+	/// <summary>
+	/// 直近に成立したバウンド開始時のSurface速度です。
+	/// </summary>
+	private float m_LastBounceSurfaceSpeed;
+
+	/// <summary>
+	/// 直近に成立したバウンド開始時の法線方向速度です。
+	/// </summary>
+	private float m_LastBounceVerticalSpeed;
 
 	private int m_LastEdgeTriangleIndex;
 	private int m_LastEdgeIndex;
@@ -98,6 +165,8 @@ public sealed class BallSurfaceSimulation
 	private int m_ConvexTargetEdgeIndex;
 
 	private Vector3 m_ConvexEdgeDirection;
+	private Vector3 m_ConvexEdgeStartPoint;
+	private Vector3 m_ConvexEdgeEndPoint;
 	private Vector3 m_ConvexSourceNormal;
 	private Vector3 m_ConvexTargetNormal;
 
@@ -106,6 +175,34 @@ public sealed class BallSurfaceSimulation
 
 	private float m_ConvexAlongSpeed;
 	private float m_ConvexCrossSpeed;
+
+	/// <summary>
+	/// 頂点の角度二等分線から進入し、
+	/// 3本目のConvex Edgeへ向きを切り替えている途中かどうかです。
+	/// </summary>
+	private bool m_IsConvexVertexTransition;
+
+	private Vector3 m_ConvexVertexPoint;
+	private Vector3 m_ConvexVertexSourceNormal;
+	private Vector3 m_ConvexVertexTargetNormal;
+	private Vector3 m_ConvexVertexRotationAxis;
+
+	private float m_ConvexVertexSignedAngle;
+	private float m_ConvexVertexCurrentAngle;
+
+	private Vector3 m_ConvexVertexOutgoingEdgeDirection;
+	private Vector3 m_ConvexVertexOutgoingEdgeEnd;
+
+	/// <summary>
+	/// 頂点遷移完了後、
+	/// TriangleではなくConvex EdgeそのものをSurface基準として
+	/// 進んでいるかどうかです。
+	/// </summary>
+	private bool m_IsConvexVertexEdgePath;
+
+	private Vector3 m_ConvexVertexEdgeNormal;
+	private Vector3 m_ConvexVertexEdgeDirection;
+	private Vector3 m_ConvexVertexEdgeEnd;
 
 	public bool IsInitialized
 	{
@@ -123,6 +220,61 @@ public sealed class BallSurfaceSimulation
 		get
 		{
 			return m_DidTraverseConvexEdgeThisStep;
+		}
+	}
+
+	/// <summary>
+	/// 直近のAdvance中にSurface方向へ進んだ距離を取得します。
+	/// </summary>
+	public float SurfaceDistanceTravelledThisStep
+	{
+		get
+		{
+			return m_SurfaceDistanceTravelledThisStep;
+		}
+	}
+
+	/// <summary>
+	/// 直近のAdvance中にSurfaceへ着地したか取得します。
+	/// </summary>
+	public bool DidSurfaceImpactThisStep
+	{
+		get
+		{
+			return m_DidSurfaceImpactThisStep;
+		}
+	}
+
+	/// <summary>
+	/// 現在のバウンド番号を取得します。
+	/// </summary>
+	public int BounceSequence
+	{
+		get
+		{
+			return m_BounceSequence;
+		}
+	}
+
+	/// <summary>
+	/// 直近に成立したバウンド開始時のSurface速度を取得します。
+	/// </summary>
+	public float LastBounceSurfaceSpeed
+	{
+		get
+		{
+			return m_LastBounceSurfaceSpeed;
+		}
+	}
+
+	/// <summary>
+	/// 直近に成立したバウンド開始時の法線方向速度を取得します。
+	/// </summary>
+	public float LastBounceVerticalSpeed
+	{
+		get
+		{
+			return m_LastBounceVerticalSpeed;
 		}
 	}
 
@@ -456,6 +608,12 @@ public sealed class BallSurfaceSimulation
 		m_DidTraverseConvexEdgeThisStep =
 			false;
 
+		m_SurfaceDistanceTravelledThisStep =
+			0.0f;
+
+		m_DidSurfaceImpactThisStep =
+			false;
+
 		if (!m_IsInitialized ||
 			m_SurfaceSource == null ||
 			m_MeshData == null)
@@ -487,7 +645,8 @@ public sealed class BallSurfaceSimulation
 				Mathf.Abs(
 					m_VerticalVelocity) >
 					m_MinimumCalculationValue ||
-				m_IsConvexEdgeTransition;
+				m_IsConvexEdgeTransition ||
+				m_IsConvexVertexTransition;
 
 			float stepTime =
 				requiresCoupledStep
@@ -506,7 +665,8 @@ public sealed class BallSurfaceSimulation
 				stepTime);
 
 			if (IsGrounded &&
-				!m_IsConvexEdgeTransition)
+				!m_IsConvexEdgeTransition &&
+				!m_IsConvexVertexTransition)
 			{
 				ApplyGroundedDeceleration(
 					stepTime);
@@ -602,6 +762,9 @@ public sealed class BallSurfaceSimulation
 
 			m_VerticalVelocity =
 				0.0f;
+
+			m_DidSurfaceImpactThisStep =
+				true;
 
 			bool bounced =
 				HandleSurfaceImpact(
@@ -797,6 +960,14 @@ public sealed class BallSurfaceSimulation
 		m_VerticalVelocity =
 			bounceSpeed;
 
+		m_BounceSequence++;
+
+		m_LastBounceSurfaceSpeed =
+			m_SurfaceVelocity.magnitude;
+
+		m_LastBounceVerticalSpeed =
+			bounceSpeed;
+
 		return true;
 	}
 
@@ -867,6 +1038,37 @@ public sealed class BallSurfaceSimulation
 				m_MaximumTriangleTransitionsPerStep)
 			{
 				return EAdvanceResult.TransitionLimitReached;
+			}
+
+			// 現在面の角度二等分線からVertexへ進入した場合は、
+			// 左右どちらかの面を選ばず、
+			// Vertexから伸びる3本目のConvex Edgeへ向きを切り替えます。
+			if (m_IsConvexVertexTransition)
+			{
+				if (!AdvanceConvexVertexTransition(
+					ref remainingTime,
+					out bool completed))
+				{
+					return EAdvanceResult.InvalidGeometry;
+				}
+
+				if (!completed)
+				{
+					return EAdvanceResult.Moved;
+				}
+
+				transitionCount++;
+				continue;
+			}
+
+			// Vertex Transition完了後は、
+			// TriangleではなくConvex Edgeそのものを基準線として進みます。
+			if (m_IsConvexVertexEdgePath)
+			{
+				AdvanceConvexVertexEdgePath(
+					remainingTime);
+
+				return EAdvanceResult.Moved;
 			}
 
 			// Sharp Convex Edgeへ入った後は、
@@ -983,6 +1185,10 @@ public sealed class BallSurfaceSimulation
 			if (IsInsideTriangle(
 				endBarycentric))
 			{
+				m_SurfaceDistanceTravelledThisStep +=
+					currentSpeed *
+					remainingTime;
+
 				m_SurfacePoint =
 					ProjectPointToPlane(
 						targetPoint,
@@ -992,27 +1198,111 @@ public sealed class BallSurfaceSimulation
 				return EAdvanceResult.Moved;
 			}
 
-			if (!TryFindFirstCrossedEdge(
+			if (!TryFindFirstSurfaceCrossing(
 				startBarycentric,
 				endBarycentric,
 				ignoredEntryEdgeIndex,
 				out int crossedEdgeIndex,
+				out int simultaneousEdgeIndex,
 				out float crossingFraction))
 			{
 				return EAdvanceResult.InvalidGeometry;
 			}
 
-			Vector3 crossingPoint =
-				Vector3.LerpUnclamped(
-					segmentStartPoint,
-					targetPoint,
-					crossingFraction);
+			Vector3 crossingPoint;
 
-			crossingPoint =
-				ProjectPointToPlane(
-					crossingPoint,
+			if (simultaneousEdgeIndex >=
+					0 &&
+				TryGetSharedTriangleVertex(
+					crossedEdgeIndex,
+					simultaneousEdgeIndex,
 					vertexA,
-					currentNormal);
+					vertexB,
+					vertexC,
+					out Vector3 crossingVertex))
+			{
+				float distanceToVertex =
+					Vector3.Distance(
+						segmentStartPoint,
+						crossingVertex);
+
+				float timeToVertex =
+					currentSpeed >
+						m_MinimumCalculationValue
+						? distanceToVertex /
+							currentSpeed
+						: 0.0f;
+
+				timeToVertex =
+					Mathf.Clamp(
+						timeToVertex,
+						0.0f,
+						remainingTime);
+
+				m_SurfaceDistanceTravelledThisStep +=
+					currentSpeed *
+						timeToVertex;
+
+				crossingPoint =
+					crossingVertex;
+
+				crossingFraction =
+					remainingTime >
+						m_MinimumCalculationValue
+						? timeToVertex /
+							remainingTime
+						: 0.0f;
+
+				// 2本のEdgeへほぼ同時到達した時点で
+				// EdgeではなくVertex Crossingとして処理します。
+				if (TryBeginSymmetricConvexVertexTransition(
+					crossingVertex,
+					currentNormal,
+					m_SurfaceVelocity))
+				{
+					m_DidTraverseConvexEdgeThisStep =
+						true;
+
+					m_SurfacePoint =
+						crossingVertex;
+
+					remainingTime -=
+						timeToVertex;
+
+					if (remainingTime <
+						0.0f)
+					{
+						remainingTime =
+							0.0f;
+					}
+
+					transitionCount++;
+					continue;
+				}
+			}
+			else
+			{
+				float timeToCrossing =
+					remainingTime *
+						Mathf.Clamp01(
+							crossingFraction);
+
+				m_SurfaceDistanceTravelledThisStep +=
+					currentSpeed *
+						timeToCrossing;
+
+				crossingPoint =
+					Vector3.LerpUnclamped(
+						segmentStartPoint,
+						targetPoint,
+						crossingFraction);
+
+				crossingPoint =
+					ProjectPointToPlane(
+						crossingPoint,
+						vertexA,
+						currentNormal);
+			}
 
 			BallSurfaceMeshData.EEdgeType edgeType =
 				m_MeshData.GetEdgeType(
@@ -1194,6 +1484,725 @@ public sealed class BallSurfaceSimulation
 	}
 
 	/// <summary>
+	/// 現在面の角度二等分線からConvex Vertexへ進入した場合に、
+	/// Vertexから伸びる3本目のConvex Edgeを進行先として設定します。
+	/// </summary>
+	/// <remarks>
+	/// Cubeの頂点では3本のSharp Convex Edgeが接続しています。
+	///
+	/// 現在面上の2本:
+	///   \ /
+	///    ●  ← Vertex
+	///
+	/// この2本の角度二等分線へ向かって進入した場合、
+	/// 左右どちらか一方の面を選ぶのではなく、
+	/// 現在面から外へ伸びる3本目のEdgeを採用します。
+	///
+	/// この探索はVertex到達時だけ行うため、
+	/// 毎Physics StepでMesh全体を走査することはありません。
+	/// </remarks>
+	private bool TryBeginSymmetricConvexVertexTransition(
+		Vector3 vertexPoint,
+		Vector3 currentNormal,
+		Vector3 incomingSurfaceVelocity)
+	{
+		if (incomingSurfaceVelocity.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue ||
+			m_SurfaceSource == null ||
+			m_MeshData == null)
+		{
+			return false;
+		}
+
+		Vector3 localVertexPoint =
+			m_SurfaceSource.transform.InverseTransformPoint(
+				vertexPoint);
+
+		if (!m_MeshData.TryGetIncidentConvexEdges(
+				localVertexPoint,
+				out BallSurfaceMeshData.ConvexEdgeReference[] incidentEdges) ||
+			incidentEdges == null ||
+			incidentEdges.Length < 3)
+		{
+			return false;
+		}
+
+		int firstFaceEdgeIndex =
+			-1;
+
+		int secondFaceEdgeIndex =
+			-1;
+
+		Vector3 firstFaceDirection =
+			Vector3.zero;
+
+		Vector3 secondFaceDirection =
+			Vector3.zero;
+
+		for (int incidentIndex = 0;
+			incidentIndex < incidentEdges.Length;
+			incidentIndex++)
+		{
+			Vector3 otherWorldPoint =
+				m_SurfaceSource.transform.TransformPoint(
+					incidentEdges[
+						incidentIndex].OtherLocalVertex);
+
+			Vector3 direction =
+				otherWorldPoint -
+					vertexPoint;
+
+			if (direction.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue)
+			{
+				continue;
+			}
+
+			direction.Normalize();
+
+			float normalDot =
+				Mathf.Abs(
+					Vector3.Dot(
+						direction,
+						currentNormal));
+
+			if (normalDot >
+				m_VertexFaceEdgeNormalDotTolerance)
+			{
+				continue;
+			}
+
+			if (firstFaceEdgeIndex < 0)
+			{
+				firstFaceEdgeIndex =
+					incidentIndex;
+
+				firstFaceDirection =
+					direction;
+
+				continue;
+			}
+
+			if (secondFaceEdgeIndex < 0)
+			{
+				secondFaceEdgeIndex =
+					incidentIndex;
+
+				secondFaceDirection =
+					direction;
+
+				break;
+			}
+		}
+
+		if (firstFaceEdgeIndex < 0 ||
+			secondFaceEdgeIndex < 0)
+		{
+			return false;
+		}
+
+		Vector3 expectedIncomingDirection =
+			-(
+				firstFaceDirection +
+				secondFaceDirection
+			);
+
+		if (expectedIncomingDirection.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		expectedIncomingDirection.Normalize();
+
+		Vector3 actualIncomingDirection =
+			Vector3.ProjectOnPlane(
+				incomingSurfaceVelocity,
+				currentNormal);
+
+		if (actualIncomingDirection.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		actualIncomingDirection.Normalize();
+
+		float bisectorAngle =
+			Vector3.Angle(
+				actualIncomingDirection,
+				expectedIncomingDirection);
+
+		if (bisectorAngle >
+			m_VertexBisectorMaximumAngle)
+		{
+			return false;
+		}
+
+		int outgoingCandidateIndex =
+			-1;
+
+		float bestOutgoingAlignment =
+			float.NegativeInfinity;
+
+		for (int incidentIndex = 0;
+			incidentIndex < incidentEdges.Length;
+			incidentIndex++)
+		{
+			if (incidentIndex ==
+					firstFaceEdgeIndex ||
+				incidentIndex ==
+					secondFaceEdgeIndex)
+			{
+				continue;
+			}
+
+			Vector3 otherWorldPoint =
+				m_SurfaceSource.transform.TransformPoint(
+					incidentEdges[
+						incidentIndex].OtherLocalVertex);
+
+			Vector3 direction =
+				otherWorldPoint -
+					vertexPoint;
+
+			if (direction.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue)
+			{
+				continue;
+			}
+
+			direction.Normalize();
+
+			float alignment =
+				Vector3.Dot(
+					direction,
+					-currentNormal);
+
+			if (alignment <=
+				bestOutgoingAlignment)
+			{
+				continue;
+			}
+
+			bestOutgoingAlignment =
+				alignment;
+
+			outgoingCandidateIndex =
+				incidentIndex;
+		}
+
+		if (outgoingCandidateIndex < 0)
+		{
+			return false;
+		}
+
+		BallSurfaceMeshData.ConvexEdgeReference outgoingEdge =
+			incidentEdges[
+				outgoingCandidateIndex];
+
+		if (!m_MeshData.TryGetNeighbor(
+			outgoingEdge.TriangleIndex,
+			outgoingEdge.EdgeIndex,
+			out int neighborTriangleIndex,
+			out _))
+		{
+			return false;
+		}
+
+		if (!TryGetTriangleWorldData(
+				outgoingEdge.TriangleIndex,
+				out _,
+				out _,
+				out _,
+				out Vector3 firstOutgoingNormal) ||
+			!TryGetTriangleWorldData(
+				neighborTriangleIndex,
+				out _,
+				out _,
+				out _,
+				out Vector3 secondOutgoingNormal))
+		{
+			return false;
+		}
+
+		Vector3 targetEdgeNormal =
+			firstOutgoingNormal +
+				secondOutgoingNormal;
+
+		if (targetEdgeNormal.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		targetEdgeNormal.Normalize();
+
+		Vector3 outgoingEdgeEnd =
+			m_SurfaceSource.transform.TransformPoint(
+				outgoingEdge.OtherLocalVertex);
+
+		Vector3 outgoingDirection =
+			outgoingEdgeEnd -
+				vertexPoint;
+
+		if (outgoingDirection.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		outgoingDirection.Normalize();
+
+		Vector3 rotationAxis =
+			Vector3.Cross(
+				currentNormal,
+				targetEdgeNormal);
+
+		float totalAngle =
+			Vector3.Angle(
+				currentNormal,
+				targetEdgeNormal);
+
+		float retainedSpeed =
+			incomingSurfaceVelocity.magnitude *
+				m_ConvexEdgeSpeedRetention;
+
+		if (retainedSpeed <=
+			m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		m_SurfaceVelocity =
+			outgoingDirection *
+				retainedSpeed;
+
+		m_ConvexVertexPoint =
+			vertexPoint;
+
+		m_ConvexVertexSourceNormal =
+			currentNormal.normalized;
+
+		m_ConvexVertexTargetNormal =
+			targetEdgeNormal;
+
+		m_ConvexVertexOutgoingEdgeDirection =
+			outgoingDirection;
+
+		m_ConvexVertexOutgoingEdgeEnd =
+			outgoingEdgeEnd;
+
+		if (totalAngle <=
+				m_MinimumCalculationValue ||
+			rotationAxis.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue)
+		{
+			m_IsConvexVertexTransition =
+				false;
+
+			m_IsConvexVertexEdgePath =
+				true;
+
+			m_ConvexVertexEdgeNormal =
+				targetEdgeNormal;
+
+			m_ConvexVertexEdgeDirection =
+				outgoingDirection;
+
+			m_ConvexVertexEdgeEnd =
+				outgoingEdgeEnd;
+
+			return true;
+		}
+
+		rotationAxis.Normalize();
+
+		m_IsConvexVertexTransition =
+			true;
+
+		m_IsConvexVertexEdgePath =
+			false;
+
+		m_ConvexVertexRotationAxis =
+			rotationAxis;
+
+		m_ConvexVertexSignedAngle =
+			Vector3.SignedAngle(
+				m_ConvexVertexSourceNormal,
+				m_ConvexVertexTargetNormal,
+				m_ConvexVertexRotationAxis);
+
+		m_ConvexVertexCurrentAngle =
+			0.0f;
+
+		return true;
+	}
+
+	/// <summary>
+	/// Convex Vertexから3本目のEdgeへ向くための
+	/// World表示上の回り込みを進めます。
+	/// </summary>
+	private bool AdvanceConvexVertexTransition(
+		ref float remainingTime,
+		out bool completed)
+	{
+		completed =
+			false;
+
+		if (!m_IsConvexVertexTransition)
+		{
+			completed =
+				true;
+
+			return true;
+		}
+
+		float surfaceSpeed =
+			m_SurfaceVelocity.magnitude;
+
+		if (surfaceSpeed <=
+			m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		float offsetRadius =
+			Mathf.Max(
+				m_BallRadius +
+					m_Height,
+				m_MinimumCalculationValue);
+
+		float totalAngleMagnitude =
+			Mathf.Abs(
+				m_ConvexVertexSignedAngle);
+
+		float currentAngleMagnitude =
+			Mathf.Abs(
+				m_ConvexVertexCurrentAngle);
+
+		float remainingAngle =
+			Mathf.Max(
+				0.0f,
+				totalAngleMagnitude -
+					currentAngleMagnitude);
+
+		if (remainingAngle <=
+			m_MinimumCalculationValue)
+		{
+			CompleteConvexVertexTransition();
+
+			completed =
+				true;
+
+			return true;
+		}
+
+		float angularSpeed =
+			surfaceSpeed /
+				offsetRadius *
+			Mathf.Rad2Deg;
+
+		if (angularSpeed <=
+			m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		float timeToComplete =
+			remainingAngle /
+				angularSpeed;
+
+		float stepTime =
+			Mathf.Min(
+				remainingTime,
+				timeToComplete);
+
+		m_SurfaceDistanceTravelledThisStep +=
+			surfaceSpeed *
+				stepTime;
+
+		float angleStep =
+			angularSpeed *
+				stepTime *
+				Mathf.Sign(
+					m_ConvexVertexSignedAngle);
+
+		m_ConvexVertexCurrentAngle +=
+			angleStep;
+
+		remainingTime -=
+			stepTime;
+
+		if (remainingTime <
+			0.0f)
+		{
+			remainingTime =
+				0.0f;
+		}
+
+		bool reachedTarget =
+			timeToComplete <=
+			stepTime +
+				m_MinimumCalculationValue;
+
+		if (!reachedTarget)
+		{
+			return true;
+		}
+
+		m_ConvexVertexCurrentAngle =
+			m_ConvexVertexSignedAngle;
+
+		CompleteConvexVertexTransition();
+
+		completed =
+			true;
+
+		return true;
+	}
+
+	/// <summary>
+	/// Vertex回り込みを終了し、
+	/// 3本目のConvex EdgeをSurface基準線として使用します。
+	/// </summary>
+	private void CompleteConvexVertexTransition()
+	{
+		m_IsConvexVertexTransition =
+			false;
+
+		m_IsConvexVertexEdgePath =
+			true;
+
+		m_SurfacePoint =
+			m_ConvexVertexPoint;
+
+		m_ConvexVertexEdgeNormal =
+			m_ConvexVertexTargetNormal;
+
+		m_ConvexVertexEdgeDirection =
+			m_ConvexVertexOutgoingEdgeDirection;
+
+		m_ConvexVertexEdgeEnd =
+			m_ConvexVertexOutgoingEdgeEnd;
+
+		m_SurfaceVelocity =
+			m_ConvexVertexEdgeDirection *
+				m_SurfaceVelocity.magnitude;
+	}
+
+	/// <summary>
+	/// Vertexから伸びるConvex Edge上を進めます。
+	/// </summary>
+	private void AdvanceConvexVertexEdgePath(
+		float deltaTime)
+	{
+		if (!m_IsConvexVertexEdgePath ||
+			deltaTime <=
+				0.0f)
+		{
+			return;
+		}
+
+		float speed =
+			m_SurfaceVelocity.magnitude;
+
+		if (speed <=
+			m_MinimumCalculationValue)
+		{
+			m_SurfaceVelocity =
+				Vector3.zero;
+
+			return;
+		}
+
+		Vector3 toEdgeEnd =
+			m_ConvexVertexEdgeEnd -
+				m_SurfacePoint;
+
+		float remainingEdgeDistance =
+			Vector3.Dot(
+				toEdgeEnd,
+				m_ConvexVertexEdgeDirection);
+
+		if (remainingEdgeDistance <=
+			m_MinimumCalculationValue)
+		{
+			m_SurfacePoint =
+				m_ConvexVertexEdgeEnd;
+
+			m_SurfaceVelocity =
+				Vector3.zero;
+
+			return;
+		}
+
+		float requestedDistance =
+			speed *
+				deltaTime;
+
+		float travelledDistance =
+			Mathf.Min(
+				requestedDistance,
+				remainingEdgeDistance);
+
+		m_SurfacePoint +=
+			m_ConvexVertexEdgeDirection *
+				travelledDistance;
+
+		m_SurfaceDistanceTravelledThisStep +=
+			travelledDistance;
+
+		if (requestedDistance >=
+			remainingEdgeDistance)
+		{
+			m_SurfacePoint =
+				m_ConvexVertexEdgeEnd;
+
+			m_SurfaceVelocity =
+				Vector3.zero;
+		}
+	}
+
+	/// <summary>
+	/// 現在のVertex Transition Normalを取得します。
+	/// </summary>
+	private Vector3 GetConvexVertexTransitionNormal()
+	{
+		Quaternion rotation =
+			Quaternion.AngleAxis(
+				m_ConvexVertexCurrentAngle,
+				m_ConvexVertexRotationAxis);
+
+		Vector3 transitionNormal =
+			rotation *
+				m_ConvexVertexSourceNormal;
+
+		if (transitionNormal.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return m_ConvexVertexSourceNormal;
+		}
+
+		return transitionNormal.normalized;
+	}
+
+	/// <summary>
+	/// Vertex Transition中のBall中心Offsetを、
+	/// 既存Convex Edgeと同じ潰したBezierで取得します。
+	/// </summary>
+	private Vector3 GetFlattenedConvexVertexBallCenterOffset()
+	{
+		float offsetRadius =
+			Mathf.Max(
+				m_BallRadius +
+					m_Height,
+				m_MinimumCalculationValue);
+
+		float totalAngleMagnitude =
+			Mathf.Abs(
+				m_ConvexVertexSignedAngle);
+
+		if (totalAngleMagnitude <=
+			m_MinimumCalculationValue)
+		{
+			return m_ConvexVertexSourceNormal *
+				offsetRadius;
+		}
+
+		float progress =
+			Mathf.Clamp01(
+				Mathf.Abs(
+					m_ConvexVertexCurrentAngle) /
+				totalAngleMagnitude);
+
+		float angleSign =
+			Mathf.Sign(
+				m_ConvexVertexSignedAngle);
+
+		Vector3 sourceTangent =
+			Vector3.Cross(
+				m_ConvexVertexRotationAxis,
+				m_ConvexVertexSourceNormal) *
+			angleSign;
+
+		Vector3 targetTangent =
+			Vector3.Cross(
+				m_ConvexVertexRotationAxis,
+				m_ConvexVertexTargetNormal) *
+			angleSign;
+
+		if (sourceTangent.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue ||
+			targetTangent.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue)
+		{
+			return GetConvexVertexTransitionNormal() *
+				offsetRadius;
+		}
+
+		sourceTangent.Normalize();
+		targetTangent.Normalize();
+
+		float clampedAngleDegrees =
+			Mathf.Min(
+				totalAngleMagnitude,
+				179.0f);
+
+		float angleRadians =
+			clampedAngleDegrees *
+				Mathf.Deg2Rad;
+
+		float circularHandleLength =
+			4.0f /
+				3.0f *
+			Mathf.Tan(
+				angleRadians *
+					0.25f) *
+			offsetRadius;
+
+		float flattenedHandleLength =
+			circularHandleLength *
+				m_ConvexCurveFlatten;
+
+		Vector3 point0 =
+			m_ConvexVertexSourceNormal *
+				offsetRadius;
+
+		Vector3 point1 =
+			point0 +
+			sourceTangent *
+				flattenedHandleLength;
+
+		Vector3 point3 =
+			m_ConvexVertexTargetNormal *
+				offsetRadius;
+
+		Vector3 point2 =
+			point3 -
+			targetTangent *
+				flattenedHandleLength;
+
+		return EvaluateCubicBezier(
+			point0,
+			point1,
+			point2,
+			point3,
+			progress);
+	}
+
+	/// <summary>
 	/// Sharp Convex Edgeの円弧移動を開始します。
 	/// </summary>
 	private bool BeginConvexEdgeTransition(
@@ -1287,6 +2296,22 @@ public sealed class BallSurfaceSimulation
 			return false;
 		}
 
+		// Sharp Convex Edgeへ入った瞬間だけ、
+		// Surface方向の速度を少し落とします。
+		//
+		// 円弧移動中に毎Frame減速するのではないため、
+		// 一度の角通過で連続的に速度が失われることはありません。
+		float retainedAlongSpeed =
+			alongSpeed *
+			m_ConvexEdgeSpeedRetention;
+
+		float retainedCrossSpeed =
+			crossSpeed *
+			m_ConvexEdgeSpeedRetention;
+
+		m_SurfaceVelocity *=
+			m_ConvexEdgeSpeedRetention;
+
 		m_IsConvexEdgeTransition =
 			true;
 
@@ -1298,6 +2323,14 @@ public sealed class BallSurfaceSimulation
 
 		m_ConvexEdgeDirection =
 			edgeDirection;
+
+		// 円弧中にSurfacePointが本物のEdge端を越えないよう、
+		// EdgeのWorld端点を保持します。
+		m_ConvexEdgeStartPoint =
+			edgeStart;
+
+		m_ConvexEdgeEndPoint =
+			edgeEnd;
 
 		m_ConvexSourceNormal =
 			sourceNormal.normalized;
@@ -1312,10 +2345,10 @@ public sealed class BallSurfaceSimulation
 			0.0f;
 
 		m_ConvexAlongSpeed =
-			alongSpeed;
+			retainedAlongSpeed;
 
 		m_ConvexCrossSpeed =
-			crossSpeed;
+			retainedCrossSpeed;
 
 		UpdateConvexTransitionVelocity();
 
@@ -1326,15 +2359,11 @@ public sealed class BallSurfaceSimulation
 	/// Sharp Convex Edgeの円弧移動を進めます。
 	/// </summary>
 	/// <remarks>
-	/// Ball中心は
+	/// 円弧完了までの時間だけでなく、
+	/// Edge方向速度によって実Edge端のVertexへ到達する時間も計算します。
 	///
-	/// EdgePoint + TransitionNormal * (BallRadius + Height)
-	///
-	/// に配置されます。
-	///
-	/// SurfacePointを共有Edge上に保ったまま
-	/// TransitionNormalを回転させるため、
-	/// Cubeの角でもWorld位置が連続します。
+	/// Vertexへ先に到達した場合はSurfacePointをVertexへ固定し、
+	/// Edge延長線へ出る前にVertex Transitionへ切り替えます。
 	/// </remarks>
 	private bool AdvanceConvexEdgeTransition(
 		ref float remainingTime,
@@ -1404,12 +2433,69 @@ public sealed class BallSurfaceSimulation
 			remainingAngle /
 				angularSpeed;
 
+		float timeToVertex =
+			float.PositiveInfinity;
+
+		Vector3 reachedVertexPoint =
+			Vector3.zero;
+
+		if (Mathf.Abs(
+				m_ConvexAlongSpeed) >
+			m_MinimumCalculationValue)
+		{
+			bool movesTowardEdgeEnd =
+				m_ConvexAlongSpeed >
+				0.0f;
+
+			reachedVertexPoint =
+				movesTowardEdgeEnd
+					? m_ConvexEdgeEndPoint
+					: m_ConvexEdgeStartPoint;
+
+			Vector3 alongDirection =
+				m_ConvexEdgeDirection *
+				Mathf.Sign(
+					m_ConvexAlongSpeed);
+
+			float distanceToVertex =
+				Vector3.Dot(
+					reachedVertexPoint -
+						m_SurfacePoint,
+					alongDirection);
+
+			if (distanceToVertex <=
+				m_MinimumCalculationValue)
+			{
+				timeToVertex =
+					0.0f;
+			}
+			else
+			{
+				timeToVertex =
+					distanceToVertex /
+					Mathf.Abs(
+						m_ConvexAlongSpeed);
+			}
+		}
+
 		float stepTime =
 			Mathf.Min(
 				remainingTime,
-				timeToComplete);
+				Mathf.Min(
+					timeToComplete,
+					timeToVertex));
 
-		// Edge方向の速度成分は円弧移動中もそのまま進めます。
+		float convexSurfaceSpeed =
+			Mathf.Sqrt(
+				m_ConvexAlongSpeed *
+					m_ConvexAlongSpeed +
+				m_ConvexCrossSpeed *
+					m_ConvexCrossSpeed);
+
+		m_SurfaceDistanceTravelledThisStep +=
+			convexSurfaceSpeed *
+				stepTime;
+
 		m_SurfacePoint +=
 			m_ConvexEdgeDirection *
 				m_ConvexAlongSpeed *
@@ -1434,10 +2520,76 @@ public sealed class BallSurfaceSimulation
 				0.0f;
 		}
 
+		bool reachedVertex =
+			timeToVertex <=
+				stepTime +
+					m_MinimumCalculationValue &&
+			timeToVertex <=
+				timeToComplete +
+					m_MinimumCalculationValue;
+
+		if (reachedVertex)
+		{
+			m_SurfacePoint =
+				reachedVertexPoint;
+
+			Vector3 sourceCrossDirection =
+				Vector3.Cross(
+					m_ConvexEdgeDirection,
+					m_ConvexSourceNormal) *
+				Mathf.Sign(
+					m_ConvexSignedAngle);
+
+			if (sourceCrossDirection.sqrMagnitude >
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue)
+			{
+				sourceCrossDirection.Normalize();
+			}
+
+			Vector3 sourceSurfaceVelocity =
+				m_ConvexEdgeDirection *
+					m_ConvexAlongSpeed +
+				sourceCrossDirection *
+					m_ConvexCrossSpeed;
+
+			Vector3 sourceNormal =
+				m_ConvexSourceNormal;
+
+			ResetConvexEdgeTransition();
+
+			if (TryBeginSymmetricConvexVertexTransition(
+				reachedVertexPoint,
+				sourceNormal,
+				sourceSurfaceVelocity))
+			{
+				m_DidTraverseConvexEdgeThisStep =
+					true;
+
+				completed =
+					true;
+
+				completedEntryEdgeIndex =
+					-1;
+
+				return true;
+			}
+
+			// Vertexとして進行先を安全に決められない場合も、
+			// Edge延長線へ飛び出させず頂点で停止します。
+			m_SurfaceVelocity =
+				Vector3.zero;
+
+			completed =
+				false;
+
+			return true;
+		}
+
 		bool reachedTarget =
 			timeToComplete <=
-			stepTime +
-				m_MinimumCalculationValue;
+				stepTime +
+					m_MinimumCalculationValue;
 
 		if (reachedTarget)
 		{
@@ -1808,16 +2960,18 @@ public sealed class BallSurfaceSimulation
 		m_SurfaceVelocity *=
 			clampedScale;
 
-		if (!m_IsConvexEdgeTransition)
+		if (m_IsConvexEdgeTransition)
 		{
-			return;
+			m_ConvexAlongSpeed *=
+				clampedScale;
+
+			m_ConvexCrossSpeed *=
+				clampedScale;
 		}
 
-		m_ConvexAlongSpeed *=
-			clampedScale;
-
-		m_ConvexCrossSpeed *=
-			clampedScale;
+		// Vertex Transition / Edge Pathは
+		// m_SurfaceVelocityそのものを速度として使用するため、
+		// 上の共通Scaleだけで同期します。
 	}
 
 	/// <summary>
@@ -1835,6 +2989,12 @@ public sealed class BallSurfaceSimulation
 			-1;
 
 		m_ConvexEdgeDirection =
+			Vector3.zero;
+
+		m_ConvexEdgeStartPoint =
+			Vector3.zero;
+
+		m_ConvexEdgeEndPoint =
 			Vector3.zero;
 
 		m_ConvexSourceNormal =
@@ -1857,6 +3017,267 @@ public sealed class BallSurfaceSimulation
 	}
 
 	/// <summary>
+	/// Convex Vertex関連の一時状態を初期化します。
+	/// </summary>
+	private void ResetConvexVertexTransition()
+	{
+		m_IsConvexVertexTransition =
+			false;
+
+		m_ConvexVertexPoint =
+			Vector3.zero;
+
+		m_ConvexVertexSourceNormal =
+			Vector3.zero;
+
+		m_ConvexVertexTargetNormal =
+			Vector3.zero;
+
+		m_ConvexVertexRotationAxis =
+			Vector3.zero;
+
+		m_ConvexVertexSignedAngle =
+			0.0f;
+
+		m_ConvexVertexCurrentAngle =
+			0.0f;
+
+		m_ConvexVertexOutgoingEdgeDirection =
+			Vector3.zero;
+
+		m_ConvexVertexOutgoingEdgeEnd =
+			Vector3.zero;
+
+		m_IsConvexVertexEdgePath =
+			false;
+
+		m_ConvexVertexEdgeNormal =
+			Vector3.zero;
+
+		m_ConvexVertexEdgeDirection =
+			Vector3.zero;
+
+		m_ConvexVertexEdgeEnd =
+			Vector3.zero;
+	}
+
+	/// <summary>
+	/// 現在のSurfacePointからBall中心までのWorld Offsetを取得します。
+	/// </summary>
+	/// <remarks>
+	/// Flat / Smooth Edgeでは従来通り、
+	///
+	/// SurfaceNormal * (BallRadius + Height)
+	///
+	/// を返します。
+	///
+	/// Sharp Convex Edgeでは円弧そのものではなく、
+	/// 円弧を少し潰した3次Bezierカーブ上のOffsetを返します。
+	/// 物理上のSurface速度・Height・バウンド時間には影響せず、
+	/// World上で見えるBall中心の軌道だけを変更します。
+	/// </remarks>
+	public bool TryGetCurrentBallCenterOffset(
+		out Vector3 ballCenterOffset)
+	{
+		ballCenterOffset =
+			Vector3.zero;
+
+		if (!m_IsInitialized)
+		{
+			return false;
+		}
+
+		if (m_IsConvexVertexTransition)
+		{
+			ballCenterOffset =
+				GetFlattenedConvexVertexBallCenterOffset();
+
+			return ballCenterOffset.sqrMagnitude >
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue;
+		}
+
+		if (m_IsConvexEdgeTransition)
+		{
+			ballCenterOffset =
+				GetFlattenedConvexBallCenterOffset();
+
+			return ballCenterOffset.sqrMagnitude >
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue;
+		}
+
+		if (!TryGetCurrentSurfaceNormal(
+			out Vector3 surfaceNormal))
+		{
+			return false;
+		}
+
+		float offsetDistance =
+			Mathf.Max(
+				m_BallRadius +
+					m_Height,
+				m_MinimumCalculationValue);
+
+		ballCenterOffset =
+			surfaceNormal *
+				offsetDistance;
+
+		return true;
+	}
+
+	/// <summary>
+	/// Sharp Convex Edge上のBall中心Offsetを、
+	/// 円弧より少し内側へ潰したBezierカーブとして取得します。
+	/// </summary>
+	private Vector3 GetFlattenedConvexBallCenterOffset()
+	{
+		float offsetRadius =
+			Mathf.Max(
+				m_BallRadius +
+					m_Height,
+				m_MinimumCalculationValue);
+
+		float totalAngleMagnitude =
+			Mathf.Abs(
+				m_ConvexSignedAngle);
+
+		if (totalAngleMagnitude <=
+			m_MinimumCalculationValue)
+		{
+			return m_ConvexSourceNormal *
+				offsetRadius;
+		}
+
+		float progress =
+			Mathf.Clamp01(
+				Mathf.Abs(
+					m_ConvexCurrentAngle) /
+				totalAngleMagnitude);
+
+		float angleSign =
+			Mathf.Sign(
+				m_ConvexSignedAngle);
+
+		Vector3 sourceTangent =
+			Vector3.Cross(
+				m_ConvexEdgeDirection,
+				m_ConvexSourceNormal) *
+			angleSign;
+
+		Vector3 targetTangent =
+			Vector3.Cross(
+				m_ConvexEdgeDirection,
+				m_ConvexTargetNormal) *
+			angleSign;
+
+		if (sourceTangent.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue ||
+			targetTangent.sqrMagnitude <=
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue)
+		{
+			return GetConvexTransitionNormal() *
+				offsetRadius;
+		}
+
+		sourceTangent.Normalize();
+		targetTangent.Normalize();
+
+		// 円弧を3次Bezierで近似するときの標準Handle長を求め、
+		// Flatten倍率で短くすることで中央をEdge側へ潰します。
+		float clampedAngleDegrees =
+			Mathf.Min(
+				totalAngleMagnitude,
+				179.0f);
+
+		float angleRadians =
+			clampedAngleDegrees *
+			Mathf.Deg2Rad;
+
+		float circularHandleLength =
+			4.0f /
+				3.0f *
+			Mathf.Tan(
+				angleRadians *
+					0.25f) *
+			offsetRadius;
+
+		float flattenedHandleLength =
+			circularHandleLength *
+			m_ConvexCurveFlatten;
+
+		Vector3 point0 =
+			m_ConvexSourceNormal *
+				offsetRadius;
+
+		Vector3 point1 =
+			point0 +
+			sourceTangent *
+				flattenedHandleLength;
+
+		Vector3 point3 =
+			m_ConvexTargetNormal *
+				offsetRadius;
+
+		Vector3 point2 =
+			point3 -
+			targetTangent *
+				flattenedHandleLength;
+
+		return EvaluateCubicBezier(
+			point0,
+			point1,
+			point2,
+			point3,
+			progress);
+	}
+
+	/// <summary>
+	/// 3次Bezierカーブ上の位置を取得します。
+	/// </summary>
+	private Vector3 EvaluateCubicBezier(
+		Vector3 point0,
+		Vector3 point1,
+		Vector3 point2,
+		Vector3 point3,
+		float progress)
+	{
+		float clampedProgress =
+			Mathf.Clamp01(
+				progress);
+
+		float inverseProgress =
+			1.0f -
+			clampedProgress;
+
+		float inverseProgressSquared =
+			inverseProgress *
+			inverseProgress;
+
+		float progressSquared =
+			clampedProgress *
+			clampedProgress;
+
+		return
+			point0 *
+				inverseProgressSquared *
+				inverseProgress +
+			3.0f *
+				point1 *
+				inverseProgressSquared *
+				clampedProgress +
+			3.0f *
+				point2 *
+				inverseProgress *
+				progressSquared +
+			point3 *
+				progressSquared *
+				clampedProgress;
+	}
+
+	/// <summary>
 	/// 現在位置で使用する連続したSurface Normalを取得します。
 	/// </summary>
 	public bool TryGetCurrentSurfaceNormal(
@@ -1868,6 +3289,26 @@ public sealed class BallSurfaceSimulation
 		if (!m_IsInitialized)
 		{
 			return false;
+		}
+
+		if (m_IsConvexVertexTransition)
+		{
+			surfaceNormal =
+				GetConvexVertexTransitionNormal();
+
+			return surfaceNormal.sqrMagnitude >
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue;
+		}
+
+		if (m_IsConvexVertexEdgePath)
+		{
+			surfaceNormal =
+				m_ConvexVertexEdgeNormal;
+
+			return surfaceNormal.sqrMagnitude >
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue;
 		}
 
 		if (m_IsConvexEdgeTransition)
@@ -1915,7 +3356,24 @@ public sealed class BallSurfaceSimulation
 		m_DidTraverseConvexEdgeThisStep =
 			false;
 
+		m_SurfaceDistanceTravelledThisStep =
+			0.0f;
+
+		m_DidSurfaceImpactThisStep =
+			false;
+
+		m_BounceSequence =
+			0;
+
+		m_LastBounceSurfaceSpeed =
+			0.0f;
+
+		m_LastBounceVerticalSpeed =
+			0.0f;
+
 		ResetConvexEdgeTransition();
+
+		ResetConvexVertexTransition();
 
 		ClearLastEdge();
 	}
@@ -2234,14 +3692,18 @@ public sealed class BallSurfaceSimulation
 				-m_BarycentricTolerance;
 	}
 
-	private bool TryFindFirstCrossedEdge(
+	private bool TryFindFirstSurfaceCrossing(
 		Vector3 startBarycentric,
 		Vector3 endBarycentric,
 		int ignoredEntryEdgeIndex,
 		out int crossedEdgeIndex,
+		out int simultaneousEdgeIndex,
 		out float crossingFraction)
 	{
 		crossedEdgeIndex =
+			-1;
+
+		simultaneousEdgeIndex =
 			-1;
 
 		crossingFraction =
@@ -2283,12 +3745,9 @@ public sealed class BallSurfaceSimulation
 			}
 
 			float fraction =
-				startCoordinate /
-					denominator;
-
-			fraction =
 				Mathf.Clamp01(
-					fraction);
+					startCoordinate /
+						denominator);
 
 			int edgeIndex =
 				ConvertBarycentricIndexToEdgeIndex(
@@ -2302,21 +3761,98 @@ public sealed class BallSurfaceSimulation
 				continue;
 			}
 
-			if (fraction >=
-				crossingFraction)
+			if (crossedEdgeIndex < 0 ||
+				fraction <
+					crossingFraction -
+						m_VertexCrossingFractionTolerance)
 			{
+				crossingFraction =
+					fraction;
+
+				crossedEdgeIndex =
+					edgeIndex;
+
+				simultaneousEdgeIndex =
+					-1;
+
 				continue;
 			}
 
-			crossingFraction =
-				fraction;
+			if (Mathf.Abs(
+					fraction -
+						crossingFraction) <=
+				m_VertexCrossingFractionTolerance &&
+				edgeIndex !=
+					crossedEdgeIndex)
+			{
+				simultaneousEdgeIndex =
+					edgeIndex;
 
-			crossedEdgeIndex =
-				edgeIndex;
+				crossingFraction =
+					Mathf.Min(
+						crossingFraction,
+						fraction);
+			}
 		}
 
 		return crossedEdgeIndex >=
 			0;
+	}
+
+	/// <summary>
+	/// 同一Triangleの2本のEdgeが共有する頂点を取得します。
+	/// </summary>
+	private bool TryGetSharedTriangleVertex(
+		int firstEdgeIndex,
+		int secondEdgeIndex,
+		Vector3 vertexA,
+		Vector3 vertexB,
+		Vector3 vertexC,
+		out Vector3 sharedVertex)
+	{
+		sharedVertex =
+			Vector3.zero;
+
+		if (firstEdgeIndex ==
+			secondEdgeIndex)
+		{
+			return false;
+		}
+
+		if ((firstEdgeIndex == 0 &&
+				secondEdgeIndex == 1) ||
+			(firstEdgeIndex == 1 &&
+				secondEdgeIndex == 0))
+		{
+			sharedVertex =
+				vertexB;
+
+			return true;
+		}
+
+		if ((firstEdgeIndex == 1 &&
+				secondEdgeIndex == 2) ||
+			(firstEdgeIndex == 2 &&
+				secondEdgeIndex == 1))
+		{
+			sharedVertex =
+				vertexC;
+
+			return true;
+		}
+
+		if ((firstEdgeIndex == 2 &&
+				secondEdgeIndex == 0) ||
+			(firstEdgeIndex == 0 &&
+				secondEdgeIndex == 2))
+		{
+			sharedVertex =
+				vertexA;
+
+			return true;
+		}
+
+		return false;
 	}
 
 	private int ConvertBarycentricIndexToEdgeIndex(

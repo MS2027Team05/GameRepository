@@ -21,9 +21,20 @@ public sealed class BallSurfaceSource : MonoBehaviour
 {
 	/// <summary>
 	/// 接触地点からTriangleを特定する際に使用する
-	/// Rayの最低開始距離です。
+	/// 通常探索Rayの最低開始距離です。
 	/// </summary>
 	private const float m_MinimumProbeOffset = 0.02f;
+
+	/// <summary>
+	/// 通常探索でTriangleを取得できなかった場合に使用する
+	/// Fallback探索Rayの最低開始距離です。
+	/// </summary>
+	private const float m_MinimumFallbackProbeOffset = 0.10f;
+
+	/// <summary>
+	/// Fallback探索Rayへ追加する最低余裕距離です。
+	/// </summary>
+	private const float m_MinimumFallbackRayMargin = 0.10f;
 
 	private MeshCollider m_SurfaceCollider;
 
@@ -176,22 +187,17 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	/// </summary>
 	/// <remarks>
 	/// CollisionのContactPointにはtriangleIndexが存在しないため、
-	/// 接触地点の両側からMeshCollider自身へ短いRayを飛ばし、
+	/// MeshCollider自身へRayを飛ばして
 	/// RaycastHit.triangleIndexを取得します。
 	///
-	/// Collisionから得られるContact Normalは、
-	/// Sphereの斜め接触やSharp Edge付近では
-	/// 実際のTriangle Normalと完全には一致しない場合があります。
+	/// まず従来通りContactPointの近傍を短いRayで探索します。
 	///
-	/// そのため一方向だけではなく、
+	/// ContactPointがPhysicsの接触補正や数値誤差によって
+	/// Mesh表面から少しずれており、通常探索で取得できなかった場合だけ、
+	/// より大きなOffsetとRay距離を使用して再探索します。
 	///
-	/// SurfacePoint + Normal
-	/// SurfacePoint - Normal
-	///
-	/// の両側からTriangleを探索します。
-	///
-	/// 両方のRayが成功した場合は、
-	/// 元のContactPointへ近いHitを採用します。
+	/// どちらの探索もContact Normalの正負両側から行い、
+	/// 両方がHitした場合は元のContactPointへ近いHitを採用します。
 	/// </remarks>
 	/// <param name="surfacePoint">
 	/// Collisionから取得したSurface接触地点です。
@@ -238,26 +244,83 @@ public sealed class BallSurfaceSource : MonoBehaviour
 				2.0f +
 			m_MinimumProbeOffset;
 
+		// まずは従来と同じ短い探索を行います。
+		if (TryProbeSurfaceFromBothSides(
+			surfacePoint,
+			normal,
+			probeOffset,
+			rayDistance,
+			out surfaceHit))
+		{
+			return true;
+		}
+
+		// ContactPointがMesh表面からわずかにずれている場合や、
+		// Ray開始点が接触境界付近に入り込んだ場合を補完するため、
+		// より広いFallback探索を行います。
+		float fallbackProbeOffset =
+			Mathf.Max(
+				probeOffset *
+					4.0f,
+				m_MinimumFallbackProbeOffset);
+
+		float fallbackRayDistance =
+			fallbackProbeOffset *
+				2.0f +
+			Mathf.Max(
+				probeOffset,
+				m_MinimumFallbackRayMargin);
+
+		return TryProbeSurfaceFromBothSides(
+			surfacePoint,
+			normal,
+			fallbackProbeOffset,
+			fallbackRayDistance,
+			out surfaceHit);
+	}
+
+	/// <summary>
+	/// ContactPointの両側からMeshColliderへRayを飛ばし、
+	/// 最もContactPointに近いTriangle Hitを取得します。
+	/// </summary>
+	private bool TryProbeSurfaceFromBothSides(
+		Vector3 surfacePoint,
+		Vector3 surfaceNormal,
+		float probeOffset,
+		float rayDistance,
+		out RaycastHit surfaceHit)
+	{
+		surfaceHit =
+			default;
+
+		if (probeOffset <=
+				0.0f ||
+			rayDistance <=
+				0.0f)
+		{
+			return false;
+		}
+
 		// Contact Normal側からSurfaceへ向けて探索します。
 		bool positiveSideHit =
 			TryRaycastSurface(
 				surfacePoint +
-					normal *
+					surfaceNormal *
 						probeOffset,
-				-normal,
+				-surfaceNormal,
 				rayDistance,
 				out RaycastHit positiveHit);
 
 		// Contact Normalとは反対側からもSurfaceへ向けて探索します。
 		//
-		// Contact Normalの向きや接触点の数値誤差によって
-		// 片側RayがMeshを拾えないケースを補完します。
+		// Contact Normalの向きやContactPointの数値誤差によって
+		// 片側だけではMeshを拾えないケースを補完します。
 		bool negativeSideHit =
 			TryRaycastSurface(
 				surfacePoint -
-					normal *
+					surfaceNormal *
 						probeOffset,
-				normal,
+				surfaceNormal,
 				rayDistance,
 				out RaycastHit negativeHit);
 
@@ -286,7 +349,7 @@ public sealed class BallSurfaceSource : MonoBehaviour
 		}
 
 		// 両方向からTriangleが取得できた場合は、
-		// CollisionのContactPointに近い方を採用します。
+		// CollisionのContactPointへ近い方を採用します。
 		float positiveDistanceSquared =
 			(
 				positiveHit.point -

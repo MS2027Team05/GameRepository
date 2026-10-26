@@ -1,5 +1,6 @@
 ﻿using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// ボールのFree FlightとSurface Physicsを管理します。
@@ -156,8 +157,9 @@ public class BallPhysicsController : NetworkBehaviour
 	[Header("Surface Physics Debug")]
 
 	[Tooltip(
-		"ONにするとSharp Convex Edge前後の実World速度をConsoleへ出力します。計測終了後はOFFにしてください。")]
-	[SerializeField] private bool m_EnableSurfaceSpeedDebug;
+		"ONにするとバウンドごとの滞空時間・World移動距離・Surface移動距離をConsoleへ出力します。計測終了後はOFFにしてください。")]
+	[FormerlySerializedAs("m_EnableSurfaceSpeedDebug")]
+	[SerializeField] private bool m_EnableBounceDistanceDebug;
 
 	[Header("Stopped Ground Search")]
 
@@ -174,18 +176,6 @@ public class BallPhysicsController : NetworkBehaviour
 	[SerializeField] private float m_SurfaceSeekAcceleration;
 
 	private const float m_MinimumCalculationDistance = 0.001f;
-
-	/// <summary>
-	/// Sharp Edge計測終了判定で、
-	/// 法線が停止したとみなす角度差です。
-	/// </summary>
-	private const float m_SurfaceSpeedDebugStableNormalAngle = 0.05f;
-
-	/// <summary>
-	/// Sharp Edge通過後、この回数だけ法線変化が止まったら
-	/// 計測ログを終了します。
-	/// </summary>
-	private const int m_SurfaceSpeedDebugStableFrameCount = 2;
 
 	private Rigidbody m_Rigidbody;
 	private SphereCollider m_BallCollider;
@@ -204,14 +194,18 @@ public class BallPhysicsController : NetworkBehaviour
 	private float m_NextSurfaceSearchTime;
 	private float m_NextAttractSearchTime;
 
-	private bool m_HasSurfaceSpeedDebugSample;
-	private bool m_IsSurfaceSpeedDebugTrackingSharpEdge;
+	private bool m_HasBounceDistanceDebugSample;
+	private bool m_BounceDebugCrossedConvexEdge;
 
-	private Vector3 m_PreviousSurfaceSpeedDebugPosition;
-	private Vector3 m_PreviousSurfaceSpeedDebugNormal;
+	private Vector3 m_PreviousBounceDebugWorldPosition;
 
-	private float m_PreviousSurfaceSpeedDebugWorldSpeed;
-	private int m_SurfaceSpeedDebugStableFrames;
+	private float m_BounceDebugWorldDistance;
+	private float m_BounceDebugSurfaceDistance;
+	private float m_BounceDebugAirTime;
+	private float m_BounceDebugStartSurfaceSpeed;
+	private float m_BounceDebugStartVerticalSpeed;
+
+	private int m_BounceDebugSequence;
 
 	/// <summary>
 	/// ComponentとSurface Physicsを初期化します。
@@ -532,22 +526,15 @@ public class BallPhysicsController : NetworkBehaviour
 	private void ApplySurfacePosition(
 		bool immediate)
 	{
-		if (!m_SurfaceSimulation.TryGetCurrentSurfaceNormal(
-			out Vector3 surfaceNormal))
+		if (!m_SurfaceSimulation.TryGetCurrentBallCenterOffset(
+			out Vector3 ballCenterOffset))
 		{
 			return;
 		}
 
-		float ballRadius =
-			GetBallWorldRadius();
-
 		Vector3 targetColliderCenter =
 			m_SurfaceSimulation.SurfacePoint +
-			surfaceNormal *
-			(
-				ballRadius +
-				m_SurfaceSimulation.Height
-			);
+			ballCenterOffset;
 
 		Vector3 colliderCenterOffset =
 			transform.TransformVector(
@@ -557,9 +544,8 @@ public class BallPhysicsController : NetworkBehaviour
 			targetColliderCenter -
 			colliderCenterOffset;
 
-		MeasureSurfaceWorldSpeed(
+		MeasureBounceDistance(
 			targetRigidbodyPosition,
-			surfaceNormal,
 			immediate);
 
 		if (immediate)
@@ -575,185 +561,180 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Surface Physicsが算出したWorld位置から、
-	/// 実際の1FixedUpdateあたりの移動速度を計測します。
+	/// バウンド1回分の移動距離を計測します。
 	/// </summary>
 	/// <remarks>
-	/// Sharp Convex Edgeへ入ったFrameから、
-	/// Edgeを抜けて法線変化が安定するまでだけConsoleへ出力します。
+	/// 1回のバウンド開始から次の着地までについて、
 	///
-	/// WorldSpeed:
-	/// 実際のWorld位置差から求めた速度です。
+	/// ・AirTime
+	/// ・WorldDistance
+	/// ・SurfaceDistance
+	/// ・StartSurfaceSpeed
+	/// ・StartVerticalSpeed
+	/// ・CrossedConvex
 	///
-	/// ExpectedSpeed:
-	/// SurfaceVelocityとVerticalVelocityを直交成分として
-	/// 合成した理論速度です。
+	/// を集計します。
 	///
-	/// Ratioが1.0付近ならWorld上でも速度はほぼ一致しています。
-	/// 角で1.0を大きく超える場合は、位置への折り戻し処理で
-	/// 実際に加速していると判断できます。
+	/// WorldDistanceは実際にWorld上でボール中心が進んだ経路長です。
+	/// SurfaceDistanceはSimulationが展開Surface上で
+	/// 実際に消費した経路長です。
+	///
+	/// Sharp Convex Edgeを越えたバウンドだけ距離が不自然に変化するかを
+	/// バウンド単位で比較するための一時デバッグです。
 	/// </remarks>
-	private void MeasureSurfaceWorldSpeed(
+	private void MeasureBounceDistance(
 		Vector3 targetRigidbodyPosition,
-		Vector3 surfaceNormal,
 		bool immediate)
 	{
-		if (!m_EnableSurfaceSpeedDebug)
+		if (!m_EnableBounceDistanceDebug)
 		{
-			ResetSurfaceSpeedDebug();
+			ResetBounceDistanceDebug();
+
+			return;
+		}
+
+		int currentBounceSequence =
+			m_SurfaceSimulation.BounceSequence;
+
+		// 初回Surface接触でバウンドが成立しなかった場合は
+		// 計測対象が存在しません。
+		if (currentBounceSequence <=
+			0)
+		{
+			ResetBounceDistanceDebug();
 
 			return;
 		}
 
 		if (immediate ||
-			!m_HasSurfaceSpeedDebugSample)
+			!m_HasBounceDistanceDebugSample)
 		{
-			m_HasSurfaceSpeedDebugSample =
-				true;
-
-			m_PreviousSurfaceSpeedDebugPosition =
-				targetRigidbodyPosition;
-
-			m_PreviousSurfaceSpeedDebugNormal =
-				surfaceNormal;
-
-			m_PreviousSurfaceSpeedDebugWorldSpeed =
-				0.0f;
-
-			m_IsSurfaceSpeedDebugTrackingSharpEdge =
-				false;
-
-			m_SurfaceSpeedDebugStableFrames =
-				0;
-
-			return;
-		}
-
-		float deltaTime =
-			Time.fixedDeltaTime;
-
-		if (deltaTime <=
-			Mathf.Epsilon)
-		{
-			return;
-		}
-
-		float worldDistance =
-			Vector3.Distance(
-				m_PreviousSurfaceSpeedDebugPosition,
+			BeginBounceDistanceDebug(
+				currentBounceSequence,
 				targetRigidbodyPosition);
 
-		float worldSpeed =
-			worldDistance /
-			deltaTime;
+			return;
+		}
 
-		float surfaceSpeed =
-			m_SurfaceSimulation.SurfaceSpeed;
+		m_BounceDebugWorldDistance +=
+			Vector3.Distance(
+				m_PreviousBounceDebugWorldPosition,
+				targetRigidbodyPosition);
 
-		float verticalSpeed =
-			Mathf.Abs(
-				m_SurfaceSimulation.VerticalVelocity);
+		m_BounceDebugSurfaceDistance +=
+			m_SurfaceSimulation.SurfaceDistanceTravelledThisStep;
 
-		float expectedSpeed =
-			Mathf.Sqrt(
-				surfaceSpeed *
-					surfaceSpeed +
-				verticalSpeed *
-					verticalSpeed);
+		m_BounceDebugAirTime +=
+			Time.fixedDeltaTime;
 
-		float speedRatio =
-			expectedSpeed >
-				Mathf.Epsilon
-				? worldSpeed /
-					expectedSpeed
-				: 0.0f;
-
-		float normalAngle =
-			Vector3.Angle(
-				m_PreviousSurfaceSpeedDebugNormal,
-				surfaceNormal);
-
-		// LastEdgeは同一Advance内の後続Edgeで上書きされるため、
-		// Step中に一度でもConvexを通ったことを保持する専用フラグを使います。
-		bool enteredConvexEdge =
-			m_SurfaceSimulation.DidTraverseConvexEdgeThisStep;
-
-		if (enteredConvexEdge)
+		if (m_SurfaceSimulation.DidTraverseConvexEdgeThisStep)
 		{
-			m_IsSurfaceSpeedDebugTrackingSharpEdge =
+			m_BounceDebugCrossedConvexEdge =
 				true;
-
-			m_SurfaceSpeedDebugStableFrames =
-				0;
 		}
 
-		if (m_IsSurfaceSpeedDebugTrackingSharpEdge)
-		{
-			Debug.Log(
-				$"[SurfaceSpeedDebug] " +
-				$"Phase={(enteredConvexEdge ? "ENTER" : "TRACK")}, " +
-				$"PrevWorld={m_PreviousSurfaceSpeedDebugWorldSpeed:F3}, " +
-				$"World={worldSpeed:F3}, " +
-				$"Expected={expectedSpeed:F3}, " +
-				$"Ratio={speedRatio:F3}, " +
-				$"Surface={surfaceSpeed:F3}, " +
-				$"Vertical={verticalSpeed:F3}, " +
-				$"NormalDelta={normalAngle:F3}, " +
-				$"Height={m_SurfaceSimulation.Height:F3}, " +
-				$"Triangle={m_SurfaceSimulation.CurrentTriangleIndex}",
-				this);
-
-			if (!enteredConvexEdge &&
-				normalAngle <=
-					m_SurfaceSpeedDebugStableNormalAngle)
-			{
-				m_SurfaceSpeedDebugStableFrames++;
-			}
-			else
-			{
-				m_SurfaceSpeedDebugStableFrames =
-					0;
-			}
-
-			if (m_SurfaceSpeedDebugStableFrames >=
-				m_SurfaceSpeedDebugStableFrameCount)
-			{
-				m_IsSurfaceSpeedDebugTrackingSharpEdge =
-					false;
-			}
-		}
-
-		m_PreviousSurfaceSpeedDebugPosition =
+		m_PreviousBounceDebugWorldPosition =
 			targetRigidbodyPosition;
 
-		m_PreviousSurfaceSpeedDebugNormal =
-			surfaceNormal;
+		if (!m_SurfaceSimulation.DidSurfaceImpactThisStep)
+		{
+			return;
+		}
 
-		m_PreviousSurfaceSpeedDebugWorldSpeed =
-			worldSpeed;
+		// このStep内で着地したので、
+		// 直前まで追跡していた1バウンド分を出力します。
+		Debug.Log(
+			$"[BounceDistanceDebug] " +
+			$"Bounce={m_BounceDebugSequence}, " +
+			$"AirTime={m_BounceDebugAirTime:F3}, " +
+			$"WorldDistance={m_BounceDebugWorldDistance:F3}, " +
+			$"SurfaceDistance={m_BounceDebugSurfaceDistance:F3}, " +
+			$"StartSurfaceSpeed={m_BounceDebugStartSurfaceSpeed:F3}, " +
+			$"StartVerticalSpeed={m_BounceDebugStartVerticalSpeed:F3}, " +
+			$"CrossedConvex={m_BounceDebugCrossedConvexEdge}",
+			this);
+
+		if (currentBounceSequence >
+			m_BounceDebugSequence)
+		{
+			// 着地後に再バウンドした場合は、
+			// 同じ位置から次のバウンド計測を開始します。
+			BeginBounceDistanceDebug(
+				currentBounceSequence,
+				targetRigidbodyPosition);
+
+			return;
+		}
+
+		// 再バウンドしなかった場合は計測終了です。
+		ResetBounceDistanceDebug();
 	}
 
 	/// <summary>
-	/// Surface速度計測用の一時状態を初期化します。
+	/// 新しいバウンドの距離計測を開始します。
 	/// </summary>
-	private void ResetSurfaceSpeedDebug()
+	private void BeginBounceDistanceDebug(
+		int bounceSequence,
+		Vector3 worldPosition)
 	{
-		m_HasSurfaceSpeedDebugSample =
-			false;
+		m_HasBounceDistanceDebugSample =
+			true;
 
-		m_IsSurfaceSpeedDebugTrackingSharpEdge =
-			false;
+		m_BounceDebugSequence =
+			bounceSequence;
 
-		m_PreviousSurfaceSpeedDebugPosition =
-			Vector3.zero;
+		m_PreviousBounceDebugWorldPosition =
+			worldPosition;
 
-		m_PreviousSurfaceSpeedDebugNormal =
-			Vector3.zero;
-
-		m_PreviousSurfaceSpeedDebugWorldSpeed =
+		m_BounceDebugWorldDistance =
 			0.0f;
 
-		m_SurfaceSpeedDebugStableFrames =
+		m_BounceDebugSurfaceDistance =
+			0.0f;
+
+		m_BounceDebugAirTime =
+			0.0f;
+
+		m_BounceDebugStartSurfaceSpeed =
+			m_SurfaceSimulation.LastBounceSurfaceSpeed;
+
+		m_BounceDebugStartVerticalSpeed =
+			m_SurfaceSimulation.LastBounceVerticalSpeed;
+
+		m_BounceDebugCrossedConvexEdge =
+			false;
+	}
+
+	/// <summary>
+	/// バウンド距離計測用の一時状態を初期化します。
+	/// </summary>
+	private void ResetBounceDistanceDebug()
+	{
+		m_HasBounceDistanceDebugSample =
+			false;
+
+		m_BounceDebugCrossedConvexEdge =
+			false;
+
+		m_PreviousBounceDebugWorldPosition =
+			Vector3.zero;
+
+		m_BounceDebugWorldDistance =
+			0.0f;
+
+		m_BounceDebugSurfaceDistance =
+			0.0f;
+
+		m_BounceDebugAirTime =
+			0.0f;
+
+		m_BounceDebugStartSurfaceSpeed =
+			0.0f;
+
+		m_BounceDebugStartVerticalSpeed =
+			0.0f;
+
+		m_BounceDebugSequence =
 			0;
 	}
 
@@ -1292,7 +1273,7 @@ public class BallPhysicsController : NetworkBehaviour
 
 		m_SurfaceSimulation.Reset();
 
-		ResetSurfaceSpeedDebug();
+		ResetBounceDistanceDebug();
 	}
 
 	/// <summary>
@@ -1327,7 +1308,7 @@ public class BallPhysicsController : NetworkBehaviour
 
 		m_SurfaceSimulation.Reset();
 
-		ResetSurfaceSpeedDebug();
+		ResetBounceDistanceDebug();
 
 		m_NextSurfaceSearchTime =
 			0.0f;
