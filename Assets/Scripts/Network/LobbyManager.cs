@@ -32,9 +32,13 @@ public class LobbyManager : NetworkBehaviour
 	// ロビーデータや開始条件が変化した際に発火するイベント
 	public event Action OnLobbyDataChanged;
 
+	// ゲームシーンの非同期ロードが開始された際に発火するイベント
+	public event Action OnGameSceneLoadStarted;
+
 	private int m_CurrentRequiredPlayers;
 	// 現在選択されている遷移先がレベルデザインシーンかどうか
 	private bool m_UseLevelDesignScene;
+	private bool m_IsGameStarting;
 	private string m_CachedHostIp = "127.0.0.1";
 
 	// 参加者情報のネットワーク同期リスト
@@ -75,6 +79,11 @@ public class LobbyManager : NetworkBehaviour
 		// クライアント側でサーバーが切断された場合の検知
 		NetworkManager.Singleton.OnClientDisconnectCallback += HandleServerDisconnect;
 
+		if (NetworkManager.Singleton.SceneManager != null)
+		{
+			NetworkManager.Singleton.SceneManager.OnSceneEvent += HandleSceneEvent;
+		}
+
 		NotifyDataChanged();
 	}
 
@@ -84,6 +93,11 @@ public class LobbyManager : NetworkBehaviour
 
 		if (NetworkManager.Singleton != null)
 		{
+			if (NetworkManager.Singleton.SceneManager != null)
+			{
+				NetworkManager.Singleton.SceneManager.OnSceneEvent -= HandleSceneEvent;
+			}
+
 			if (IsServer)
 			{
 				NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
@@ -171,6 +185,32 @@ public class LobbyManager : NetworkBehaviour
 	private void NotifyDataChanged()
 	{
 		OnLobbyDataChanged?.Invoke();
+	}
+
+	private void HandleSceneEvent(SceneEvent sceneEvent)
+	{
+		if (sceneEvent == null) return;
+
+		// シーンロード開始イベントを検知(ホスト・クライアント双方で受信)
+		if (sceneEvent.SceneEventType == SceneEventType.Load)
+		{
+			string sceneName = sceneEvent.SceneName;
+			if (sceneName == m_GameSceneName || sceneName == m_LevelDesignSceneName)
+			{
+				NotifyGameSceneLoadStarted();
+			}
+		}
+	}
+
+	private void NotifyGameSceneLoadStarted()
+	{
+		OnGameSceneLoadStarted?.Invoke();
+	}
+
+	[Rpc(SendTo.Everyone)]
+	private void NotifyGameSceneLoadStartedRpc()
+	{
+		NotifyGameSceneLoadStarted();
 	}
 
 	public const int MaxPlayerNameLength = 12;
@@ -571,6 +611,9 @@ public class LobbyManager : NetworkBehaviour
 
 	private void StartGameTransition()
 	{
+		if (m_IsGameStarting) return;
+		m_IsGameStarting = true;
+
 		if (SessionPlayerDataStore.Instance != null)
 		{
 			for (int i = 0; i < m_LobbyPlayers.Count; i++)
@@ -582,10 +625,13 @@ public class LobbyManager : NetworkBehaviour
 		string targetScene = m_UseLevelDesignScene ? m_LevelDesignSceneName : m_GameSceneName;
 		if (!string.IsNullOrEmpty(targetScene))
 		{
+			// 全端末(ホストおよび全クライアント)へ即座にロード中UIの表示を通知
+			NotifyGameSceneLoadStartedRpc();
 			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
 		}
 		else
 		{
+			m_IsGameStarting = false;
 			Debug.LogWarning("[LobbyManager] 遷移先シーン名が設定されていません。");
 		}
 	}

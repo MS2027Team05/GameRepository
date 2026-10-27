@@ -20,6 +20,7 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private GameObject m_HostControlPanel;
 	[SerializeField] private GameObject m_PlayerControlPanel;
 	[SerializeField] private GameObject m_DebugPanel;
+	[SerializeField] private GameObject m_LoadingPanel;
 
 	[Header("全体情報UI参照")]
 	[SerializeField] private TextMeshProUGUI m_PlayerCountText;
@@ -96,6 +97,7 @@ public class LobbyUIController : MonoBehaviour
 		if (m_LobbyManager != null)
 		{
 			m_LobbyManager.OnLobbyDataChanged += RefreshAllUI;
+			m_LobbyManager.OnGameSceneLoadStarted += ShowLoadingPanel;
 		}
 
 		RefreshAllUI();
@@ -106,6 +108,7 @@ public class LobbyUIController : MonoBehaviour
 		if (m_LobbyManager != null)
 		{
 			m_LobbyManager.OnLobbyDataChanged -= RefreshAllUI;
+			m_LobbyManager.OnGameSceneLoadStarted -= ShowLoadingPanel;
 		}
 	}
 
@@ -142,6 +145,28 @@ public class LobbyUIController : MonoBehaviour
 		if (m_DebugPanel != null)
 		{
 			m_DebugPanel.SetActive(showDebugPanel);
+		}
+
+		// ⑤ ロード中パネル: 初期状態では非表示
+		if (m_LoadingPanel != null)
+		{
+			m_LoadingPanel.SetActive(false);
+		}
+	}
+
+	/// <summary>
+	/// ゲームシーンへの非同期ロード開始時に呼び出され、全操作パネルを非表示にしてロード中パネルを表示します。
+	/// </summary>
+	private void ShowLoadingPanel()
+	{
+		if (m_SharedInfoPanel != null) m_SharedInfoPanel.SetActive(false);
+		if (m_HostControlPanel != null) m_HostControlPanel.SetActive(false);
+		if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(false);
+		if (m_DebugPanel != null) m_DebugPanel.SetActive(false);
+
+		if (m_LoadingPanel != null)
+		{
+			m_LoadingPanel.SetActive(true);
 		}
 	}
 
