@@ -327,9 +327,11 @@ public class PlayerSilhouette : MonoBehaviour
 			float alpha = m_PlayerSilhouetteAlpha > 0.001f ? m_PlayerSilhouetteAlpha : 0.6f;
 			Color silColor = new Color(teamColor.r, teamColor.g, teamColor.b, alpha);
 			m_SilhouetteInstance.SetColor(m_SilhouetteColorId, silColor);
-			// 遮蔽時は壁の奥のメッシュを無条件描画するためCompareFunction.Alwaysに設定
-			m_SilhouetteInstance.SetFloat(m_StencilCompId, (float)UnityEngine.Rendering.CompareFunction.Always);
-			m_SilhouetteInstance.SetFloat(m_StencilPassId, (float)UnityEngine.Rendering.StencilOp.Keep);
+			m_SilhouetteInstance.SetFloat(m_StencilRefId, stencilRef);
+			// 見えている本体メッシュ(stencilRef)以外に描画し、自己遮蔽やポリゴン交差部での誤描画を防止
+			m_SilhouetteInstance.SetFloat(m_StencilCompId, (float)UnityEngine.Rendering.CompareFunction.NotEqual);
+			// 壁裏描画時にマークを更新し、複数ポリゴン重なり時のアルファ2重ブレンドを防止
+			m_SilhouetteInstance.SetFloat(m_StencilPassId, (float)UnityEngine.Rendering.StencilOp.Replace);
 		}
 
 		// マテリアル配列の再構築
@@ -377,8 +379,9 @@ public class PlayerSilhouette : MonoBehaviour
 			if (baseMats == null) continue;
 
 			// 半透明マテリアルの末尾にアウトライン・シルエット用マテリアルを付与
+			bool needStencilMask = (m_UseOutline || shouldShowSilhouette) && m_StencilMaskInstance != null;
 			int extraCount = 0;
-			if (m_UseOutline && m_StencilMaskInstance != null) extraCount++;
+			if (needStencilMask) extraCount++;
 			if (shouldShowSilhouette && m_SilhouetteInstance != null) extraCount++;
 			if (m_UseOutline && m_OutlineInstance != null) extraCount++;
 
@@ -386,7 +389,7 @@ public class PlayerSilhouette : MonoBehaviour
 			baseMats.CopyTo(newMats, 0);
 
 			int idx = baseMats.Length;
-			if (m_UseOutline && m_StencilMaskInstance != null)
+			if (needStencilMask)
 			{
 				newMats[idx++] = m_StencilMaskInstance;
 			}
@@ -407,8 +410,9 @@ public class PlayerSilhouette : MonoBehaviour
 	{
 		if (m_Renderers == null || m_OriginalMaterials == null) return;
 
+		bool needStencilMask = (useOutline || useSilhouette) && m_StencilMaskInstance != null;
 		int extraCount = 0;
-		if (useOutline && m_StencilMaskInstance != null) extraCount++;
+		if (needStencilMask) extraCount++;
 		if (useSilhouette && m_SilhouetteInstance != null) extraCount++;
 		if (useOutline && m_OutlineInstance != null) extraCount++;
 
@@ -423,7 +427,7 @@ public class PlayerSilhouette : MonoBehaviour
 			originals.CopyTo(newMaterials, 0);
 
 			int index = originals.Length;
-			if (useOutline && m_StencilMaskInstance != null)
+			if (needStencilMask)
 			{
 				newMaterials[index++] = m_StencilMaskInstance;
 			}
