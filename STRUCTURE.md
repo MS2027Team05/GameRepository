@@ -70,6 +70,8 @@ GameRepository/
 │   │       ├── PlayerSurfaceMover.cs    # 地上/曲面歩行移動・運動量転送・ダウンフォース・姿勢回転制御
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
 │   │   └── UI/                  # 汎用・共通UI制御
+│   │       ├── UIInputReceiver.cs       # UI系統入力検知・InputActionインスタンス分離制御
+│   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・退出制御
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定

@@ -644,7 +644,7 @@ public class LobbyManager : NetworkBehaviour
 		}
 	}
 
-	private string GetLocalIPv4Address()
+	public static string GetLocalIPv4Address()
 	{
 		try
 		{
@@ -661,7 +661,7 @@ public class LobbyManager : NetworkBehaviour
 					continue;
 				}
 
-				// 仮想アダプタ名（WSL, VirtualBox, vEthernet, Hyper-V, VMwareなど）を除外
+				// 仮想アダプタ名(WSL, VirtualBox, vEthernet, Hyper-V, VMwareなど)を除外
 				string name = ni.Name.ToLower();
 				string desc = ni.Description.ToLower();
 				if (name.Contains("vethernet") || name.Contains("wsl") || name.Contains("virtual") ||
