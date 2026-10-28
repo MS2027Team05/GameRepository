@@ -23,7 +23,7 @@ ModelImporter:
     animationDoRetargetingWarnings: 0
     importAnimatedCustomProperties: 0
     importConstraints: 0
-    animationCompression: 1
+    animationCompression: 3
     animationRotationError: 0.5
     animationPositionError: 0.5
     animationScaleError: 0.5
@@ -84,7 +84,562 @@ ModelImporter:
   humanDescription:
     serializedVersion: 3
     human: []
-    skeleton: []
+    skeleton:
+    - name: Men_Tpose(Clone)
+      parentName: 
+      position: {x: -2.7135626e-13, y: 1.0184507, z: 0.0032495125}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:rig
+      parentName: Men_Tpose(Clone)
+      position: {x: 2.7135626e-13, y: -1.0184507, z: -0.0032495125}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:jnt_org
+      parentName: Rig:rig
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Loot_jnt
+      parentName: Rig:jnt_org
+      position: {x: 0, y: -0.65582395, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:spine_C0_0_jnt
+      parentName: Rig:Loot_jnt
+      position: {x: 1.8713236e-19, y: 1.2298113, z: 0.01794568}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:spine_C0_1_jnt
+      parentName: Rig:spine_C0_0_jnt
+      position: {x: 3.6322126e-27, y: 0.033705737, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:spine_C0_2_jnt
+      parentName: Rig:spine_C0_1_jnt
+      position: {x: -3.6322422e-27, y: 0.033705834, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:shoulder_L0_shoulder_jnt
+      parentName: Rig:spine_C0_2_jnt
+      position: {x: -0.011456344, y: 0.22456688, z: 0.002496747}
+      rotation: {x: -0.692906, y: -0.14100088, z: -0.09643136, w: 0.70050055}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_0_jnt
+      parentName: Rig:shoulder_L0_shoulder_jnt
+      position: {x: -0.15243231, y: -0.00012153837, z: 0.000028085838}
+      rotation: {x: -0.0062678466, y: 0.031349216, z: 0.13968712, w: 0.9896795}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_1_jnt
+      parentName: Rig:arm_L0_0_jnt
+      position: {x: -0.10960983, y: -0.0000001819613, z: 2.5295321e-14}
+      rotation: {x: 1.517883e-18, y: -2.5885459e-24, z: 0.0000017053619, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_2_jnt
+      parentName: Rig:arm_L0_1_jnt
+      position: {x: -0.10564804, y: -0.0000006264054, z: 2.4442669e-14}
+      rotation: {x: 1.517883e-18, y: -3.2328025e-23, z: 0.000017887372, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_3_jnt
+      parentName: Rig:arm_L0_2_jnt
+      position: {x: -0.0044019967, y: -0.00000018182828, z: 1.1368684e-15}
+      rotation: {x: 1.517155e-18, y: -4.700548e-20, z: 0.030928621, w: 0.9995216}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_4_jnt
+      parentName: Rig:arm_L0_3_jnt
+      position: {x: -0.0055567566, y: -0.0003441079, z: 2.2737367e-15}
+      rotation: {x: 1.5113454e-18, y: -1.4072715e-19, z: 0.030934881, w: 0.99952143}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_5_jnt
+      parentName: Rig:arm_L0_4_jnt
+      position: {x: -0.13361777, y: -0.0000029803155, z: 4.774847e-14}
+      rotation: {x: 1.5062662e-18, y: -1.8743232e-19, z: 0.000012767699, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_6_jnt
+      parentName: Rig:arm_L0_5_jnt
+      position: {x: -0.13361777, y: 0.00000050282455, z: 4.8316904e-14}
+      rotation: {x: 1.5062665e-18, y: -1.8743026e-19, z: -0.000014129031, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_L0_end_jnt
+      parentName: Rig:arm_L0_6_jnt
+      position: {x: -0.0055674016, y: 0.00000019748582, z: 1.7053025e-15}
+      rotation: {x: 1.5117253e-18, y: -1.3658523e-19, z: -0.033670936, w: 0.999433}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_L0_0_jnt
+      parentName: Rig:arm_L0_end_jnt
+      position: {x: -0.03322379, y: -0.034128387, z: 0.000013860941}
+      rotation: {x: 0.4820226, y: -0.5164249, z: -0.48507982, w: 0.5154193}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_L0_1_jnt
+      parentName: Rig:meta_L0_0_jnt
+      position: {x: -0.020901922, y: 0, z: -2.842171e-16}
+      rotation: {x: 0.07807277, y: 0.7650545, z: -0.118345454, w: 0.6281644}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_L0_2_jnt
+      parentName: Rig:meta_L0_1_jnt
+      position: {x: -0.036098562, y: 0, z: 1.4210854e-16}
+      rotation: {x: -2.3750148e-18, y: -3.6011212e-17, z: 0.006306864, w: 0.99998015}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_L0_3_jnt
+      parentName: Rig:meta_L0_2_jnt
+      position: {x: -0.02880718, y: 1.1368684e-15, z: -1.7053025e-15}
+      rotation: {x: -0.0000015264374, y: -0.62211484, z: 0.011237801, w: 0.7828454}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L3_0_jnt
+      parentName: Rig:meta_L0_3_jnt
+      position: {x: -0.038125835, y: 0.0032545936, z: 0.18016578}
+      rotation: {x: 0.7893328, y: 0.068238504, z: -0.6082125, w: 0.048733667}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L3_1_jnt
+      parentName: Rig:finger_L3_0_jnt
+      position: {x: -0.047871165, y: -1.7053025e-15, z: 1.0658141e-16}
+      rotation: {x: 2.1163626e-16, y: 5.551115e-17, z: 8.673617e-18, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L3_2_jnt
+      parentName: Rig:finger_L3_1_jnt
+      position: {x: -0.04645868, y: 2.842171e-16, z: 7.105427e-17}
+      rotation: {x: -2.429882e-17, y: -0.0016135662, z: -7.845474e-18, w: 0.9999987}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L2_0_jnt
+      parentName: Rig:meta_L0_2_jnt
+      position: {x: -0.020948721, y: 0.0057667964, z: 0.19294725}
+      rotation: {x: 0.7339137, y: 0.04177757, z: -0.6771069, w: 0.033935968}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L2_1_jnt
+      parentName: Rig:finger_L2_0_jnt
+      position: {x: -0.083722055, y: 1.4210854e-15, z: -4.1744386e-16}
+      rotation: {x: 1.9394208e-15, y: -2.0816682e-16, z: 1.2468325e-17, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L2_2_jnt
+      parentName: Rig:finger_L2_1_jnt
+      position: {x: -0.05431576, y: 5.684342e-16, z: 3.0642155e-16}
+      rotation: {x: 1.9411556e-15, y: -2.0816682e-16, z: 1.3877788e-17, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L1_0_jnt
+      parentName: Rig:meta_L0_1_jnt
+      position: {x: -0.00280063, y: 0.011817631, z: 0.19739975}
+      rotation: {x: 0.70558846, y: 0.046313286, z: -0.70558846, w: 0.046313286}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L1_1_jnt
+      parentName: Rig:finger_L1_0_jnt
+      position: {x: -0.08630378, y: -5.684342e-16, z: -2.264855e-15}
+      rotation: {x: 1.5612511e-16, y: 1.3578548e-14, z: 1.2630379e-15, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L1_2_jnt
+      parentName: Rig:finger_L1_1_jnt
+      position: {x: -0.08017494, y: 1.7053025e-15, z: -2.1782575e-15}
+      rotation: {x: 1.565588e-16, y: 1.3578548e-14, z: 1.263248e-15, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L0_0_jnt
+      parentName: Rig:meta_L0_0_jnt
+      position: {x: 0.032786787, y: 0.0051050386, z: 0.1993384}
+      rotation: {x: -0.66487306, y: 0.0045292666, z: 0.74692726, w: -0.00479374}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L0_1_jnt
+      parentName: Rig:finger_L0_0_jnt
+      position: {x: -0.078892216, y: 8.5265126e-16, z: -4.4408918e-17}
+      rotation: {x: -1.9290125e-15, y: 1.0408341e-16, z: -2.1250363e-17, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_L0_2_jnt
+      parentName: Rig:finger_L0_1_jnt
+      position: {x: -0.078246765, y: -1.4210854e-15, z: 7.9936054e-17}
+      rotation: {x: -1.9359514e-15, y: 9.7144515e-17, z: -2.1684043e-17, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:thumb_L0_0_jnt
+      parentName: Rig:meta_L0_0_jnt
+      position: {x: 0.013757189, y: 0.00631283, z: 0.026896706}
+      rotation: {x: -0.18809216, y: 0.61157167, z: 0.72645915, w: 0.2507162}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:thumb_L0_1_jnt
+      parentName: Rig:thumb_L0_0_jnt
+      position: {x: -0.10946143, y: 7.105427e-17, z: 8.2422955e-15}
+      rotation: {x: 3.8865598e-19, y: 1.3872344e-17, z: -0.028005615, w: 0.99960774}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:thumb_L0_2_jnt
+      parentName: Rig:thumb_L0_1_jnt
+      position: {x: -0.079038806, y: -1.7763567e-16, z: -5.4001247e-15}
+      rotation: {x: 1.3877788e-16, y: -3.7816972e-16, z: -1.3877788e-16, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:shoulder_R0_shoulder_jnt
+      parentName: Rig:spine_C0_2_jnt
+      position: {x: 0.011456344, y: 0.22456688, z: 0.002496747}
+      rotation: {x: 0.70050055, y: 0.09643136, z: -0.14100088, w: 0.692906}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_0_jnt
+      parentName: Rig:shoulder_R0_shoulder_jnt
+      position: {x: 0.15243231, y: 0.000121536796, z: -0.000028085475}
+      rotation: {x: -0.0062678466, y: 0.031349216, z: 0.13968712, w: 0.9896795}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_1_jnt
+      parentName: Rig:arm_R0_0_jnt
+      position: {x: 0.10960984, y: 0.00000018196134, z: -2.5579538e-14}
+      rotation: {x: 1.517883e-18, y: -2.5884698e-24, z: 0.0000017053621, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_2_jnt
+      parentName: Rig:arm_R0_1_jnt
+      position: {x: 0.10564804, y: 0.0000006264054, z: -2.4442669e-14}
+      rotation: {x: 1.517883e-18, y: -3.2327962e-23, z: 0.000017887372, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_3_jnt
+      parentName: Rig:arm_R0_2_jnt
+      position: {x: 0.0044019967, y: 0.00000018182828, z: -1.4210854e-15}
+      rotation: {x: 1.517155e-18, y: -4.700548e-20, z: 0.030928621, w: 0.9995216}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_4_jnt
+      parentName: Rig:arm_R0_3_jnt
+      position: {x: 0.0055567566, y: 0.0003441079, z: -1.9895197e-15}
+      rotation: {x: 1.5113454e-18, y: -1.4072715e-19, z: 0.030934881, w: 0.99952143}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_5_jnt
+      parentName: Rig:arm_R0_4_jnt
+      position: {x: 0.13361777, y: 0.0000029803155, z: -4.7464254e-14}
+      rotation: {x: 1.5062662e-18, y: -1.8743232e-19, z: 0.000012767699, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_6_jnt
+      parentName: Rig:arm_R0_5_jnt
+      position: {x: 0.13361776, y: -0.0000005028244, z: -4.8316904e-14}
+      rotation: {x: 1.5062665e-18, y: -1.8743026e-19, z: -0.000014129024, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:arm_R0_end_jnt
+      parentName: Rig:arm_R0_6_jnt
+      position: {x: 0.0055674063, y: -0.00000019748589, z: -1.7053025e-15}
+      rotation: {x: 1.5117253e-18, y: -1.3658523e-19, z: -0.033670936, w: 0.999433}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Human_Ball_Joint
+      parentName: Rig:arm_R0_end_jnt
+      position: {x: 0.2971988, y: 0.009363012, z: 0.24777353}
+      rotation: {x: -0.70710677, y: -0.00024329772, z: 0.00024329772, w: 0.70710677}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_R0_0_jnt
+      parentName: Rig:arm_R0_end_jnt
+      position: {x: 0.03322379, y: 0.034128387, z: -0.000013860941}
+      rotation: {x: 0.4820226, y: -0.5164249, z: -0.48507982, w: 0.5154193}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_R0_1_jnt
+      parentName: Rig:meta_R0_0_jnt
+      position: {x: 0.020901922, y: 2.842171e-16, z: 0}
+      rotation: {x: 0.07807298, y: 0.765055, z: -0.11834507, w: 0.62816393}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_R0_2_jnt
+      parentName: Rig:meta_R0_1_jnt
+      position: {x: 0.036098562, y: -8.5265126e-16, z: -2.842171e-16}
+      rotation: {x: 3.698638e-18, y: -2.7732802e-17, z: 0.006306864, w: 0.99998015}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:meta_R0_3_jnt
+      parentName: Rig:meta_R0_2_jnt
+      position: {x: 0.02880718, y: -5.684342e-16, z: 1.4210854e-15}
+      rotation: {x: 0.00000026402978, y: -0.62211424, z: 0.0112381205, w: 0.7828458}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R3_0_jnt
+      parentName: Rig:meta_R0_3_jnt
+      position: {x: 0.038125835, y: -0.0032545936, z: -0.18016578}
+      rotation: {x: 0.7893328, y: 0.068238504, z: -0.6082125, w: 0.048733667}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R3_1_jnt
+      parentName: Rig:finger_R3_0_jnt
+      position: {x: 0.047871165, y: 3.126388e-15, z: -7.105427e-17}
+      rotation: {x: -6.938894e-17, y: -5.3805668e-33, z: -1.1275703e-17, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R3_2_jnt
+      parentName: Rig:finger_R3_1_jnt
+      position: {x: 0.04645868, y: 2.842171e-16, z: 1.0658141e-16}
+      rotation: {x: 1.7337505e-17, y: -0.0016135662, z: -6.0435648e-18, w: 0.9999987}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R2_0_jnt
+      parentName: Rig:meta_R0_2_jnt
+      position: {x: 0.020948721, y: -0.0057667964, z: -0.19294725}
+      rotation: {x: 0.7339137, y: 0.04177757, z: -0.6771069, w: 0.033935968}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R2_1_jnt
+      parentName: Rig:finger_R2_0_jnt
+      position: {x: 0.083722055, y: 0, z: -7.5495166e-17}
+      rotation: {x: -2.2030988e-16, y: -3.469447e-17, z: -1.517883e-18, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R2_2_jnt
+      parentName: Rig:finger_R2_1_jnt
+      position: {x: 0.05431576, y: -5.684342e-16, z: -5.506706e-16}
+      rotation: {x: -2.2030988e-16, y: -4.8572257e-17, z: -2.1684043e-18, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R1_0_jnt
+      parentName: Rig:meta_R0_1_jnt
+      position: {x: 0.00280063, y: -0.011817631, z: -0.19739975}
+      rotation: {x: 0.70558846, y: 0.046313286, z: -0.70558846, w: 0.046313286}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R1_1_jnt
+      parentName: Rig:finger_R1_0_jnt
+      position: {x: 0.08630378, y: 1.4210854e-15, z: 2.320366e-15}
+      rotation: {x: 4.1199683e-17, y: 1.3831384e-14, z: -1.3528031e-15, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R1_2_jnt
+      parentName: Rig:finger_R1_1_jnt
+      position: {x: 0.08017494, y: -2.842171e-16, z: 2.1538326e-15}
+      rotation: {x: 4.1199683e-17, y: 1.383095e-14, z: -1.3528031e-15, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R0_0_jnt
+      parentName: Rig:meta_R0_0_jnt
+      position: {x: -0.032786787, y: -0.0051050386, z: -0.1993384}
+      rotation: {x: -0.66487324, y: 0.0045292364, z: 0.7469271, w: -0.0047935434}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R0_1_jnt
+      parentName: Rig:finger_R0_0_jnt
+      position: {x: 0.078892216, y: -1.1368684e-15, z: 4.4408918e-17}
+      rotation: {x: 6.730727e-16, y: -6.2450045e-17, z: -7.372575e-18, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:finger_R0_2_jnt
+      parentName: Rig:finger_R0_1_jnt
+      position: {x: 0.078246765, y: 1.7053025e-15, z: -2.6645352e-17}
+      rotation: {x: 6.800116e-16, y: -6.2450045e-17, z: -8.2399365e-18, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:thumb_R0_0_jnt
+      parentName: Rig:meta_R0_0_jnt
+      position: {x: -0.013757189, y: -0.00631283, z: -0.026896706}
+      rotation: {x: -0.1880923, y: 0.61157155, z: 0.726459, w: 0.2507165}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:thumb_R0_1_jnt
+      parentName: Rig:thumb_R0_0_jnt
+      position: {x: 0.10946143, y: -3.5527136e-17, z: -7.958079e-15}
+      rotation: {x: 7.0333364e-18, y: 3.2737581e-18, z: -0.028005615, w: 0.99960774}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:thumb_R0_2_jnt
+      parentName: Rig:thumb_R0_1_jnt
+      position: {x: 0.079038806, y: 1.0658141e-16, z: 5.4001247e-15}
+      rotation: {x: 1.2490009e-16, y: 3.4347525e-16, z: -5.551115e-17, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Neck_01
+      parentName: Rig:spine_C0_2_jnt
+      position: {x: -1.8713236e-19, y: 0.30595326, z: -0.04258727}
+      rotation: {x: 0.036454886, y: -0, z: -0, w: 0.99933535}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Head_01
+      parentName: Rig:Neck_01
+      position: {x: -0, y: 0.09080537, z: 3.5527136e-17}
+      rotation: {x: -0.036454886, y: 0, z: -0, w: 0.99933535}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Head_02
+      parentName: Rig:Head_01
+      position: {x: 9.846331e-17, y: 0.34316134, z: -1.4763193e-16}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C0_0_jnt
+      parentName: Rig:Head_01
+      position: {x: 0.0014601719, y: 0.17172398, z: -0.22639662}
+      rotation: {x: -0.10894874, y: -0.7335256, z: 0.11878386, w: 0.66027325}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C0_1_jnt
+      parentName: Rig:chainSpringGravity_C0_0_jnt
+      position: {x: -0.09682801, y: 0, z: 9.7699626e-17}
+      rotation: {x: -0.05735199, y: 0.016306575, z: 0.48612723, w: 0.87185156}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C0_2_jnt
+      parentName: Rig:chainSpringGravity_C0_1_jnt
+      position: {x: -0.08702113, y: 1.4210854e-16, z: 1.0658141e-16}
+      rotation: {x: -0.024491947, y: 0.021695632, z: 0.1514199, w: 0.98792785}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C0_3_jnt
+      parentName: Rig:chainSpringGravity_C0_2_jnt
+      position: {x: -0.09431044, y: 1.7763567e-16, z: 3.5527136e-17}
+      rotation: {x: -0.018897241, y: 0.02095959, z: 0.089464664, w: 0.99559015}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C0_4_jnt
+      parentName: Rig:chainSpringGravity_C0_3_jnt
+      position: {x: -0.11315704, y: 3.5527136e-17, z: 0}
+      rotation: {x: 0.008532975, y: -0.03444653, z: -0.046529252, w: 0.99828637}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C0_5_jnt
+      parentName: Rig:chainSpringGravity_C0_4_jnt
+      position: {x: -0.08418499, y: -1.7763567e-16, z: -3.5527136e-17}
+      rotation: {x: -0.0095915, y: -0.10316401, z: -0.20483385, w: 0.97329766}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C0_6_jnt
+      parentName: Rig:chainSpringGravity_C0_5_jnt
+      position: {x: -0.09107278, y: 4.2632563e-16, z: 0}
+      rotation: {x: -0.086524166, y: -0.07228313, z: -0.19836354, w: 0.97362244}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C5_0_jnt
+      parentName: Rig:chainSpringGravity_C0_5_jnt
+      position: {x: -0.0358564, y: 0.0010108822, z: 0.039440975}
+      rotation: {x: 0.5656317, y: 0.19233713, z: -0.10836342, w: 0.79455936}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C5_1_jnt
+      parentName: Rig:chainSpringGravity_C5_0_jnt
+      position: {x: -0.059854697, y: -2.842171e-16, z: 7.105427e-17}
+      rotation: {x: 0.003440561, y: 0.013882751, z: -0.14560534, w: 0.9892394}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C4_0_jnt
+      parentName: Rig:chainSpringGravity_C0_4_jnt
+      position: {x: -0.045377124, y: 0.038303055, z: 0.03591556}
+      rotation: {x: 0.15421025, y: -0.02756408, z: -0.2669744, w: 0.95088595}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C4_1_jnt
+      parentName: Rig:chainSpringGravity_C4_0_jnt
+      position: {x: -0.075209886, y: -2.842171e-16, z: -3.5527136e-17}
+      rotation: {x: -0.036638826, y: -0.15782318, z: -0.11529491, w: 0.98002887}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C2_0_jnt
+      parentName: Rig:chainSpringGravity_C0_3_jnt
+      position: {x: -0.087328434, y: -0.013830999, z: -0.044998407}
+      rotation: {x: -0.8235204, y: 0.030551825, z: -0.09684053, w: 0.5581243}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C2_1_jnt
+      parentName: Rig:chainSpringGravity_C2_0_jnt
+      position: {x: -0.07341539, y: 1.4210854e-16, z: -1.7763567e-16}
+      rotation: {x: 0.000020582764, y: -0.000692003, z: 0.026784385, w: 0.999641}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C2_2_jnt
+      parentName: Rig:chainSpringGravity_C2_1_jnt
+      position: {x: -0.09552909, y: -1.0658141e-16, z: 8.8817837e-17}
+      rotation: {x: -0.031630434, y: 0.11787682, z: 0.14023621, w: 0.98256725}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C3_0_jnt
+      parentName: Rig:chainSpringGravity_C0_2_jnt
+      position: {x: -0.09615422, y: 0.03530343, z: -0.0144645665}
+      rotation: {x: -0.2890506, y: -0.063089065, z: -0.026458984, w: 0.95486623}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C3_1_jnt
+      parentName: Rig:chainSpringGravity_C3_0_jnt
+      position: {x: -0.12797436, y: 0, z: -1.4210854e-16}
+      rotation: {x: -0.0033399411, y: 0.1515144, z: 0.0126983, w: 0.98836786}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C3_2_jnt
+      parentName: Rig:chainSpringGravity_C3_1_jnt
+      position: {x: -0.13438454, y: 1.0658141e-16, z: -1.4210854e-16}
+      rotation: {x: 0.17928742, y: 0.15555225, z: -0.16562885, w: 0.95719725}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C1_0_jnt
+      parentName: Rig:chainSpringGravity_C0_1_jnt
+      position: {x: -0.069681674, y: -0.057735004, z: 0.034180272}
+      rotation: {x: 0.95631325, y: 0.25376633, z: 0.056812875, w: 0.13356626}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C1_1_jnt
+      parentName: Rig:chainSpringGravity_C1_0_jnt
+      position: {x: -0.11267693, y: -7.105427e-17, z: -1.9539925e-16}
+      rotation: {x: -0.021871904, y: 0.09944818, z: 0.123787165, w: 0.9870706}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:chainSpringGravity_C1_2_jnt
+      parentName: Rig:chainSpringGravity_C1_1_jnt
+      position: {x: -0.14262468, y: 7.105427e-17, z: 2.4868996e-16}
+      rotation: {x: -0.08334242, y: -0.00097219215, z: 0.2134025, w: 0.9734025}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_0_jnt
+      parentName: Rig:spine_C0_0_jnt
+      position: {x: -0.12483188, y: -0.11450435, z: 0.0008727976}
+      rotation: {x: 0.49153578, y: 0.5083233, z: 0.49153578, w: 0.5083233}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_1_jnt
+      parentName: Rig:leg_L0_0_jnt
+      position: {x: -0.22272854, y: -0.00000026593665, z: 1.7763568e-17}
+      rotation: {x: 9.860785e-32, y: -1.9105213e-31, z: 0.000001208396, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_2_jnt
+      parentName: Rig:leg_L0_1_jnt
+      position: {x: -0.21467811, y: -0.0000008560552, z: 3.5527136e-17}
+      rotation: {x: -6.0871163e-37, y: 4.9303807e-32, z: 0.000012346139, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_3_jnt
+      parentName: Rig:leg_L0_2_jnt
+      position: {x: -0.008944913, y: -0.00000025471604, z: -3.5527136e-17}
+      rotation: {x: 9.851472e-32, y: 4.279205e-33, z: 0.043396294, w: 0.99905795}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_4_jnt
+      parentName: Rig:leg_L0_3_jnt
+      position: {x: -0.009334115, y: -0.00081225066, z: 3.5527136e-17}
+      rotation: {x: -8.1396283e-32, y: -3.983384e-31, z: 0.04340035, w: 0.99905777}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_5_jnt
+      parentName: Rig:leg_L0_4_jnt
+      position: {x: -0.22486559, y: -0.0000040710356, z: -3.7303492e-16}
+      rotation: {x: 1.23249606e-32, y: 9.860774e-32, z: 0.000010047514, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_6_jnt
+      parentName: Rig:leg_L0_5_jnt
+      position: {x: -0.22486559, y: 0.0000011247371, z: -3.1974422e-16}
+      rotation: {x: 0, y: -0, z: -0.00001789837, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_L0_end_jnt
+      parentName: Rig:leg_L0_6_jnt
+      position: {x: -0.00936939, y: 0.00000040950266, z: -1.7763568e-17}
+      rotation: {x: -1.1680944e-31, y: 8.194888e-33, z: -0.06998403, w: 0.9975481}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:foot_L0_0_jnt
+      parentName: Rig:leg_L0_end_jnt
+      position: {x: -0.09880185, y: 0.20192854, z: -0.000088213324}
+      rotation: {x: 0.00057560805, y: -0.00012245575, z: -0.5821664, w: 0.81306946}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:foot_L0_1_jnt
+      parentName: Rig:foot_L0_0_jnt
+      position: {x: -0.0990143, y: 1.971756e-14, z: -1.6786572e-14}
+      rotation: {x: 0.00005026887, y: -0.00020676307, z: 0.23624133, w: 0.9716944}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_0_jnt
+      parentName: Rig:spine_C0_0_jnt
+      position: {x: 0.12483188, y: -0.114504345, z: 0.0008727973}
+      rotation: {x: 0.5083233, y: -0.49153578, z: 0.5083233, w: -0.49153578}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_1_jnt
+      parentName: Rig:leg_R0_0_jnt
+      position: {x: 0.22272854, y: 0.0000002659367, z: -2.1316282e-16}
+      rotation: {x: -1.972154e-31, y: 9.860737e-32, z: 0.0000012083962, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_2_jnt
+      parentName: Rig:leg_R0_1_jnt
+      position: {x: 0.21467811, y: 0.0000008560552, z: -2.1316282e-16}
+      rotation: {x: 6.162976e-33, y: 7.6088954e-38, z: 0.000012346139, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_3_jnt
+      parentName: Rig:leg_R0_2_jnt
+      position: {x: 0.008944913, y: 0.00000025471604, z: 1.7763568e-17}
+      rotation: {x: -1.231434e-32, y: -5.349006e-34, z: 0.043396294, w: 0.99905795}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_4_jnt
+      parentName: Rig:leg_R0_3_jnt
+      position: {x: 0.009334115, y: 0.00081225066, z: 0}
+      rotation: {x: 1.9241153e-34, y: 8.3586036e-36, z: 0.04340035, w: 0.99905777}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_5_jnt
+      parentName: Rig:leg_R0_4_jnt
+      position: {x: 0.22486559, y: 0.0000040710356, z: -3.5527136e-17}
+      rotation: {x: 1.2384516e-36, y: -1.2325952e-31, z: 0.000010047514, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_6_jnt
+      parentName: Rig:leg_R0_5_jnt
+      position: {x: 0.22486559, y: -0.0000011247367, z: 0}
+      rotation: {x: -3.9443088e-31, y: -2.4644843e-32, z: -0.000017898357, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:leg_R0_end_jnt
+      parentName: Rig:leg_R0_6_jnt
+      position: {x: 0.0093693985, y: -0.00000040950292, z: -1.7763568e-17}
+      rotation: {x: 0, y: -0, z: -0.06998403, w: 0.9975481}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:foot_R0_0_jnt
+      parentName: Rig:leg_R0_end_jnt
+      position: {x: 0.09880185, y: -0.20192854, z: 0.000088213324}
+      rotation: {x: 0.00057560805, y: -0.00012245575, z: -0.5821664, w: 0.81306946}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:foot_R0_1_jnt
+      parentName: Rig:foot_R0_0_jnt
+      position: {x: 0.0990143, y: -6.750156e-15, z: -1.847411e-15}
+      rotation: {x: 0.00005026887, y: -0.00020676307, z: 0.23624133, w: 0.9716944}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Character_Model
+      parentName: Men_Tpose(Clone)
+      position: {x: 2.7135626e-13, y: -1.0184507, z: -0.0032495125}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Team_Color
+      parentName: Rig:Character_Model
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Common
+      parentName: Rig:Character_Model
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Rig:Men
+      parentName: Rig:Character_Model
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
     armTwist: 0.5
     foreArmTwist: 0.5
     upperLegTwist: 0.5
@@ -101,7 +656,7 @@ ModelImporter:
   autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 2
   humanoidOversampling: 1
-  avatarSetup: 0
+  avatarSetup: 1
   addHumanoidExtraRootOnlyWhenUsingAvatar: 1
   importBlendShapeDeformPercent: 1
   remapMaterialsIfMaterialImportModeIsNone: 0
