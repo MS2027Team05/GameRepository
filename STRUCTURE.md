@@ -59,6 +59,7 @@ GameRepository/
 │   │       ├── GravityMover.cs          # 等速直線移動(落下)・空中ホバリング・着地衝突制御
 │   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
 │   │       ├── PlayerAimGuide.cs        # レティクル表示・軌道予測線の描画およびエイム照準制御
+│   │       ├── PlayerAnimationController.cs # 地上移動速度に基づくAnimator状態切り替え・移動状態の通信同期
 │   │       ├── PlayerAppearance.cs      # プレイヤー外見(性別モデル・マテリアル・カラー)管理制御
 │   │       ├── PlayerBallCarrier.cs     # プレイヤーのボール所持・キャッチ・投擲(シュート)制御
 │   │       ├── PlayerCameraEffect.cs    # 三人称視点カメラ旋回(接地面法線追従)・高速移動時FOV変更・カメラシェイク制御・視点リセット
