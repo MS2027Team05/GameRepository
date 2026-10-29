@@ -398,8 +398,13 @@ public class BallPhysicsController : NetworkBehaviour
 			}
 
 			Debug.LogWarning(
-				$"{name}: BallSurfaceへ接触しましたがSurface Physicsの初期化に失敗しました。 Surface={surfaceSource.name}",
+				$"{name}: BallSurfaceへ接触しましたがSurface Physicsの初期化に失敗したため、接触地点付近で停止します。 Surface={surfaceSource.name}",
 				this);
+
+			StopSafelyAtSurfaceContact(
+				contact);
+
+			return;
 		}
 
 		HandleNormalCollision(
@@ -482,7 +487,11 @@ public class BallPhysicsController : NetworkBehaviour
 	{
 		if (!m_SurfaceSimulation.IsInitialized)
 		{
-			BeginSurfaceSeeking();
+			Debug.LogWarning(
+				$"{name}: Surface Physicsが未初期化の状態になったため、現在位置で停止します。",
+				this);
+
+			StopSurfaceMotionSafely();
 
 			return;
 		}
@@ -506,16 +515,13 @@ public class BallPhysicsController : NetworkBehaviour
 				break;
 
 			case BallSurfaceSimulation.EAdvanceResult.NotInitialized:
-				BeginSurfaceSeeking();
-				break;
-
 			case BallSurfaceSimulation.EAdvanceResult.InvalidGeometry:
 			case BallSurfaceSimulation.EAdvanceResult.TransitionLimitReached:
 				Debug.LogWarning(
-					$"{name}: Surface Physicsを継続できませんでした。 Result={result}",
+					$"{name}: Surface Physicsを継続できないため、現在位置で停止します。 Result={result}",
 					this);
 
-				BeginSurfaceSeeking();
+				StopSurfaceMotionSafely();
 				break;
 		}
 	}
@@ -1118,6 +1124,105 @@ public class BallPhysicsController : NetworkBehaviour
 
 		ChangeMotionState(
 			EBallMotionState.Flying);
+	}
+
+	/// <summary>
+	/// BallSurfaceへの接触は成立したものの、
+	/// Triangleを取得できずSurface Physicsを開始できなかった場合に、
+	/// 接触地点の外側へボールを置いて安全に停止します。
+	/// </summary>
+	private void StopSafelyAtSurfaceContact(
+		ContactPoint contact)
+	{
+		Vector3 targetRigidbodyPosition =
+			m_Rigidbody.position;
+
+		bool hasSafePosition =
+			false;
+
+		Vector3 contactNormal =
+			contact.normal;
+
+		if (contactNormal.sqrMagnitude >
+			Mathf.Epsilon)
+		{
+			contactNormal.Normalize();
+
+			Vector3 colliderCenterOffset =
+				transform.TransformVector(
+					m_BallCollider.center);
+
+			Vector3 currentColliderCenter =
+				m_Rigidbody.position +
+				colliderCenterOffset;
+
+			// Contact Normalの向きに依存せず、
+			// 現在のBall中心が存在する側へ必ず退避させます。
+			if (Vector3.Dot(
+				currentColliderCenter -
+					contact.point,
+				contactNormal) <
+				0.0f)
+			{
+				contactNormal =
+					-contactNormal;
+			}
+
+			float safeCenterDistance =
+				GetBallWorldRadius() +
+				m_MinimumCalculationDistance;
+
+			Vector3 targetColliderCenter =
+				contact.point +
+				contactNormal *
+					safeCenterDistance;
+
+			targetRigidbodyPosition =
+				targetColliderCenter -
+				colliderCenterOffset;
+
+			hasSafePosition =
+				true;
+		}
+
+		StopSurfaceMotionSafely();
+
+		if (hasSafePosition)
+		{
+			m_Rigidbody.position =
+				targetRigidbodyPosition;
+		}
+	}
+
+	/// <summary>
+	/// Surface Physicsを安全停止し、
+	/// 周辺Surfaceの再探索を行わず現在位置を維持します。
+	/// </summary>
+	private void StopSurfaceMotionSafely()
+	{
+		m_SurfaceSimulation.Reset();
+
+		m_Rigidbody.linearVelocity =
+			Vector3.zero;
+
+		m_Rigidbody.angularVelocity =
+			Vector3.zero;
+
+		m_Rigidbody.isKinematic =
+			true;
+
+		m_FlightDirection =
+			Vector3.zero;
+
+		m_PrePhysicsVelocity =
+			Vector3.zero;
+
+		m_SurfaceGravity.Clear();
+
+		ResetBounceDistanceDebug();
+
+		ChangeMotionState(
+			EBallMotionState.Idle);
 	}
 
 	/// <summary>

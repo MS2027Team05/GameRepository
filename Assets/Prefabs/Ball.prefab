@@ -312,7 +312,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   m_PhysicsCollider: {fileID: 7969707258151822165}
   m_SensorCollider: {fileID: 5519193905326050400}
-  m_ShootPower: 37.5
+  m_ShootPower: 50
   m_RepickupDelay: 0.2
 --- !u!114 &1323764943930010185
 MonoBehaviour:
@@ -327,14 +327,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallPhysicsController
   ShowTopMostFoldoutHeaderGroup: 1
-  m_FlightDeceleration: 8
+  m_FlightDeceleration: 10
   m_StopSpeedThreshold: 0.5
   m_AttachSurfaceMask:
     serializedVersion: 2
     m_Bits: 128
   m_AttractStartSpeed: 35
-  m_AttractSearchDistance: 10
-  m_AttractReleaseDistance: 15
+  m_AttractSearchDistance: 8
+  m_AttractReleaseDistance: 10
   m_AttractSearchInterval: 0.2
   m_AttractMinAcceleration: 20
   m_AttractMaxAcceleration: 100
