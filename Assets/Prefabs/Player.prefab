@@ -684,9 +684,10 @@ GameObject:
   - component: {fileID: 6206248664396906086}
   - component: {fileID: 232556757510405882}
   - component: {fileID: 4402567928680259289}
+  - component: {fileID: -2047718237545438515}
   m_Layer: 6
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: Ally
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -918,6 +919,7 @@ MonoBehaviour:
   m_BrakeAction: {fileID: 4505039029517225548, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_ShootAction: {fileID: 41435168702994022, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_ViewResetAction: {fileID: 8129071423441501024, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  m_LockOnAction: {fileID: 0}
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1246,6 +1248,22 @@ MonoBehaviour:
   m_SurfaceMover: {fileID: 3112936510738658285}
   m_PlayerController: {fileID: 8696501033850427894}
   m_MoveSpeedThreshold: 0.1
+--- !u!114 &-2047718237545438515
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b06efcce98c31c747a7a182dacf9664a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LockOnManager
+  m_TargetCamera: {fileID: 0}
+  m_AllyTag: Ally
+  m_BallTag: Ball
+  m_AllyLockOnMarker: {fileID: 0}
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0
