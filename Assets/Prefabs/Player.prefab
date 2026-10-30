@@ -1224,9 +1224,13 @@ MonoBehaviour:
   - {fileID: 4636190323278876295}
   m_WomanRenderers:
   - {fileID: 1223099735125840022}
+  m_TeamColorRenderers:
+  - {fileID: 4237472994145664109}
+  - {fileID: 287789537841788865}
   m_UseDebugAppearance: 1
   m_DebugGender: 0
   m_DebugMaterial: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
+  m_DebugTeamMaterial: {fileID: 2100000, guid: 3f4aba630f13053419b234b7768eca15, type: 2}
 --- !u!114 &4402567928680259289
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2240,6 +2244,14 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: f026894e8b7e7b7469d65022d2df2592, type: 2}
+    - target: {fileID: -2161385379441642910, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
+      propertyPath: m_SortingLayer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -2161385379441642910, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 3f4aba630f13053419b234b7768eca15, type: 2}
     - target: {fileID: 919132149155446097, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_Name
       value: Men_Tpose
@@ -2296,6 +2308,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 6264371105760102432}
   m_SourcePrefab: {fileID: 100100000, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
+--- !u!137 &4237472994145664109 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: -2161385379441642910, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
+  m_PrefabInstance: {fileID: 6399527446096678415}
+  m_PrefabAsset: {fileID: 0}
 --- !u!137 &4636190323278876295 stripped
 SkinnedMeshRenderer:
   m_CorrespondingSourceObject: {fileID: 1772376216499683464, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
@@ -2397,6 +2414,14 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
+    - target: {fileID: -2161385379441642910, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
+      propertyPath: m_SortingLayer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -2161385379441642910, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 3f4aba630f13053419b234b7768eca15, type: 2}
     - target: {fileID: 919132149155446097, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_Name
       value: Women_Tpose
@@ -2437,6 +2462,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 4843181947419752757}
   m_SourcePrefab: {fileID: 100100000, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
+--- !u!137 &287789537841788865 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: -2161385379441642910, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
+  m_PrefabInstance: {fileID: 7061460037831116195}
+  m_PrefabAsset: {fileID: 0}
 --- !u!137 &1223099735125840022 stripped
 SkinnedMeshRenderer:
   m_CorrespondingSourceObject: {fileID: 8144208826691130677, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
