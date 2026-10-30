@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
@@ -54,6 +55,9 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>視点リセットボタン押下イベント</summary>
 	public event Action OnViewResetPressed;
 
+	private static readonly HashSet<PlayerInputReceiver> m_ActiveReceivers = new HashSet<PlayerInputReceiver>();
+	private static bool m_IsGlobalPaused = false;
+
 	// PlayerControllerから入力を許可されたかどうか
 	private bool m_InputAllowed = false;
 
@@ -77,23 +81,45 @@ public class PlayerInputReceiver : MonoBehaviour
 	}
 
 	/// <summary>
+	/// ポーズメニュー開閉時などに全プレイヤー入力の一時停止・再開を一括設定します。
+	/// </summary>
+	/// <param name="paused">trueの場合、プレイヤーの操作入力を一時停止します。</param>
+	public static void SetAllPaused(bool paused)
+	{
+		m_IsGlobalPaused = paused;
+
+		foreach (PlayerInputReceiver receiver in m_ActiveReceivers)
+		{
+			if (receiver != null)
+			{
+				receiver.UpdateInputState();
+			}
+		}
+	}
+
+	/// <summary>
 	/// コンポーネントの有効・無効に応じて入力を管理
 	/// </summary>
-
 	private void OnEnable()
 	{
+		m_ActiveReceivers.Add(this);
+
 		// OnEnable時点で入力許可済みなら、入力を開始する
 		UpdateInputState();
 	}
 
 	private void OnDisable()
 	{
+		m_ActiveReceivers.Remove(this);
+
 		// コンポーネントが無効になったら入力を停止する
 		StopInputActions();
 	}
 
 	private void OnDestroy()
 	{
+		m_ActiveReceivers.Remove(this);
+
 		// 破棄時にもイベント登録が残らないようにする
 		StopInputActions();
 	}
@@ -114,8 +140,8 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// </summary>
 	private void UpdateInputState()
 	{
-		// 無効なコンポーネントでは入力を開始しない
-		if (!isActiveAndEnabled || !m_InputAllowed)
+		// 無効なコンポーネントまたはポーズ中は入力を開始しない
+		if (!isActiveAndEnabled || !m_InputAllowed || m_IsGlobalPaused)
 		{
 			StopInputActions();
 			return;
@@ -190,15 +216,14 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private void Update()
 	{
-		// 自分が操作するPlayer以外は入力処理を行わない
-		if (!m_InputAllowed || !isActiveAndEnabled)
+		// 自分が操作するPlayer以外、またはポーズ中は入力処理を行わない
+		if (!m_InputAllowed || !isActiveAndEnabled || m_IsGlobalPaused)
 		{
 			return;
 		}
 
 		UpdateMoveInput();
 		UpdateLookInput();
-		HandleCursorToggle();
 
 		// InputActionReferenceが未設定の場合のキーボード/ゲームパッド標準フォールバック
 		HandleKeyboardFallback();
@@ -296,26 +321,6 @@ public class PlayerInputReceiver : MonoBehaviour
 		}
 
 		LookInput = input;
-	}
-
-	/// <summary>
-	/// 開発・デバッグ用: Escapeキーでカーソルロックをトグル、
-	/// 画面クリックで再ロックします。
-	/// </summary>
-	private void HandleCursorToggle()
-	{
-		if (Keyboard.current != null &&
-			Keyboard.current.escapeKey.wasPressedThisFrame)
-		{
-			bool isLocked = Cursor.lockState == CursorLockMode.Locked;
-			SetCursorLocked(!isLocked);
-		}
-		else if (Cursor.lockState != CursorLockMode.Locked &&
-				 Mouse.current != null &&
-				 Mouse.current.leftButton.wasPressedThisFrame)
-		{
-			SetCursorLocked(true);
-		}
 	}
 
 	private void BindAction(

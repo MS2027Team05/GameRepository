@@ -51,13 +51,14 @@ GameRepository/
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
 │   │       │   ├── IAimGuide.cs         # エイム・ガイド表示制御インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
-│   │       │   ├── ICameraEffect.cs     # カメラ演出制御用インターフェース
+│   │       │   ├── ICameraEffect.cs     # カメラ演出・移動基準基底提供用インターフェース
 │   │       │   ├── IGravityMover.cs     # 等速直線移動(落下)・ホバリング制御インターフェース
 │   │       │   ├── IGroundDetector.cs   # 接地検知・法線計測インターフェース
 │   │       │   ├── ISurfaceMover.cs     # 地上・曲面歩行移動インターフェース
 │   │       │   └── IPlayerRespawnHandler.cs # 場外復帰要求の受け口インターフェース
 │   │       ├── GravityMover.cs          # 等速直線移動(落下)・空中ホバリング・着地衝突制御
 │   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
+│   │       ├── LockOnManager.cs         # ロックオン制御(ボール非所持時のボール照準・所持時の味方照準制御)
 │   │       ├── PlayerAimGuide.cs        # レティクル表示・軌道予測線の描画およびエイム照準制御
 │   │       ├── PlayerAnimationController.cs # 地上移動速度に基づくAnimator状態切り替え・移動状態の通信同期
 │   │       ├── PlayerAppearance.cs      # プレイヤー外見(性別モデル・マテリアル・カラー)管理制御
@@ -70,6 +71,8 @@ GameRepository/
 │   │       ├── PlayerSurfaceMover.cs    # 地上/曲面歩行移動・運動量転送・ダウンフォース・姿勢回転制御
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
 │   │   └── UI/                  # 汎用・共通UI制御
+│   │       ├── UIInputReceiver.cs       # UI系統入力検知・InputActionインスタンス分離制御
+│   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・退出制御
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定
