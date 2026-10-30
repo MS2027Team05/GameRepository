@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// カメラ演出およびカメラ基準の移動方向基底を提供するインターフェース。
