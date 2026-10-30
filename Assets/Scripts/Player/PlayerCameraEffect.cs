@@ -1,28 +1,16 @@
-using Unity.Cinemachine;
+﻿using Unity.Cinemachine;
 using Unity.Netcode;
 using UnityEngine;
 using DG.Tweening;
 
 /// <summary>
 /// プレイヤーのカメラ演出および視点回転操作を担当するモジュール。
-/// FOV変更やカメラシェイク、接地面法線に追従した三人称視点カメラの旋回を管理します。
+/// FOV変更やカメラシェイク、着地時の視線維持法線補正および地上・エッジ歩行時の法線追従旋回を管理します。
 /// </summary>
 public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 {
-	/// <summary>
-	/// 接地面法線に対するカメラの追従補正モード。
-	/// </summary>
-	public enum ECameraNormalAlignMode
-	{
-		/// <summary>法線の変化に合わせてカメラの向き全体(視線含む)を回転させる従来方式</summary>
-		FullAlign,
-		/// <summary>現在のワールド視線方向を維持したままカメラの天頂軸(Up)のみを法線へ合わせる方式</summary>
-		PreserveLookDirection,
-		/// <summary>基準Upから接地面法線へ一定の割合・最大角度まで部分的に傾ける方式</summary>
-		PartialAlign,
-		/// <summary>自動での法線追従を行わず、視点リセット(Rキー)時のみ法線へ合わせる方式</summary>
-		None
-	}
+	private const float m_SteepBlendStartDot = 0.85f;
+	private const float m_SteepBlendEndDot = 0.98f;
 
 	[Header("Cinemachine Camera")]
 	[SerializeField] private CinemachineCamera m_CinemachineCamera;
@@ -47,14 +35,8 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	[SerializeField] private float m_MinPitchAngle;
 	[SerializeField] private float m_MaxPitchAngle;
 
-	[Header("接地面法線への追従モード設定")]
-	// 想定設定値: PreserveLookDirection (視線維持) 等を切り替えて検証
-	[SerializeField] private ECameraNormalAlignMode m_NormalAlignMode;
-
-	// 想定設定値: false (落下・飛行移動中はカメラの法線追従を止め、着地後に追従させる場合はfalse)
-	[SerializeField] private bool m_AlignWhileFalling;
-
-	// 想定設定値: false (地上移動入力を行っている間のみ法線追従させる場合はtrue)
+	[Header("着地時のカメラ法線追従設定")]
+	// 想定設定値: true (true: 着地後に移動入力が入るまで法線追従を待機 / false: 着地直後から法線追従を開始)
 	[SerializeField] private bool m_AlignOnlyWhenMoving;
 
 	[Header("接地面法線への姿勢追従速度")]
@@ -62,13 +44,6 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 	[Header("カメラ法線追従の最大角速度(度/秒: 初速スパイク防止)")]
 	[SerializeField] private float m_MaxNormalDegreesPerSecond;
-
-	[Header("部分補正(PartialAlign)設定")]
-	// 想定設定値: 0.5f (0.0〜1.0: ワールド上方向から接地面法線へ寄せる割合)
-	[SerializeField, Range(0f, 1f)] private float m_PartialAlignRatio;
-
-	// 想定設定値: 45.0f (ワールド上方向からカメラを傾ける最大角度)
-	[SerializeField] private float m_MaxPartialTiltAngle;
 
 	[Header("カメラピボット位置スムース時間(衝撃緩和SmoothDamp)")]
 	[SerializeField] private float m_PositionSmoothTime;
@@ -89,11 +64,22 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	private Vector3 m_PositionVelocity;
 	private Vector3 m_CurrentUp = Vector3.up;
 	private Vector3 m_PlanarForward = Vector3.forward;
+	private Vector3 m_LandedSurfaceNormal = Vector3.up;
 	private float m_Pitch = 12.0f;
+	private float m_CameraLocalPitchOffset;
 	private bool m_IsInitialized;
 
+	// 着地後の視線維持法線補正フェーズ中かどうか
+	private bool m_IsLandingAlignPending;
+
+	// 着地後の法線補正が開始済みかどうか(m_AlignOnlyWhenMoving有効時の入力トリガー管理用)
+	private bool m_IsLandingAlignStarted;
+
+	// 直前まで落下(飛行)移動中だったかどうか
+	private bool m_WasFalling;
+
 	// 視点リセット中かどうか
-	private bool m_IsResettingView = false;
+	private bool m_IsResettingView;
 
 	// 視点リセット用Tween
 	private Sequence m_ViewResetTween;
@@ -105,9 +91,13 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		m_GravityMover = GetComponent<IGravityMover>();
 		m_NetworkObject = GetComponent<NetworkObject>();
 
-		if (m_CameraPivot == null && m_CinemachineCamera != null)
+		if (m_CinemachineCamera != null)
 		{
-			m_CameraPivot = m_CinemachineCamera.transform.parent;
+			m_CameraLocalPitchOffset = Mathf.DeltaAngle(0.0f, m_CinemachineCamera.transform.localEulerAngles.x);
+			if (m_CameraPivot == null)
+			{
+				m_CameraPivot = m_CinemachineCamera.transform.parent;
+			}
 		}
 	}
 
@@ -119,14 +109,17 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			return;
 		}
 
+		if (m_GravityMover != null)
+		{
+			m_GravityMover.OnLanded += HandleLanded;
+		}
+
 		if (m_CameraPivot != null)
 		{
 			// 親(Player)の回転に引きずられないよう階層を独立化
 			m_CameraPivot.SetParent(null);
 
-			m_CurrentUp = (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
-				? m_GroundDetector.CurrentGroundNormal
-				: transform.up;
+			m_CurrentUp = GetCurrentGroundOrTransformUp();
 
 			m_PlanarForward = Vector3.ProjectOnPlane(transform.forward, m_CurrentUp);
 			if (m_PlanarForward.sqrMagnitude < 0.001f)
@@ -139,7 +132,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			}
 			m_PlanarForward.Normalize();
 
-			m_Pitch = 12.0f;
+			m_Pitch = ClampPitchWithOffset(12.0f);
 			m_IsInitialized = true;
 		}
 	}
@@ -151,15 +144,31 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			return;
 		}
 
-		// プレイヤーの位置へ追従: SmoothDampによる滑らかなスプリングダンピングで角の衝撃を完全吸収
+		// プレイヤーの位置へ追従: SmoothDampによる滑らかなスプリングダンピングで角の衝撃を吸収
 		float smoothTime = m_PositionSmoothTime > 0f ? m_PositionSmoothTime : 0.08f;
 		m_CameraPivot.position = Vector3.SmoothDamp(m_CameraPivot.position, transform.position, ref m_PositionVelocity, smoothTime);
 
 		// 視点リセット中でなければ、通常のカメラ制御を行う
 		if (!m_IsResettingView)
 		{
-			if (ShouldAlignCameraNormal())
+			bool isFalling = m_GravityMover != null && m_GravityMover.IsFalling;
+			bool isGrounded = m_GroundDetector == null || m_GroundDetector.IsGrounded;
+
+			if (isFalling)
 			{
+				// 飛行移動中はカメラの法線追従を行わず視界を安定化
+				m_WasFalling = true;
+				m_IsLandingAlignPending = false;
+				m_IsLandingAlignStarted = false;
+			}
+			else if (isGrounded)
+			{
+				// 空中ブレーキ後などOnLandedを経由せず接地した場合のフォールバック検知
+				if (m_WasFalling)
+				{
+					BeginLandingAlign(GetCurrentGroundOrTransformUp());
+				}
+
 				UpdateCameraNormalAlignment();
 			}
 
@@ -172,9 +181,9 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 				float yawAngle = look.x * m_MouseSensitivity;
 				m_PlanarForward = (Quaternion.AngleAxis(yawAngle, m_CurrentUp) * m_PlanarForward).normalized;
 
-				// 垂直仰角: 接平面に対するチルト角を更新
+				// 垂直仰角: 子カメラのローカルオフセット角を加味して実効仰角を設定範囲内へクランプ
 				m_Pitch -= look.y * m_MouseSensitivity;
-				m_Pitch = Mathf.Clamp(m_Pitch, m_MinPitchAngle, m_MaxPitchAngle);
+				m_Pitch = ClampPitchWithOffset(m_Pitch);
 			}
 		}
 
@@ -190,98 +199,273 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	}
 
 	/// <summary>
-	/// 現フレームで接地面法線へのカメラ追従を実行すべきかを判定します。
+	/// 指定された接地法線に対して、上下角の特異点や反転を含まない移動用の前方・右方単位ベクトルを取得します。
 	/// </summary>
-	private bool ShouldAlignCameraNormal()
+	/// <param name="groundNormal">現在の接地法線ベクトル</param>
+	/// <param name="forwardOnPlane">接平面上の前方単位ベクトル</param>
+	/// <param name="rightOnPlane">接平面上の右方単位ベクトル</param>
+	/// <returns>有効な移動基底を算出できた場合はtrue</returns>
+	public bool TryGetMovementBasis(Vector3 groundNormal, out Vector3 forwardOnPlane, out Vector3 rightOnPlane)
 	{
-		if (m_NormalAlignMode == ECameraNormalAlignMode.None)
+		forwardOnPlane = Vector3.zero;
+		rightOnPlane = Vector3.zero;
+
+		if (!m_IsInitialized || groundNormal.sqrMagnitude < 0.0001f)
 		{
 			return false;
 		}
 
-		if (!m_AlignWhileFalling)
+		Vector3 normal = groundNormal.normalized;
+
+		if (!m_IsLandingAlignPending)
 		{
-			bool isFalling = m_GravityMover != null && m_GravityMover.IsFalling;
-			bool isGrounded = m_GroundDetector == null || m_GroundDetector.IsGrounded;
-			if (isFalling || !isGrounded)
+			// 通常地上・エッジ歩行フェーズ: Pitchを含まない水平前方ベクトル(m_PlanarForward)を現在の接地法線へ回転投影
+			Quaternion upRotation = CreateNormalAlignmentRotation(m_CurrentUp, normal);
+			forwardOnPlane = Vector3.ProjectOnPlane(upRotation * m_PlanarForward, normal);
+			if (forwardOnPlane.sqrMagnitude < 0.0001f)
 			{
 				return false;
 			}
+
+			forwardOnPlane.Normalize();
+			rightOnPlane = Vector3.Cross(normal, forwardOnPlane).normalized;
+			return true;
 		}
 
-		if (m_AlignOnlyWhenMoving)
+		// 着地後の視線維持補正フェーズ: 実カメラの視線方向をベースにしつつ、垂直着地等の特異点ではカメラ上下軸へ連続ブレンド
+		Quaternion currentBaseRotation = Quaternion.LookRotation(m_PlanarForward, m_CurrentUp);
+		Quaternion currentEffectiveRotation = currentBaseRotation * Quaternion.Euler(m_Pitch + m_CameraLocalPitchOffset, 0.0f, 0.0f);
+		Vector3 camForward = currentEffectiveRotation * Vector3.forward;
+		Vector3 camUp = currentEffectiveRotation * Vector3.up;
+		Vector3 camRight = currentEffectiveRotation * Vector3.right;
+
+		forwardOnPlane = ComputeBlendedForwardOnPlane(camForward, camUp, normal);
+		if (forwardOnPlane.sqrMagnitude < 0.0001f)
 		{
-			if (m_InputReceiver == null || m_InputReceiver.MoveInput.sqrMagnitude < 0.001f)
-			{
-				return false;
-			}
+			return false;
 		}
 
+		forwardOnPlane.Normalize();
+
+		rightOnPlane = Vector3.ProjectOnPlane(camRight, normal);
+		if (rightOnPlane.sqrMagnitude < 0.01f)
+		{
+			float upSign = Vector3.Dot(camUp, normal) < 0.0f ? -1.0f : 1.0f;
+			rightOnPlane = Vector3.Cross(normal, forwardOnPlane) * upSign;
+		}
+
+		if (rightOnPlane.sqrMagnitude < 0.0001f)
+		{
+			return false;
+		}
+
+		rightOnPlane.Normalize();
 		return true;
 	}
 
+	private void HandleLanded()
+	{
+		if (!m_IsInitialized)
+		{
+			return;
+		}
+
+		BeginLandingAlign(GetCurrentGroundOrTransformUp());
+	}
+
 	/// <summary>
-	/// 選択された追従モードに応じてカメラの天頂軸(m_CurrentUp)および前方基準(m_PlanarForward)・仰角(m_Pitch)を更新します。
+	/// 着地後の視線維持法線補正フェーズを開始します。
+	/// </summary>
+	/// <param name="landedNormal">着地した面の法線ベクトル</param>
+	private void BeginLandingAlign(Vector3 landedNormal)
+	{
+		m_WasFalling = false;
+		m_LandedSurfaceNormal = landedNormal;
+
+		// すでに現在のカメラUpと着地面法線がほぼ一致している場合は着地補正を行わず通常エッジ追従へ移行
+		if (Vector3.Angle(m_CurrentUp, landedNormal) <= 0.5f)
+		{
+			Quaternion snapRotation = CreateNormalAlignmentRotation(m_CurrentUp, landedNormal);
+			m_PlanarForward = Vector3.ProjectOnPlane(snapRotation * m_PlanarForward, landedNormal).normalized;
+			m_CurrentUp = landedNormal;
+			m_IsLandingAlignPending = false;
+			m_IsLandingAlignStarted = false;
+			return;
+		}
+
+		m_IsLandingAlignPending = true;
+		m_IsLandingAlignStarted = !m_AlignOnlyWhenMoving;
+	}
+
+	/// <summary>
+	/// 着地後フェーズ(視線維持投影)および地上・エッジ歩行フェーズ(法線一体回転)に応じてカメラ姿勢を更新します。
 	/// </summary>
 	private void UpdateCameraNormalAlignment()
 	{
-		Vector3 rawTargetUp = (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
-			? m_GroundDetector.CurrentGroundNormal.normalized
-			: transform.up;
+		Vector3 targetUp = GetCurrentGroundOrTransformUp();
 
-		Vector3 targetUp = rawTargetUp;
-
-		if (m_NormalAlignMode == ECameraNormalAlignMode.PartialAlign)
+		if (m_IsLandingAlignPending)
 		{
-			float ratio = m_PartialAlignRatio > 0f ? m_PartialAlignRatio : 0.5f;
-			float maxTilt = m_MaxPartialTiltAngle > 0f ? m_MaxPartialTiltAngle : 45.0f;
-			Vector3 blendedUp = Vector3.Slerp(Vector3.up, rawTargetUp, ratio).normalized;
-			targetUp = Vector3.RotateTowards(Vector3.up, blendedUp, maxTilt * Mathf.Deg2Rad, 0f).normalized;
+			// 移動入力待機オプションが有効な場合、移動入力が入るまで法線追従を待機
+			if (!m_IsLandingAlignStarted)
+			{
+				if (m_InputReceiver != null && m_InputReceiver.MoveInput.sqrMagnitude > 0.001f)
+				{
+					m_IsLandingAlignStarted = true;
+				}
+				else
+				{
+					return;
+				}
+			}
+
+			// 着地補正の途中で歩いて角・エッジを跨ぎ、着地した面から大きく法線が変化した場合はエッジ追従へ即時移行
+			if (Vector3.Angle(m_LandedSurfaceNormal, targetUp) > 30.0f)
+			{
+				m_IsLandingAlignPending = false;
+				m_IsLandingAlignStarted = false;
+			}
 		}
 
-		// カメラのUpベクトル追従: RotateTowardsによる角速度上限で初速スパイクを排除しふわりと追従
+		// カメラのUpベクトル追従: RotateTowardsによる角速度上限で初速スパイクを排除し滑らかに追従
 		float maxDegPerSec = m_MaxNormalDegreesPerSecond > 0f ? m_MaxNormalDegreesPerSecond : 90.0f;
 		float alignSpeed = m_NormalAlignSpeed > 0f ? m_NormalAlignSpeed : 5.0f;
 		Vector3 slerpedUp = Vector3.Slerp(m_CurrentUp, targetUp, alignSpeed * Time.deltaTime);
 		Vector3 newUp = Vector3.RotateTowards(m_CurrentUp, slerpedUp, maxDegPerSec * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
 
-		if (m_NormalAlignMode == ECameraNormalAlignMode.PreserveLookDirection)
+		if (m_IsLandingAlignPending)
 		{
-			// 現在のカメラのワールド視線ベクトルを算出
+			// 着地後の法線補正フェーズ: 実カメラのワールド視線ベクトルを維持したまま天頂軸(Up)のみを着地面法線へ合わせる
 			Quaternion currentBaseRotation = Quaternion.LookRotation(m_PlanarForward, m_CurrentUp);
-			Vector3 currentWorldLookDir = (currentBaseRotation * Quaternion.Euler(m_Pitch, 0.0f, 0.0f)) * Vector3.forward;
+			Quaternion currentEffectiveRotation = currentBaseRotation * Quaternion.Euler(m_Pitch + m_CameraLocalPitchOffset, 0.0f, 0.0f);
+			Vector3 currentWorldLookDir = currentEffectiveRotation * Vector3.forward;
+			Vector3 currentWorldUpDir = currentEffectiveRotation * Vector3.up;
 
-			// ワールド視線ベクトルを新しい法線の接平面へ投影し、見ている方向を維持
-			Vector3 projectedForward = Vector3.ProjectOnPlane(currentWorldLookDir, newUp);
-			if (projectedForward.sqrMagnitude > 0.001f)
+			Vector3 blendedForward = ComputeBlendedForwardOnPlane(currentWorldLookDir, currentWorldUpDir, newUp);
+			if (blendedForward.sqrMagnitude > 0.0001f)
 			{
-				m_PlanarForward = projectedForward.normalized;
-
-				// 新しい接平面に対するワールド視線ベクトルの仰角(Pitch)を逆算して引き継ぐ
-				float sinPitch = Mathf.Clamp(Vector3.Dot(currentWorldLookDir, newUp), -1.0f, 1.0f);
-				float newPitch = -Mathf.Asin(sinPitch) * Mathf.Rad2Deg;
-				m_Pitch = Mathf.Clamp(newPitch, m_MinPitchAngle, m_MaxPitchAngle);
+				m_PlanarForward = blendedForward.normalized;
 			}
 			else
 			{
-				// 視線と新しい法線がほぼ平行(真上・真下)の特異点ではロール回転で前方基準を補間
-				Quaternion upRotation = Quaternion.FromToRotation(m_CurrentUp, newUp);
-				m_PlanarForward = (upRotation * m_PlanarForward).normalized;
+				Quaternion upRotation = CreateNormalAlignmentRotation(m_CurrentUp, newUp);
+				m_PlanarForward = Vector3.ProjectOnPlane(upRotation * m_PlanarForward, newUp).normalized;
 			}
 
+			// 新しい接平面に対する実カメラ視線ベクトルの仰角(Pitch)を逆算し、オフセットを差し引いて引き継ぐ
+			float sinPitch = Mathf.Clamp(Vector3.Dot(currentWorldLookDir, newUp), -1.0f, 1.0f);
+			float newEffectivePitch = -Mathf.Asin(sinPitch) * Mathf.Rad2Deg;
+			m_Pitch = ClampPitchWithOffset(newEffectivePitch - m_CameraLocalPitchOffset);
+
 			m_CurrentUp = newUp;
+
+			// 着地面法線への補正が完了したら地上・エッジ歩行フェーズへ移行
+			if (Vector3.Angle(m_CurrentUp, targetUp) <= 0.5f)
+			{
+				m_IsLandingAlignPending = false;
+				m_IsLandingAlignStarted = false;
+			}
 		}
 		else
 		{
-			// FullAlign / PartialAlign: 法線の変化に合わせて水平視線ベクトル(m_PlanarForward)を回転追従
-			Quaternion upRotation = Quaternion.FromToRotation(m_CurrentUp, newUp);
-			m_PlanarForward = (upRotation * m_PlanarForward).normalized;
+			// 地上・エッジ歩行フェーズ: 法線の変化に合わせて水平視線ベクトル(m_PlanarForward)を一体として回転追従
+			Quaternion upRotation = CreateNormalAlignmentRotation(m_CurrentUp, newUp);
+			m_PlanarForward = Vector3.ProjectOnPlane(upRotation * m_PlanarForward, newUp).normalized;
 			m_CurrentUp = newUp;
 		}
 	}
 
+	/// <summary>
+	/// 子カメラのローカルPitchオフセットを加味し、実カメラの仰角が設定範囲に収まるようクランプします。
+	/// </summary>
+	private float ClampPitchWithOffset(float pitch)
+	{
+		bool hasConfiguredRange = Mathf.Abs(m_MinPitchAngle) > 0.001f || Mathf.Abs(m_MaxPitchAngle) > 0.001f;
+		float minEffectivePitch = hasConfiguredRange ? m_MinPitchAngle : -70.0f;
+		float maxEffectivePitch = hasConfiguredRange ? m_MaxPitchAngle : 70.0f;
+
+		return Mathf.Clamp(
+			pitch,
+			minEffectivePitch - m_CameraLocalPitchOffset,
+			maxEffectivePitch - m_CameraLocalPitchOffset);
+	}
+
+	/// <summary>
+	/// 180度逆向きの特異点を回避しながら、2つの法線間の回転クォータニオンを生成します。
+	/// </summary>
+	private Quaternion CreateNormalAlignmentRotation(Vector3 fromUp, Vector3 toUp)
+	{
+		if (Vector3.Dot(fromUp, toUp) < -0.999f)
+		{
+			Vector3 rightAxis = Vector3.Cross(fromUp, m_PlanarForward);
+			if (rightAxis.sqrMagnitude < 0.0001f)
+			{
+				rightAxis = Vector3.Cross(fromUp, Vector3.right);
+				if (rightAxis.sqrMagnitude < 0.0001f)
+				{
+					rightAxis = Vector3.Cross(fromUp, Vector3.forward);
+				}
+			}
+
+			return Quaternion.AngleAxis(180.0f, rightAxis.normalized);
+		}
+
+		return Quaternion.FromToRotation(fromUp, toUp);
+	}
+
+	/// <summary>
+	/// 視線ベクトルと法線が平行に近づく特異点領域において、カメラ上下軸の平面投影へ滑らかにブレンドした前方ベクトルを返します。
+	/// </summary>
+	private static Vector3 ComputeBlendedForwardOnPlane(Vector3 lookForward, Vector3 lookUp, Vector3 planeNormal)
+	{
+		float normalDot = Vector3.Dot(lookForward, planeNormal);
+		float absDot = Mathf.Abs(normalDot);
+
+		Vector3 forwardFromLook = Vector3.ProjectOnPlane(lookForward, planeNormal);
+		Vector3 upReference = normalDot <= 0.0f ? lookUp : -lookUp;
+		Vector3 forwardFromUp = Vector3.ProjectOnPlane(upReference, planeNormal);
+
+		float blendWeight = Mathf.InverseLerp(m_SteepBlendStartDot, m_SteepBlendEndDot, absDot);
+		if (blendWeight <= 0.0f && forwardFromLook.sqrMagnitude > 0.0001f)
+		{
+			return forwardFromLook.normalized;
+		}
+
+		if (forwardFromUp.sqrMagnitude < 0.0001f)
+		{
+			return forwardFromLook.sqrMagnitude > 0.0001f ? forwardFromLook.normalized : Vector3.zero;
+		}
+
+		Vector3 normalizedUpProj = forwardFromUp.normalized;
+		if (blendWeight >= 1.0f || forwardFromLook.sqrMagnitude <= 0.0001f)
+		{
+			return normalizedUpProj;
+		}
+
+		Vector3 normalizedLookProj = forwardFromLook.normalized;
+		float signedAngle = Vector3.SignedAngle(normalizedLookProj, normalizedUpProj, planeNormal);
+		if (Mathf.Abs(signedAngle) > 179.0f)
+		{
+			signedAngle = 180.0f;
+		}
+
+		return (Quaternion.AngleAxis(signedAngle * blendWeight, planeNormal) * normalizedLookProj).normalized;
+	}
+
+	private Vector3 GetCurrentGroundOrTransformUp()
+	{
+		return (m_GroundDetector != null && m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
+			? m_GroundDetector.CurrentGroundNormal.normalized
+			: transform.up;
+	}
+
 	private void OnDestroy()
 	{
+		if (m_GravityMover != null)
+		{
+			m_GravityMover.OnLanded -= HandleLanded;
+		}
+
 		// 独立させたピボットオブジェクトのクリーンアップ
 		if (m_CameraPivot != null && m_CameraPivot.parent == null)
 		{
@@ -387,11 +571,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		}
 
 		// 接地面の法線を取得
-		Vector3 upDirection =
-			(m_GroundDetector != null &&
-			 m_GroundDetector.CurrentGroundNormal.sqrMagnitude > 0.001f)
-			? m_GroundDetector.CurrentGroundNormal.normalized
-			: transform.up;
+		Vector3 upDirection = GetCurrentGroundOrTransformUp();
 
 		// プレイヤーの前方向を接地面に沿わせる
 		Vector3 forwardDirection =
@@ -422,10 +602,15 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			m_ViewResetTween.Kill();
 		}
 
+		// 視点リセット実行時は着地補正待機状態を解除
+		m_IsLandingAlignPending = false;
+		m_IsLandingAlignStarted = false;
+
 		// リセット中は通常のカメラ制御を停止
 		m_IsResettingView = true;
 
 		float resetDuration = m_ViewResetDuration > 0f ? m_ViewResetDuration : 0.4f;
+		float targetResetPitch = ClampPitchWithOffset(12.0f);
 
 		// 現在の値から目標値まで滑らかに補間する
 		m_ViewResetTween = DOTween.Sequence();
@@ -448,7 +633,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			DOTween.To(
 				() => m_Pitch,
 				value => m_Pitch = value,
-				12.0f,
+				targetResetPitch,
 				resetDuration));
 
 		// 終わりに向けてゆっくり減速する
@@ -459,7 +644,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			// 最終的な値を正確に設定
 			m_CurrentUp = upDirection;
 			m_PlanarForward = forwardDirection;
-			m_Pitch = 12.0f;
+			m_Pitch = targetResetPitch;
 
 			// 通常のカメラ制御を再開
 			m_IsResettingView = false;

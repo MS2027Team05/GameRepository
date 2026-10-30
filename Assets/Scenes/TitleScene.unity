@@ -2595,6 +2595,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManager
       objectReference: {fileID: 0}
+    - target: {fileID: 6347427552829375116, guid: 01931d36acd568a4ba1d4fe2f910b9c4, type: 3}
+      propertyPath: m_DisconnectTimeoutMS
+      value: 5000
+      objectReference: {fileID: 0}
     - target: {fileID: 7349481855620521779, guid: 01931d36acd568a4ba1d4fe2f910b9c4, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

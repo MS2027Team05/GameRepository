@@ -1100,6 +1100,8 @@ MonoBehaviour:
   m_OpenSettingsButton: {fileID: 3856852941480740851}
   m_LeaveGameButton: {fileID: 6796429796222008850}
   m_IpAddressText: {fileID: 3166100781812895240}
+  m_DisconnectNoticePanel: {fileID: 0}
+  m_DisconnectReturnDelay: 5
   m_TitleSceneName: TitleScene
 --- !u!1001 &2302919429487380293
 PrefabInstance:

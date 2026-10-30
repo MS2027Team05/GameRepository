@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -21,6 +21,7 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private GameObject m_PlayerControlPanel;
 	[SerializeField] private GameObject m_DebugPanel;
 	[SerializeField] private GameObject m_LoadingPanel;
+	[SerializeField] private GameObject m_DisconnectNoticePanel;
 
 	[Header("全体情報UI参照")]
 	[SerializeField] private TextMeshProUGUI m_PlayerCountText;
@@ -98,6 +99,7 @@ public class LobbyUIController : MonoBehaviour
 		{
 			m_LobbyManager.OnLobbyDataChanged += RefreshAllUI;
 			m_LobbyManager.OnGameSceneLoadStarted += ShowLoadingPanel;
+			m_LobbyManager.OnDisconnectedFromHost += ShowDisconnectNoticePanel;
 		}
 
 		RefreshAllUI();
@@ -109,6 +111,7 @@ public class LobbyUIController : MonoBehaviour
 		{
 			m_LobbyManager.OnLobbyDataChanged -= RefreshAllUI;
 			m_LobbyManager.OnGameSceneLoadStarted -= ShowLoadingPanel;
+			m_LobbyManager.OnDisconnectedFromHost -= ShowDisconnectNoticePanel;
 		}
 	}
 
@@ -152,6 +155,12 @@ public class LobbyUIController : MonoBehaviour
 		{
 			m_LoadingPanel.SetActive(false);
 		}
+
+		// ⑥ 切断通知パネル: 初期状態では非表示
+		if (m_DisconnectNoticePanel != null)
+		{
+			m_DisconnectNoticePanel.SetActive(false);
+		}
 	}
 
 	/// <summary>
@@ -167,6 +176,23 @@ public class LobbyUIController : MonoBehaviour
 		if (m_LoadingPanel != null)
 		{
 			m_LoadingPanel.SetActive(true);
+		}
+	}
+
+	/// <summary>
+	/// ホストとの通信切断時に呼び出され、全操作パネルを非表示にして切断通知パネルを表示します。
+	/// </summary>
+	private void ShowDisconnectNoticePanel()
+	{
+		if (m_SharedInfoPanel != null) m_SharedInfoPanel.SetActive(false);
+		if (m_HostControlPanel != null) m_HostControlPanel.SetActive(false);
+		if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(false);
+		if (m_DebugPanel != null) m_DebugPanel.SetActive(false);
+		if (m_LoadingPanel != null) m_LoadingPanel.SetActive(false);
+
+		if (m_DisconnectNoticePanel != null)
+		{
+			m_DisconnectNoticePanel.SetActive(true);
 		}
 	}
 

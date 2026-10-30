@@ -51,7 +51,7 @@ GameRepository/
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
 │   │       │   ├── IAimGuide.cs         # エイム・ガイド表示制御インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
-│   │       │   ├── ICameraEffect.cs     # カメラ演出制御用インターフェース
+│   │       │   ├── ICameraEffect.cs     # カメラ演出・移動基準基底提供用インターフェース
 │   │       │   ├── IGravityMover.cs     # 等速直線移動(落下)・ホバリング制御インターフェース
 │   │       │   ├── IGroundDetector.cs   # 接地検知・法線計測インターフェース
 │   │       │   ├── ISurfaceMover.cs     # 地上・曲面歩行移動インターフェース

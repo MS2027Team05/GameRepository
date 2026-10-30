@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -35,6 +36,13 @@ public class InGamePauseMenuController : MonoBehaviour
 	[SerializeField] private UnityEngine.UI.Button m_LeaveGameButton;
 	[SerializeField] private TextMeshProUGUI m_IpAddressText;
 
+	[Header("切断通知設定")]
+	// ホスト切断時に表示する通知パネル(未設定時は即時タイトルへ遷移)
+	[SerializeField] private GameObject m_DisconnectNoticePanel;
+
+	// 想定設定値: 3.0f (切断通知を表示してから自動でタイトル画面へ遷移するまでの秒数)
+	[SerializeField] private float m_DisconnectReturnDelay;
+
 	[Header("遷移先シーン設定")]
 	// 想定設定値: "TitleScene"
 	[SerializeField] private string m_TitleSceneName;
@@ -43,7 +51,9 @@ public class InGamePauseMenuController : MonoBehaviour
 	private string m_CachedHostIp;
 	private bool m_IsMenuOpen = false;
 	private bool m_IsSettingsOpen = false;
+	private bool m_IsHandlingDisconnect = false;
 	private int m_LastProcessedFrame = -1;
+	private Coroutine m_DisconnectCoroutine;
 
 	private void Awake()
 	{
@@ -81,9 +91,10 @@ public class InGamePauseMenuController : MonoBehaviour
 			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
 		}
 
-		// 初期状態ではポーズメニューおよび設定パネルを非表示にし、プレイヤー入力を許可
+		// 初期状態ではポーズメニュー・設定パネル・切断通知パネルを非表示にし、プレイヤー入力を許可
 		m_IsMenuOpen = false;
 		m_IsSettingsOpen = false;
+		m_IsHandlingDisconnect = false;
 
 		if (m_PauseMenuRoot != null)
 		{
@@ -93,6 +104,11 @@ public class InGamePauseMenuController : MonoBehaviour
 		if (m_SettingsPanel != null)
 		{
 			m_SettingsPanel.gameObject.SetActive(false);
+		}
+
+		if (m_DisconnectNoticePanel != null)
+		{
+			m_DisconnectNoticePanel.SetActive(false);
 		}
 
 		PlayerInputReceiver.SetAllPaused(false);
@@ -108,6 +124,12 @@ public class InGamePauseMenuController : MonoBehaviour
 		if (m_SettingsPanel != null)
 		{
 			m_SettingsPanel.OnClosed -= HandleSettingsClosed;
+		}
+
+		if (m_DisconnectCoroutine != null)
+		{
+			StopCoroutine(m_DisconnectCoroutine);
+			m_DisconnectCoroutine = null;
 		}
 
 		// シーン破棄時にポーズロックが残らないよう解除
@@ -152,6 +174,11 @@ public class InGamePauseMenuController : MonoBehaviour
 
 	private void HandlePausePressed()
 	{
+		if (m_IsHandlingDisconnect)
+		{
+			return;
+		}
+
 		// 同一フレーム内でPauseとCancelが重複発火した場合のガード
 		if (m_LastProcessedFrame == Time.frameCount)
 		{
@@ -175,6 +202,11 @@ public class InGamePauseMenuController : MonoBehaviour
 
 	private void HandleCancelPressed()
 	{
+		if (m_IsHandlingDisconnect)
+		{
+			return;
+		}
+
 		if (m_LastProcessedFrame == Time.frameCount)
 		{
 			return;
@@ -202,6 +234,11 @@ public class InGamePauseMenuController : MonoBehaviour
 	/// </summary>
 	public void OpenPauseMenu()
 	{
+		if (m_IsHandlingDisconnect)
+		{
+			return;
+		}
+
 		m_IsMenuOpen = true;
 		m_IsSettingsOpen = false;
 
@@ -327,6 +364,8 @@ public class InGamePauseMenuController : MonoBehaviour
 	/// </summary>
 	public void LeaveGame()
 	{
+		m_IsHandlingDisconnect = true;
+
 		PlayerInputReceiver.SetAllPaused(false);
 		PlayerInputReceiver.SetCursorLocked(false);
 
@@ -345,15 +384,62 @@ public class InGamePauseMenuController : MonoBehaviour
 
 	private void HandleClientDisconnect(ulong clientId)
 	{
-		// クライアント端末でホスト(サーバー)との接続が切断された場合、タイトル画面へ戻る
+		if (m_IsHandlingDisconnect)
+		{
+			return;
+		}
+
+		// クライアント端末でホスト(サーバー)との接続が切断された場合、通知パネルを表示して一定時間後にタイトル画面へ戻る
 		if (NetworkManager.Singleton != null &&
 			!NetworkManager.Singleton.IsServer &&
-			clientId == NetworkManager.Singleton.LocalClientId)
+			(clientId == NetworkManager.Singleton.LocalClientId || clientId == NetworkManager.ServerClientId))
 		{
+			m_IsHandlingDisconnect = true;
+			m_IsMenuOpen = false;
+			m_IsSettingsOpen = false;
+
+			if (m_UIInputReceiver != null)
+			{
+				m_UIInputReceiver.SetInputAllowed(false);
+			}
+
+			if (m_SettingsPanel != null && m_SettingsPanel.gameObject.activeSelf)
+			{
+				m_SettingsPanel.gameObject.SetActive(false);
+			}
+
+			if (m_PauseMenuRoot != null)
+			{
+				m_PauseMenuRoot.SetActive(false);
+			}
+
+			SetSelectedUIObject(null);
 			PlayerInputReceiver.SetAllPaused(false);
 			PlayerInputReceiver.SetCursorLocked(false);
-			ReturnToTitleScene();
+
+			if (m_DisconnectNoticePanel != null)
+			{
+				m_DisconnectNoticePanel.SetActive(true);
+				m_DisconnectCoroutine = StartCoroutine(DisconnectReturnRoutine());
+			}
+			else
+			{
+				ReturnToTitleScene();
+			}
 		}
+	}
+
+	private IEnumerator DisconnectReturnRoutine()
+	{
+		float delay = m_DisconnectReturnDelay > 0f ? m_DisconnectReturnDelay : 3.0f;
+		yield return new WaitForSecondsRealtime(delay);
+
+		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+		{
+			NetworkManager.Singleton.Shutdown();
+		}
+
+		ReturnToTitleScene();
 	}
 
 	private void ReturnToTitleScene()
@@ -408,4 +494,3 @@ public class InGamePauseMenuController : MonoBehaviour
 		}
 	}
 }
-
