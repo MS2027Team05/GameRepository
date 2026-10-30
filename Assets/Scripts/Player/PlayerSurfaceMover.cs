@@ -6,6 +6,9 @@
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 {
+	private const float m_SteepBlendStartDot = 0.85f;
+	private const float m_SteepBlendEndDot = 0.98f;
+
 	[Header("地上移動パラメータ")]
 	// 想定設定値: 10.0f (地上歩行移動速度)
 	[SerializeField] private float m_GroundMoveSpeed;
@@ -25,6 +28,7 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 
 	private Rigidbody m_Rigidbody;
 	private IGroundDetector m_GroundDetector;
+	private ICameraEffect m_CameraEffect;
 	private Vector2 m_MoveInput;
 	private Transform m_CameraTransform;
 	private float m_SpeedMultiplier = 1.0f;
@@ -68,6 +72,7 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 	{
 		m_Rigidbody = GetComponent<Rigidbody>();
 		m_GroundDetector = GetComponent<IGroundDetector>();
+		m_CameraEffect = GetComponent<ICameraEffect>();
 	}
 
 	/// <summary>
@@ -116,43 +121,36 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 		Vector3 targetVelocity = Vector3.zero;
 		Vector3 moveDir = Vector3.zero;
 
-		if (m_MoveInput.sqrMagnitude > 0.001f && m_CameraTransform != null)
+		if (m_MoveInput.sqrMagnitude > 0.001f && TryResolveMovementBasis(groundNormal, out Vector3 forwardOnPlane, out Vector3 rightOnPlane))
 		{
-			Vector3 camForward = m_CameraTransform.forward;
-			Vector3 camRight = m_CameraTransform.right;
-
-			Vector3 forwardOnPlane = Vector3.ProjectOnPlane(camForward, groundNormal);
-			Vector3 rightOnPlane = Vector3.ProjectOnPlane(camRight, groundNormal);
-
-			// カメラの視線が壁の法線と重なって消失した場合、直前の進行方向を接平面へ投影して前進を維持
-			if (forwardOnPlane.sqrMagnitude < 0.01f && m_LastMoveDirection.sqrMagnitude > 0.01f)
+			Vector3 rawMoveDir = forwardOnPlane * m_MoveInput.y + rightOnPlane * m_MoveInput.x;
+			if (rawMoveDir.sqrMagnitude > 0.0001f)
 			{
-				forwardOnPlane = Vector3.ProjectOnPlane(m_LastMoveDirection, groundNormal);
+				rawMoveDir.Normalize();
 			}
-
-			if (forwardOnPlane.sqrMagnitude > 0.0001f)
-			{
-				forwardOnPlane.Normalize();
-			}
-			if (rightOnPlane.sqrMagnitude > 0.0001f)
-			{
-				rightOnPlane.Normalize();
-			}
-
-			Vector3 rawMoveDir = (forwardOnPlane * m_MoveInput.y + rightOnPlane * m_MoveInput.x).normalized;
 
 			// 【アルゴリズム: 接平面移動ベクトルの慣性平滑化 (Tangent Plane Inertial Smoothing)】
 			// 角を回り込む際、法線の回転に伴ってカメラの投影ベクトルが直角にねじれてガタつくのを防止します。
 			// 直前の進行方向 m_LastMoveDirection を現在の新法線接平面上に再投影(ProjectOnPlane)して基準を保ち、
-			// 急角を跨ぐ過渡期(normalDiff > 0.05f)は角速度制限(Slerp)をかけて滑らかに進行ベクトルを追従させます。
-			if (m_LastMoveDirection.sqrMagnitude > 0.001f)
+			// 接地法線 groundNormal を回転軸とした接平面上の角度補間を行うことで180度反転時の軸ブレも排除します。
+			if (m_LastMoveDirection.sqrMagnitude > 0.001f && rawMoveDir.sqrMagnitude > 0.001f)
 			{
-				Vector3 lastOnPlane = Vector3.ProjectOnPlane(m_LastMoveDirection, groundNormal).normalized;
+				Vector3 lastOnPlane = Vector3.ProjectOnPlane(m_LastMoveDirection, groundNormal);
 				if (lastOnPlane.sqrMagnitude > 0.001f)
 				{
+					lastOnPlane.Normalize();
+
 					// 平坦地では素早いレスポンス(40.0f)、角回り込み過渡期は滑らかな円弧補間(18.0f)を適用
 					float turnRate = m_LastNormalDiff > 0.05f ? 18.0f : 40.0f;
-					moveDir = Vector3.Slerp(lastOnPlane, rawMoveDir, turnRate * Time.fixedDeltaTime).normalized;
+					float t = Mathf.Clamp01(turnRate * Time.fixedDeltaTime);
+					float signedAngle = Vector3.SignedAngle(lastOnPlane, rawMoveDir, groundNormal);
+					if (Mathf.Abs(signedAngle) > 179.0f)
+					{
+						// 前後逆入力など180度切り返し時に回転方向が左右へチャタリングしないよう符号を固定
+						signedAngle = 180.0f;
+					}
+
+					moveDir = (Quaternion.AngleAxis(signedAngle * t, groundNormal) * lastOnPlane).normalized;
 				}
 				else
 				{
@@ -229,6 +227,105 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 		m_Rigidbody.linearVelocity = newPlaneVel + snapVelocity + downforce * Time.fixedDeltaTime;
 	}
 
+	/// <summary>
+	/// カメラモジュールまたは基準Transformから、上下角の反転・消失を含まない接平面上の前方・右方基底を取得します。
+	/// </summary>
+	private bool TryResolveMovementBasis(Vector3 groundNormal, out Vector3 forwardOnPlane, out Vector3 rightOnPlane)
+	{
+		forwardOnPlane = Vector3.zero;
+		rightOnPlane = Vector3.zero;
+
+		if (groundNormal.sqrMagnitude < 0.0001f)
+		{
+			return false;
+		}
+
+		// 通常プレイ時はICameraEffectからPitch非依存の移動基底を取得(自動テストハーネス等でtransformが渡された場合は除く)
+		if (m_CameraTransform != transform &&
+			m_CameraEffect != null &&
+			m_CameraEffect.TryGetMovementBasis(groundNormal, out forwardOnPlane, out rightOnPlane))
+		{
+			return true;
+		}
+
+		if (m_CameraTransform == null)
+		{
+			return false;
+		}
+
+		Vector3 normal = groundNormal.normalized;
+		Vector3 camForward = m_CameraTransform.forward;
+		Vector3 camUp = m_CameraTransform.up;
+		Vector3 camRight = m_CameraTransform.right;
+
+		forwardOnPlane = ComputeBlendedForwardOnPlane(camForward, camUp, normal);
+		if (forwardOnPlane.sqrMagnitude < 0.0001f)
+		{
+			forwardOnPlane = Vector3.ProjectOnPlane(m_LastMoveDirection, normal);
+		}
+
+		if (forwardOnPlane.sqrMagnitude < 0.0001f)
+		{
+			return false;
+		}
+
+		forwardOnPlane.Normalize();
+
+		rightOnPlane = Vector3.ProjectOnPlane(camRight, normal);
+		if (rightOnPlane.sqrMagnitude < 0.01f)
+		{
+			float upSign = Vector3.Dot(camUp, normal) < 0.0f ? -1.0f : 1.0f;
+			rightOnPlane = Vector3.Cross(normal, forwardOnPlane) * upSign;
+		}
+
+		if (rightOnPlane.sqrMagnitude < 0.0001f)
+		{
+			return false;
+		}
+
+		rightOnPlane.Normalize();
+		return true;
+	}
+
+	/// <summary>
+	/// 視線ベクトルと法線が平行に近づく特異点領域において、上下軸の平面投影へ連続ブレンドした前方ベクトルを返します。
+	/// </summary>
+	private static Vector3 ComputeBlendedForwardOnPlane(Vector3 lookForward, Vector3 lookUp, Vector3 planeNormal)
+	{
+		float normalDot = Vector3.Dot(lookForward, planeNormal);
+		float absDot = Mathf.Abs(normalDot);
+
+		Vector3 forwardFromLook = Vector3.ProjectOnPlane(lookForward, planeNormal);
+		Vector3 upReference = normalDot <= 0.0f ? lookUp : -lookUp;
+		Vector3 forwardFromUp = Vector3.ProjectOnPlane(upReference, planeNormal);
+
+		float blendWeight = Mathf.InverseLerp(m_SteepBlendStartDot, m_SteepBlendEndDot, absDot);
+		if (blendWeight <= 0.0f && forwardFromLook.sqrMagnitude > 0.0001f)
+		{
+			return forwardFromLook.normalized;
+		}
+
+		if (forwardFromUp.sqrMagnitude < 0.0001f)
+		{
+			return forwardFromLook.sqrMagnitude > 0.0001f ? forwardFromLook.normalized : Vector3.zero;
+		}
+
+		Vector3 normalizedUpProj = forwardFromUp.normalized;
+		if (blendWeight >= 1.0f || forwardFromLook.sqrMagnitude <= 0.0001f)
+		{
+			return normalizedUpProj;
+		}
+
+		Vector3 normalizedLookProj = forwardFromLook.normalized;
+		float signedAngle = Vector3.SignedAngle(normalizedLookProj, normalizedUpProj, planeNormal);
+		if (Mathf.Abs(signedAngle) > 179.0f)
+		{
+			signedAngle = 180.0f;
+		}
+
+		return (Quaternion.AngleAxis(signedAngle * blendWeight, planeNormal) * normalizedLookProj).normalized;
+	}
+
 	private void ApplyGroundRotation(Vector3 moveDir, Vector3 groundNormal)
 	{
 		Vector3 targetForward;
@@ -256,7 +353,10 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 			float normalDiff = 1.0f - Mathf.Clamp01(Vector3.Dot(transform.up, groundNormal));
 			float alignSpeed = baseAlignSpeed + normalDiff * 6.0f;
 
-			Quaternion newRotation = Quaternion.Slerp(m_Rigidbody.rotation, targetRotation, alignSpeed * Time.fixedDeltaTime);
+			Quaternion newRotation = Quaternion.Slerp(
+				m_Rigidbody.rotation,
+				targetRotation,
+				Mathf.Clamp01(alignSpeed * Time.fixedDeltaTime));
 			m_Rigidbody.MoveRotation(newRotation);
 		}
 	}

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -26,6 +27,10 @@ public class LobbyManager : NetworkBehaviour
 	[FormerlySerializedAs("defaultRequiredPlayers")]
 	[SerializeField] private int m_DefaultRequiredPlayers;
 
+	[Header("切断通知設定")]
+	// 想定設定値: 3.0f (ホスト切断通知を表示してから自動でタイトル画面へ遷移するまでの秒数)
+	[SerializeField] private float m_DisconnectReturnDelay;
+
 	// 各チームの最大人数(2vs2)
 	public const int MaxTeamMembers = 2;
 
@@ -35,11 +40,16 @@ public class LobbyManager : NetworkBehaviour
 	// ゲームシーンの非同期ロードが開始された際に発火するイベント
 	public event Action OnGameSceneLoadStarted;
 
+	// ホストとの接続が切断された際に発火するイベント
+	public event Action OnDisconnectedFromHost;
+
 	private int m_CurrentRequiredPlayers;
 	// 現在選択されている遷移先がレベルデザインシーンかどうか
 	private bool m_UseLevelDesignScene;
 	private bool m_IsGameStarting;
+	private bool m_IsHandlingDisconnect;
 	private string m_CachedHostIp = "127.0.0.1";
+	private Coroutine m_DisconnectCoroutine;
 
 	// 参加者情報のネットワーク同期リスト
 	private readonly NetworkList<LobbyPlayerData> m_LobbyPlayers = new NetworkList<LobbyPlayerData>();
@@ -50,9 +60,12 @@ public class LobbyManager : NetworkBehaviour
 	public bool UseLevelDesignScene { get => m_UseLevelDesignScene; }
 	public string HostIpAddress { get => m_CachedHostIp; }
 
-	public string TargetSceneName { get => m_UseLevelDesignScene
+	public string TargetSceneName
+	{
+		get => m_UseLevelDesignScene
 		? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
-		: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)"); }
+		: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
+	}
 
 	private void Awake()
 	{
@@ -103,8 +116,23 @@ public class LobbyManager : NetworkBehaviour
 				NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
 				NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
 			}
+		}
+	}
+
+	public override void OnDestroy()
+	{
+		if (NetworkManager.Singleton != null)
+		{
 			NetworkManager.Singleton.OnClientDisconnectCallback -= HandleServerDisconnect;
 		}
+
+		if (m_DisconnectCoroutine != null)
+		{
+			StopCoroutine(m_DisconnectCoroutine);
+			m_DisconnectCoroutine = null;
+		}
+
+		base.OnDestroy();
 	}
 
 	private void EnsureSessionDataStore()
@@ -175,11 +203,40 @@ public class LobbyManager : NetworkBehaviour
 
 	private void HandleServerDisconnect(ulong clientId)
 	{
-		if (!IsServer && clientId == NetworkManager.Singleton.LocalClientId)
+		if (m_IsHandlingDisconnect || m_IsGameStarting)
 		{
-			// 自身が切断された場合、タイトルへ戻る
-			ReturnToTitleScene();
+			return;
 		}
+
+		if (!IsServer &&
+			NetworkManager.Singleton != null &&
+			(clientId == NetworkManager.Singleton.LocalClientId || clientId == NetworkManager.ServerClientId))
+		{
+			m_IsHandlingDisconnect = true;
+
+			if (OnDisconnectedFromHost != null)
+			{
+				OnDisconnectedFromHost.Invoke();
+				m_DisconnectCoroutine = StartCoroutine(DisconnectReturnRoutine());
+			}
+			else
+			{
+				ReturnToTitleScene();
+			}
+		}
+	}
+
+	private IEnumerator DisconnectReturnRoutine()
+	{
+		float delay = m_DisconnectReturnDelay > 0f ? m_DisconnectReturnDelay : 3.0f;
+		yield return new WaitForSecondsRealtime(delay);
+
+		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+		{
+			NetworkManager.Singleton.Shutdown();
+		}
+
+		ReturnToTitleScene();
 	}
 
 	private void NotifyDataChanged()
@@ -204,6 +261,7 @@ public class LobbyManager : NetworkBehaviour
 
 	private void NotifyGameSceneLoadStarted()
 	{
+		m_IsGameStarting = true;
 		OnGameSceneLoadStarted?.Invoke();
 	}
 
@@ -335,6 +393,8 @@ public class LobbyManager : NetworkBehaviour
 
 	public void LeaveLobby()
 	{
+		m_IsHandlingDisconnect = true;
+
 		if (NetworkManager.Singleton != null)
 		{
 			NetworkManager.Singleton.Shutdown();
@@ -644,7 +704,7 @@ public class LobbyManager : NetworkBehaviour
 		}
 	}
 
-	private string GetLocalIPv4Address()
+	public static string GetLocalIPv4Address()
 	{
 		try
 		{
@@ -661,7 +721,7 @@ public class LobbyManager : NetworkBehaviour
 					continue;
 				}
 
-				// 仮想アダプタ名（WSL, VirtualBox, vEthernet, Hyper-V, VMwareなど）を除外
+				// 仮想アダプタ名(WSL, VirtualBox, vEthernet, Hyper-V, VMwareなど)を除外
 				string name = ni.Name.ToLower();
 				string desc = ni.Description.ToLower();
 				if (name.Contains("vethernet") || name.Contains("wsl") || name.Contains("virtual") ||
