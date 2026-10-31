@@ -1,9 +1,9 @@
-﻿using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 [RequireComponent(typeof(PlayerBallCarrier))]
 [RequireComponent(typeof(PlayerInputReceiver))]
-public class LockOnManager : MonoBehaviour
+public class LockOnManager : MonoBehaviour, ILockOnProvider
 {
 	[Header("カメラ")]
 	[SerializeField] private Camera m_TargetCamera;
@@ -19,12 +19,32 @@ public class LockOnManager : MonoBehaviour
 	private PlayerBallCarrier m_BallCarrier;
 	private PlayerInputReceiver m_InputReceiver;
 	private NetworkObject m_NetworkObject;
+	private ELockOnSearchMode m_CurrentSearchMode = ELockOnSearchMode.None;
+	private ELockOnTargetType m_CurrentTargetType = ELockOnTargetType.None;
 
 	// 現在ロックオンしているGameObject
 	public GameObject CurrentTarget { get; private set; }
 
 	// プロパティ
 	public bool HasTarget => CurrentTarget != null;
+
+	/// <summary>ILockOnProvider: 現在捕捉している対象の種類</summary>
+	public ELockOnTargetType CurrentTargetType
+	{
+		get => m_CurrentTargetType;
+	}
+
+	/// <summary>ILockOnProvider: 現在捕捉している対象のGameObject</summary>
+	public GameObject CurrentTargetObject
+	{
+		get => CurrentTarget;
+	}
+
+	/// <summary>ILockOnProvider: 有効な対象が存在するか</summary>
+	public bool HasValidTarget
+	{
+		get => CurrentTarget != null;
+	}
 
 	private void Awake()
 	{
@@ -151,6 +171,10 @@ public class LockOnManager : MonoBehaviour
 
 		if (CurrentTarget != null)
 		{
+			m_CurrentTargetType = m_BallCarrier.HasBall
+				? ELockOnTargetType.AllyPlayer
+				: ELockOnTargetType.Ball;
+
 			Debug.Log(
 				"ロックオン: " + CurrentTarget.name);
 		}
@@ -159,7 +183,9 @@ public class LockOnManager : MonoBehaviour
 	private bool IsOnScreen(GameObject target)
 	{
 		if (target == null || m_TargetCamera == null)
+		{
 			return false;
+		}
 
 		// ボールの見た目や当たり判定の大きさを考慮する
 		Renderer[] renderers =
@@ -194,12 +220,56 @@ public class LockOnManager : MonoBehaviour
 	public void ReleaseTarget()
 	{
 		CurrentTarget = null;
+		m_CurrentTargetType = ELockOnTargetType.None;
+	}
+
+	// =========================================================================
+	// ILockOnProvider インターフェース窓口 (PG3担当: 本実装・改修対象)
+	// =========================================================================
+
+	/// <summary>
+	/// 検索モードを設定します(PG3本実装対象)。
+	/// </summary>
+	public void SetSearchMode(ELockOnSearchMode mode)
+	{
+		m_CurrentSearchMode = mode;
+		if (mode == ELockOnSearchMode.None)
+		{
+			ClearTarget();
+		}
+	}
+
+	/// <summary>
+	/// 現在の検索モードに基づいて対象を検索・更新します(PG3本実装対象)。
+	/// </summary>
+	public void UpdateTargetSearch()
+	{
+		if (m_CurrentSearchMode == ELockOnSearchMode.None)
+		{
+			return;
+		}
+
+		// TODO(PG3): NonBallHolder時はボール優先+敵プレイヤー、BallHolder時は味方+相手ゴールを壁越し許容で検索する
+	}
+
+	/// <summary>
+	/// 現在のロックオン対象およびマーカー表示をクリアします。
+	/// </summary>
+	public void ClearTarget()
+	{
+		ReleaseTarget();
+		if (m_AllyLockOnMarker != null)
+		{
+			m_AllyLockOnMarker.gameObject.SetActive(false);
+		}
 	}
 
 	private void UpdateLockOnMarker()
 	{
 		if (m_AllyLockOnMarker == null || m_TargetCamera == null)
+		{
 			return;
+		}
 
 		// ロックオンしていない場合は非表示
 		if (CurrentTarget == null)

@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -22,6 +22,8 @@ public class PlayerBallCarrier :
 
 	private PlayerController m_PlayerController;
 	private bool m_HasBall;
+	private bool m_IsPassCharging;
+	private float m_PassChargeRatio;
 
 	/// <summary>
 	/// このプレイヤーが現在ボールを所持しているか取得します。
@@ -31,6 +33,39 @@ public class PlayerBallCarrier :
 		get
 		{
 			return m_HasBall;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスの長押しチャージ中であるか取得します。
+	/// </summary>
+	public bool IsPassCharging
+	{
+		get
+		{
+			return m_IsPassCharging;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスのチャージ進捗率(0.0〜1.0)を取得します。
+	/// </summary>
+	public float PassChargeRatio
+	{
+		get
+		{
+			return m_PassChargeRatio;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスのチャージが満タンに達しているか取得します。
+	/// </summary>
+	public bool IsPassChargeFull
+	{
+		get
+		{
+			return m_PassChargeRatio >= 1.0f;
 		}
 	}
 
@@ -326,6 +361,11 @@ public class PlayerBallCarrier :
 
 		m_HasBall = hasBall;
 
+		if (!hasBall)
+		{
+			CancelPassCharge();
+		}
+
 		// 移動速度などプレイヤー固有の変更は、
 		// そのプレイヤーを操作するOwner側だけに通知します。
 		if (!IsOwner)
@@ -340,5 +380,68 @@ public class PlayerBallCarrier :
 
 		m_PlayerController.NotifyBallStateChanged(
 			hasBall);
+	}
+
+	// =========================================================================
+	// 追尾パスアクション用インターフェース窓口 (PG3担当: 本実装対象)
+	// =========================================================================
+
+	/// <summary>
+	/// 長押しによる追尾パスチャージおよびキャンセル案内UIの表示を開始します(PG3本実装対象)。
+	/// </summary>
+	public void BeginPassCharge()
+	{
+		if (!IsOwner || !m_HasBall)
+		{
+			return;
+		}
+
+		m_IsPassCharging = true;
+		m_PassChargeRatio = 0.0f;
+	}
+
+	/// <summary>
+	/// 追尾パスチャージの状態を毎フレーム更新します(PG3本実装対象)。
+	/// </summary>
+	/// <param name="deltaTime">経過時間(秒)</param>
+	public void UpdatePassCharge(float deltaTime)
+	{
+		if (!m_IsPassCharging)
+		{
+			return;
+		}
+
+		// TODO(PG3): Inspector設定のチャージ完了時間に応じてm_PassChargeRatioを更新しUIへ反映する
+	}
+
+	/// <summary>
+	/// 追尾パスチャージをキャンセルし、関連UIを非表示にします(PG3本実装対象)。
+	/// </summary>
+	public void CancelPassCharge()
+	{
+		m_IsPassCharging = false;
+		m_PassChargeRatio = 0.0f;
+	}
+
+	/// <summary>
+	/// ロックオン対象(味方プレイヤーまたは相手ゴール)へ向けて追尾パスを射出します(PG3本実装対象)。
+	/// </summary>
+	/// <param name="targetObject">追尾対象のGameObject</param>
+	/// <param name="targetType">追尾対象の種類</param>
+	public void ShootHoming(GameObject targetObject, ELockOnTargetType targetType)
+	{
+		CancelPassCharge();
+
+		if (!IsOwner || !m_HasBall || targetObject == null)
+		{
+			return;
+		}
+
+		// TODO(PG3): BallController / BallPhysicsControllerのHoming射出ServerRpcを呼び出す(仮実装として対象方向へ通常射出)
+		Vector3 toTarget = targetObject.transform.position - transform.position;
+		if (toTarget.sqrMagnitude > Mathf.Epsilon)
+		{
+			Shoot(toTarget.normalized);
+		}
 	}
 }
