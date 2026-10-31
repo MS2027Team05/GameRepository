@@ -5,7 +5,7 @@
 
 
 # 開発環境
-Unity 6000.3.24.f1
+Unity 6000.3.27.f2
 ## 使用エディター(予定)
 - VisualStudio
 - VisualStudioCode
@@ -17,7 +17,7 @@ Unity 6000.3.24.f1
 - Multiplayer Play Mode(2.0.2)
 - Cinemachine(3.1.7)
 - ShaderGraph(17.3.0)
-- InputSystem(1.20.0)
+- InputSystem(1.20.1)
 
 # 注意事項
 - 回答及びコメントアウトは日本語で実装すること。
