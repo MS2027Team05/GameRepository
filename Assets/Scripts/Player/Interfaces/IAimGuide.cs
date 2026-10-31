@@ -5,6 +5,8 @@
 /// </summary>
 public interface IAimGuide
 {
+	bool CanFall { get; }
+
 	/// <summary>
 	/// 照準UIおよび軌道予測線の表示/非表示を切り替えます。
 	/// </summary>

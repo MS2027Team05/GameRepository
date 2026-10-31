@@ -23,6 +23,9 @@ public class NetworkConnectManager : MonoBehaviour
 	[SerializeField] private Button m_StartButton;
 	[FormerlySerializedAs("cancelButton")]
 	[SerializeField] private Button m_CancelButton;
+	[SerializeField] private Button m_SettingButton;
+	[SerializeField] private Button m_QuitButton;
+	[SerializeField] private SettingsPanelController m_SettingsPanel;
 
 	[Header("接続UI参照(ボタン・入力)")]
 	[FormerlySerializedAs("hostSpectatorButton")]
@@ -54,6 +57,7 @@ public class NetworkConnectManager : MonoBehaviour
 	{
 		InitializeTransport();
 		SetupUIListeners();
+		SetupInputConstraints();
 	}
 
 	private void Start()
@@ -63,8 +67,12 @@ public class NetworkConnectManager : MonoBehaviour
 			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
 		}
 
-		// 初期表示状態の設定(タイトルメニューを表示、JoinPanelは非表示)
+		// 初期表示状態の設定(タイトルメニューを表示、JoinPanelおよびSettingsPanelは非表示)
 		SetJoinPanelActive(false);
+		if (m_SettingsPanel != null)
+		{
+			m_SettingsPanel.Close();
+		}
 		SetStatusMessage("待機中: Host起動またはClient接続を選択してください");
 	}
 
@@ -74,6 +82,11 @@ public class NetworkConnectManager : MonoBehaviour
 		{
 			NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
 		}
+
+		if (m_SettingsPanel != null)
+		{
+			m_SettingsPanel.OnClosed -= HandleSettingsClosed;
+		}
 	}
 
 	private void InitializeTransport()
@@ -81,6 +94,15 @@ public class NetworkConnectManager : MonoBehaviour
 		if (NetworkManager.Singleton != null)
 		{
 			m_UnityTransport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+		}
+	}
+
+	private void SetupInputConstraints()
+	{
+		// IPv4形式(xxx.xxx.xxx.xxx: 最大15文字)に制限
+		if (m_IpInputField != null)
+		{
+			m_IpInputField.characterLimit = 15;
 		}
 	}
 
@@ -95,6 +117,22 @@ public class NetworkConnectManager : MonoBehaviour
 		if (m_CancelButton != null)
 		{
 			m_CancelButton.onClick.AddListener(() => SetJoinPanelActive(false));
+		}
+
+		// 設定画面・終了ボタン
+		if (m_SettingButton != null)
+		{
+			m_SettingButton.onClick.AddListener(OpenSettingsPanel);
+		}
+
+		if (m_QuitButton != null)
+		{
+			m_QuitButton.onClick.AddListener(QuitGame);
+		}
+
+		if (m_SettingsPanel != null)
+		{
+			m_SettingsPanel.OnClosed += HandleSettingsClosed;
 		}
 
 		// 接続ボタン
@@ -230,5 +268,41 @@ public class NetworkConnectManager : MonoBehaviour
 		m_StatusStringBuilder.Clear();
 		m_StatusStringBuilder.Append(message);
 		m_StatusText.text = m_StatusStringBuilder.ToString();
+	}
+
+	/// <summary>
+	/// 設定画面を開きます。タイトルメニューを非表示にします。
+	/// </summary>
+	public void OpenSettingsPanel()
+	{
+		if (m_TitleMenuRoot != null)
+		{
+			m_TitleMenuRoot.SetActive(false);
+		}
+
+		if (m_SettingsPanel != null)
+		{
+			m_SettingsPanel.Open();
+		}
+	}
+
+	private void HandleSettingsClosed()
+	{
+		if (m_TitleMenuRoot != null)
+		{
+			m_TitleMenuRoot.SetActive(true);
+		}
+	}
+
+	/// <summary>
+	/// ゲームを終了します。Editor環境ではPlayModeを終了します。
+	/// </summary>
+	public void QuitGame()
+	{
+#if UNITY_EDITOR
+		UnityEditor.EditorApplication.isPlaying = false;
+#else
+		Application.Quit();
+#endif
 	}
 }

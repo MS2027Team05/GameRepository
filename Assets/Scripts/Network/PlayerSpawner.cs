@@ -5,7 +5,7 @@ using UnityEngine.Serialization;
 
 /// <summary>
 /// GameScene開始時に各プレイヤーキャラクターを適切な陣営(Red/Blue)にスポーンさせるクラス。
-/// サーバー(Host)側でのみ実行され、専用ホスト(観戦)とプレイヤー兼任ホストの判定を行います。
+/// SessionPlayerDataStoreに保持されたロビーデータをもとに、各プレイヤーの所属陣営位置へ生成しプロファイルを初期化します。
 /// </summary>
 public class PlayerSpawner : NetworkBehaviour
 {
@@ -41,7 +41,9 @@ public class PlayerSpawner : NetworkBehaviour
 		}
 
 		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
-		int playerIndex = 0;
+
+		int redSlotIndex = 0;
+		int blueSlotIndex = 0;
 
 		foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
 		{
@@ -53,33 +55,54 @@ public class PlayerSpawner : NetworkBehaviour
 				continue;
 			}
 
-			// スポーン位置と回転の決定(Red陣営とBlue陣営に交互に振り分け)
-			GetSpawnTransform(playerIndex, out Vector3 spawnPosition, out Quaternion spawnRotation);
+			// ロビーデータストアからプレイヤー情報を取得(未登録時はデフォルト生成)
+			LobbyPlayerData playerData;
+			if (SessionPlayerDataStore.Instance != null)
+			{
+				playerData = SessionPlayerDataStore.Instance.GetOrCreatePlayerData(clientId);
+			}
+			else
+			{
+				playerData = new LobbyPlayerData(clientId, $"Player {clientId}");
+			}
+
+			// 未所属時のフォールバック(Red優先で空いている方へ)
+			if (playerData.Team == ETeamType.None)
+			{
+				playerData.Team = (redSlotIndex <= blueSlotIndex) ? ETeamType.Red : ETeamType.Blue;
+			}
+
+			// 所属チームに応じたスポーン地点と回転の決定
+			bool isRedTeam = (playerData.Team == ETeamType.Red);
+			int targetSlot = isRedTeam ? redSlotIndex++ : blueSlotIndex++;
+			GetSpawnTransform(isRedTeam, targetSlot, out Vector3 spawnPosition, out Quaternion spawnRotation);
 
 			GameObject playerInstance = Instantiate(m_PlayerPrefab, spawnPosition, spawnRotation);
 			NetworkObject networkObject = playerInstance.GetComponent<NetworkObject>();
 
 			if (networkObject != null)
 			{
-				// 各クライアントに所有権(Ownership)を付与してネットワーク生成
-				networkObject.SpawnWithOwnership(clientId);
+				// 各クライアントのPlayerObjectとしてネットワーク生成
+				networkObject.SpawnAsPlayerObject(clientId);
 				m_SpawnedPlayerObjects.Add(playerInstance);
-			}
 
-			playerIndex++;
+				// プレイヤープロファイルの初期化
+				var profile = playerInstance.GetComponent<PlayerNetworkProfile>();
+				if (profile != null)
+				{
+					profile.InitializeProfile(playerData);
+				}
+			}
 		}
 	}
 
-	private void GetSpawnTransform(int index, out Vector3 position, out Quaternion rotation)
+	private void GetSpawnTransform(bool isRedTeam, int slotIndex, out Vector3 position, out Quaternion rotation)
 	{
-		// 偶数インデックスはRed陣営、奇数インデックスはBlue陣営
-		bool isRedTeam = (index % 2 == 0);
 		Transform[] targetPoints = isRedTeam ? m_RedSpawnPoints : m_BlueSpawnPoints;
-		int pointIndex = (index / 2);
 
 		if (targetPoints != null && targetPoints.Length > 0)
 		{
-			Transform point = targetPoints[pointIndex % targetPoints.Length];
+			Transform point = targetPoints[slotIndex % targetPoints.Length];
 			if (point != null)
 			{
 				position = point.position;
@@ -89,7 +112,9 @@ public class PlayerSpawner : NetworkBehaviour
 		}
 
 		// スポーン地点が未設定の場合のフォールバック座標
-		position = isRedTeam ? new Vector3(-5f + (index * 2f), 1f, 0f) : new Vector3(5f + (index * 2f), 1f, 0f);
+		position = isRedTeam
+			? new Vector3(-5f - (slotIndex * 2f), 1f, 0f)
+			: new Vector3(5f + (slotIndex * 2f), 1f, 0f);
 		rotation = isRedTeam ? Quaternion.LookRotation(Vector3.right) : Quaternion.LookRotation(Vector3.left);
 	}
 
@@ -109,3 +134,4 @@ public class PlayerSpawner : NetworkBehaviour
 		}
 	}
 }
+

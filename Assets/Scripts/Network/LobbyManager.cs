@@ -1,44 +1,21 @@
-﻿using System.Net;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Text;
-using TMPro;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
-using UnityEngine.UI;
 
 /// <summary>
-/// ロビー画面での参加者管理・チーム分け表示・ゲーム開始制御を担当するクラス。
-/// 接続人数に応じた開始判定およびデバッグ用の人数切り替え機能を提供します。
+/// ロビー画面での参加者管理・チーム分けデータ同期・ゲーム開始制御を担当する通信層クラス。
+/// UIコンポーネントを直接操作せず、イベントおよびAPIを通じてUI層へ状態を提供します。
 /// </summary>
 public class LobbyManager : NetworkBehaviour
 {
-	[Header("UI参照(ボタン・情報表示)")]
-	[FormerlySerializedAs("startGameButton")]
-	[SerializeField] private Button m_StartGameButton;
-	[FormerlySerializedAs("leaveLobbyButton")]
-	[SerializeField] private Button m_LeaveLobbyButton;
-	[FormerlySerializedAs("playerCountText")]
-	[SerializeField] private TextMeshProUGUI m_PlayerCountText;
-	[FormerlySerializedAs("memberListText")]
-	[SerializeField] private TextMeshProUGUI m_MemberListText;
-	[FormerlySerializedAs("lobbyStatusText")]
-	[SerializeField] private TextMeshProUGUI m_LobbyStatusText;
-	[FormerlySerializedAs("hostIpText")]
-	[SerializeField] private TextMeshProUGUI m_HostIpText;
-
-	[Header("デバッグ用UI(画面操作用)")]
-	[FormerlySerializedAs("debugPanel")]
-	[SerializeField] private GameObject m_DebugPanel;
-	[FormerlySerializedAs("debugCycleMinPlayersButton")]
-	[SerializeField] private Button m_DebugCycleMinPlayersButton;
-	[FormerlySerializedAs("debugMinPlayersText")]
-	[SerializeField] private TextMeshProUGUI m_DebugMinPlayersText;
-	[SerializeField] private Button m_DebugToggleSceneButton;
-	[SerializeField] private TextMeshProUGUI m_DebugTargetSceneText;
-
 	[Header("シーン設定")]
 	[FormerlySerializedAs("gameSceneName")]
 	[SerializeField] private string m_GameSceneName;
@@ -50,35 +27,63 @@ public class LobbyManager : NetworkBehaviour
 	[FormerlySerializedAs("defaultRequiredPlayers")]
 	[SerializeField] private int m_DefaultRequiredPlayers;
 
-	// 現在の必要開始人数(デバッグトグルで変更可能)
+	[Header("切断通知設定")]
+	// 想定設定値: 3.0f (ホスト切断通知を表示してから自動でタイトル画面へ遷移するまでの秒数)
+	[SerializeField] private float m_DisconnectReturnDelay;
+
+	// 各チームの最大人数(2vs2)
+	public const int MaxTeamMembers = 2;
+
+	// ロビーデータや開始条件が変化した際に発火するイベント
+	public event Action OnLobbyDataChanged;
+
+	// ゲームシーンの非同期ロードが開始された際に発火するイベント
+	public event Action OnGameSceneLoadStarted;
+
+	// ホストとの接続が切断された際に発火するイベント
+	public event Action OnDisconnectedFromHost;
+
 	private int m_CurrentRequiredPlayers;
 	// 現在選択されている遷移先がレベルデザインシーンかどうか
 	private bool m_UseLevelDesignScene;
-	private readonly StringBuilder m_InfoStringBuilder = new StringBuilder();
+	private bool m_IsGameStarting;
+	private bool m_IsHandlingDisconnect;
+	private string m_CachedHostIp = "127.0.0.1";
+	private Coroutine m_DisconnectCoroutine;
 
 	// 参加者情報のネットワーク同期リスト
 	private readonly NetworkList<LobbyPlayerData> m_LobbyPlayers = new NetworkList<LobbyPlayerData>();
 
-	private void Awake()
+	public NetworkList<LobbyPlayerData> LobbyPlayers { get => m_LobbyPlayers; }
+	public int ConnectedPlayerCount { get => m_LobbyPlayers.Count; }
+	public int RequiredPlayerCount { get => m_CurrentRequiredPlayers; }
+	public bool UseLevelDesignScene { get => m_UseLevelDesignScene; }
+	public string HostIpAddress { get => m_CachedHostIp; }
+
+	public string TargetSceneName
 	{
-		SetupUIListeners();
+		get => m_UseLevelDesignScene
+		? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
+		: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
 	}
 
-	private void Start()
+	private void Awake()
 	{
 		m_CurrentRequiredPlayers = m_DefaultRequiredPlayers > 0 ? m_DefaultRequiredPlayers : 4;
-		SetupDebugUI();
-		UpdateUI();
 	}
 
 	public override void OnNetworkSpawn()
 	{
+		EnsureSessionDataStore();
+
 		m_LobbyPlayers.OnListChanged += HandleLobbyPlayersChanged;
 
 		if (IsServer)
 		{
 			NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
 			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
+
+			m_CachedHostIp = GetLocalIPv4Address();
 
 			// ホスト端末自身の情報を追加
 			AddPlayer(NetworkManager.Singleton.LocalClientId);
@@ -87,8 +92,12 @@ public class LobbyManager : NetworkBehaviour
 		// クライアント側でサーバーが切断された場合の検知
 		NetworkManager.Singleton.OnClientDisconnectCallback += HandleServerDisconnect;
 
-		SetupDebugUI();
-		UpdateUI();
+		if (NetworkManager.Singleton.SceneManager != null)
+		{
+			NetworkManager.Singleton.SceneManager.OnSceneEvent += HandleSceneEvent;
+		}
+
+		NotifyDataChanged();
 	}
 
 	public override void OnNetworkDespawn()
@@ -97,69 +106,59 @@ public class LobbyManager : NetworkBehaviour
 
 		if (NetworkManager.Singleton != null)
 		{
+			if (NetworkManager.Singleton.SceneManager != null)
+			{
+				NetworkManager.Singleton.SceneManager.OnSceneEvent -= HandleSceneEvent;
+			}
+
 			if (IsServer)
 			{
 				NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
 				NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
 			}
+		}
+	}
+
+	public override void OnDestroy()
+	{
+		if (NetworkManager.Singleton != null)
+		{
 			NetworkManager.Singleton.OnClientDisconnectCallback -= HandleServerDisconnect;
 		}
+
+		if (m_DisconnectCoroutine != null)
+		{
+			StopCoroutine(m_DisconnectCoroutine);
+			m_DisconnectCoroutine = null;
+		}
+
+		base.OnDestroy();
 	}
 
-	private void SetupUIListeners()
+	private void EnsureSessionDataStore()
 	{
-		if (m_StartGameButton != null)
+		if (IsServer && SessionPlayerDataStore.Instance == null)
 		{
-			m_StartGameButton.onClick.AddListener(OnStartGameButtonClicked);
+			var storeObj = new GameObject("SessionPlayerDataStore");
+			storeObj.AddComponent<SessionPlayerDataStore>();
 		}
-
-		if (m_LeaveLobbyButton != null)
-		{
-			m_LeaveLobbyButton.onClick.AddListener(OnLeaveLobbyButtonClicked);
-		}
-
-		if (m_DebugCycleMinPlayersButton != null)
-		{
-			m_DebugCycleMinPlayersButton.onClick.AddListener(CycleMinPlayersDebug);
-		}
-
-		if (m_DebugToggleSceneButton != null)
-		{
-			m_DebugToggleSceneButton.onClick.AddListener(ToggleTargetSceneDebug);
-		}
-	}
-
-	private void SetupDebugUI()
-	{
-		// プレイヤー兼任ホスト(デバッグ用)かつエディタ/デバッグビルド時のみデバッグUIを表示
-		bool isDebugHost = NetworkConnectManager.IsPlayerHost;
-		bool isDebugBuild = Application.isEditor || Debug.isDebugBuild;
-		bool shouldShowDebugUI = IsServer && isDebugHost && isDebugBuild;
-
-		if (m_DebugPanel != null)
-		{
-			m_DebugPanel.SetActive(shouldShowDebugUI);
-		}
-
-		UpdateDebugMinPlayersText();
-		UpdateDebugTargetSceneText();
 	}
 
 	private void HandleLobbyPlayersChanged(NetworkListEvent<LobbyPlayerData> changeEvent)
 	{
-		UpdateUI();
+		NotifyDataChanged();
 	}
 
 	private void HandleClientConnected(ulong clientId)
 	{
 		AddPlayer(clientId);
-		UpdateUI();
+		NotifyDataChanged();
 	}
 
 	private void HandleClientDisconnected(ulong clientId)
 	{
 		RemovePlayer(clientId);
-		UpdateUI();
+		NotifyDataChanged();
 	}
 
 	private void AddPlayer(ulong clientId)
@@ -174,7 +173,18 @@ public class LobbyManager : NetworkBehaviour
 			}
 		}
 
-		m_LobbyPlayers.Add(new LobbyPlayerData(clientId));
+		LobbyPlayerData initialData;
+		if (SessionPlayerDataStore.Instance != null)
+		{
+			initialData = SessionPlayerDataStore.Instance.GetOrCreatePlayerData(clientId);
+		}
+		else
+		{
+			FixedString64Bytes defaultName = $"Player {clientId}";
+			initialData = new LobbyPlayerData(clientId, defaultName);
+		}
+
+		m_LobbyPlayers.Add(initialData);
 	}
 
 	private void RemovePlayer(ulong clientId)
@@ -193,84 +203,508 @@ public class LobbyManager : NetworkBehaviour
 
 	private void HandleServerDisconnect(ulong clientId)
 	{
-		if (!IsServer && clientId == NetworkManager.Singleton.LocalClientId)
+		if (m_IsHandlingDisconnect || m_IsGameStarting)
 		{
-			// 自身が切断された場合、タイトルへ戻る
-			ReturnToTitleScene();
-		}
-	}
-
-	private void UpdateUI()
-	{
-		if (NetworkManager.Singleton == null || !IsSpawned) return;
-
-		int connectedCount = m_LobbyPlayers.Count;
-
-		// 参加人数テキストの更新
-		if (m_PlayerCountText != null)
-		{
-			m_InfoStringBuilder.Clear();
-			m_InfoStringBuilder.Append("参加人数: ").Append(connectedCount).Append(" / ").Append(m_CurrentRequiredPlayers);
-			m_PlayerCountText.text = m_InfoStringBuilder.ToString();
+			return;
 		}
 
-		// メンバーリストの更新
-		if (m_MemberListText != null)
+		if (!IsServer &&
+			NetworkManager.Singleton != null &&
+			(clientId == NetworkManager.Singleton.LocalClientId || clientId == NetworkManager.ServerClientId))
 		{
-			m_InfoStringBuilder.Clear();
-			m_InfoStringBuilder.AppendLine("【接続端末一覧】");
-			for (int i = 0; i < m_LobbyPlayers.Count; i++)
+			m_IsHandlingDisconnect = true;
+
+			if (OnDisconnectedFromHost != null)
 			{
-				var player = m_LobbyPlayers[i];
-				string hostTag = player.ClientId == NetworkManager.ServerClientId ? " (Host)" : "";
-				string localTag = player.ClientId == NetworkManager.Singleton.LocalClientId ? " (You)" : "";
-				m_InfoStringBuilder.Append("- ClientId: ").Append(player.ClientId).Append(hostTag).Append(localTag).AppendLine();
-			}
-			m_MemberListText.text = m_InfoStringBuilder.ToString();
-		}
-
-		// 開始ボタンの有効化判定(Hostのみ、かつ必要人数を満たしているか)
-		if (m_StartGameButton != null)
-		{
-			bool canStart = IsServer && (connectedCount >= m_CurrentRequiredPlayers);
-			m_StartGameButton.interactable = canStart;
-			m_StartGameButton.gameObject.SetActive(IsServer);
-		}
-
-		if (m_LobbyStatusText != null)
-		{
-			if (!IsServer)
-			{
-				m_LobbyStatusText.text = "ホストのゲーム開始を待機しています...";
+				OnDisconnectedFromHost.Invoke();
+				m_DisconnectCoroutine = StartCoroutine(DisconnectReturnRoutine());
 			}
 			else
 			{
-				m_LobbyStatusText.text = connectedCount >= m_CurrentRequiredPlayers
-					? "開始準備完了: ゲーム開始ボタンを押してください"
-					: $"待機中: あと {m_CurrentRequiredPlayers - connectedCount} 台の接続が必要です";
+				ReturnToTitleScene();
+			}
+		}
+	}
+
+	private IEnumerator DisconnectReturnRoutine()
+	{
+		float delay = m_DisconnectReturnDelay > 0f ? m_DisconnectReturnDelay : 3.0f;
+		yield return new WaitForSecondsRealtime(delay);
+
+		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+		{
+			NetworkManager.Singleton.Shutdown();
+		}
+
+		ReturnToTitleScene();
+	}
+
+	private void NotifyDataChanged()
+	{
+		OnLobbyDataChanged?.Invoke();
+	}
+
+	private void HandleSceneEvent(SceneEvent sceneEvent)
+	{
+		if (sceneEvent == null) return;
+
+		// シーンロード開始イベントを検知(ホスト・クライアント双方で受信)
+		if (sceneEvent.SceneEventType == SceneEventType.Load)
+		{
+			string sceneName = sceneEvent.SceneName;
+			if (sceneName == m_GameSceneName || sceneName == m_LevelDesignSceneName)
+			{
+				NotifyGameSceneLoadStarted();
+			}
+		}
+	}
+
+	private void NotifyGameSceneLoadStarted()
+	{
+		m_IsGameStarting = true;
+		OnGameSceneLoadStarted?.Invoke();
+	}
+
+	[Rpc(SendTo.Everyone)]
+	private void NotifyGameSceneLoadStartedRpc()
+	{
+		NotifyGameSceneLoadStarted();
+	}
+
+	public const int MaxPlayerNameLength = 12;
+	public const int MaxPlayerNameBytes = 60;
+
+	/// <summary>
+	/// プレイヤーネームが有効な形式(1文字以上、最大文字数以内、UTF-8バイト数上限以内、空白のみでない)かを判定します。
+	/// </summary>
+	public static bool IsValidPlayerName(string name)
+	{
+		if (string.IsNullOrWhiteSpace(name)) return false;
+		string trimmed = name.Trim();
+		if (trimmed.Length < 1 || trimmed.Length > MaxPlayerNameLength) return false;
+		return System.Text.Encoding.UTF8.GetByteCount(trimmed) <= MaxPlayerNameBytes;
+	}
+
+	// --- 外部公開API (UIControllerから呼び出し) ---
+
+	public void SetPlayerName(string newName)
+	{
+		if (NetworkManager.Singleton == null) return;
+
+		string trimmed = newName != null ? newName.Trim() : string.Empty;
+		if (!IsValidPlayerName(trimmed))
+		{
+			// 不正な入力の場合はUI側を元の正常値に戻すため再通知
+			NotifyDataChanged();
+			return;
+		}
+
+		RequestUpdatePlayerNameServerRpc(NetworkManager.Singleton.LocalClientId, trimmed);
+	}
+
+	public void JoinTeam(ETeamType team)
+	{
+		if (NetworkManager.Singleton == null) return;
+		RequestJoinTeamServerRpc(NetworkManager.Singleton.LocalClientId, team);
+	}
+
+	public void LeaveTeam()
+	{
+		if (NetworkManager.Singleton == null) return;
+		RequestLeaveTeamServerRpc(NetworkManager.Singleton.LocalClientId);
+	}
+
+	public void ToggleCharacter()
+	{
+		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
+
+		var nextChar = localPlayer.CharacterType == ECharacterType.ModelA
+			? ECharacterType.ModelB
+			: ECharacterType.ModelA;
+
+		RequestUpdateCharacterTypeServerRpc(NetworkManager.Singleton.LocalClientId, nextChar);
+	}
+
+	public void CycleHighlightColor()
+	{
+		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
+
+		int nextColorIndex = ((int)localPlayer.HighlightColor + 1) % 6;
+		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, (EHighlightColor)nextColorIndex);
+	}
+
+	/// <summary>
+	/// 指定したハイライトカラーをローカルプレイヤーに設定します。
+	/// </summary>
+	public void SetHighlightColor(EHighlightColor highlightColor)
+	{
+		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
+
+		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, highlightColor);
+	}
+
+	public void ToggleReady()
+	{
+		if (!TryGetLocalPlayerData(out var localPlayer) || NetworkManager.Singleton == null) return;
+		if (localPlayer.Team == ETeamType.None) return;
+
+		// プレイヤーネームが不正な場合はReady状態への移行をブロック
+		if (!IsValidPlayerName(localPlayer.PlayerName.ToString()))
+		{
+			return;
+		}
+
+		RequestToggleReadyServerRpc(NetworkManager.Singleton.LocalClientId);
+	}
+
+	public void CycleMinPlayersDebug()
+	{
+		if (!IsServer) return;
+
+		if (m_CurrentRequiredPlayers == 4) m_CurrentRequiredPlayers = 2;
+		else if (m_CurrentRequiredPlayers == 2) m_CurrentRequiredPlayers = 1;
+		else m_CurrentRequiredPlayers = 4;
+
+		NotifyDataChanged();
+	}
+
+	public void ToggleTargetSceneDebug()
+	{
+		if (!IsServer) return;
+
+		m_UseLevelDesignScene = !m_UseLevelDesignScene;
+		NotifyDataChanged();
+	}
+
+	public void ForceStartGameDebug()
+	{
+		if (!IsServer) return;
+
+		AutoAssignUnseatedPlayers();
+		StartGameTransition();
+	}
+
+	public void StartGame()
+	{
+		if (!IsServer) return;
+
+		StartGameTransition();
+	}
+
+	public void LeaveLobby()
+	{
+		m_IsHandlingDisconnect = true;
+
+		if (NetworkManager.Singleton != null)
+		{
+			NetworkManager.Singleton.Shutdown();
+		}
+
+		ReturnToTitleScene();
+	}
+
+	public bool TryGetLocalPlayerData(out LobbyPlayerData playerData)
+	{
+		if (NetworkManager.Singleton != null)
+		{
+			ulong localId = NetworkManager.Singleton.LocalClientId;
+			for (int i = 0; i < m_LobbyPlayers.Count; i++)
+			{
+				if (m_LobbyPlayers[i].ClientId == localId)
+				{
+					playerData = m_LobbyPlayers[i];
+					return true;
+				}
 			}
 		}
 
-		UpdateHostIpDisplay();
+		playerData = default;
+		return false;
 	}
 
-	private void UpdateHostIpDisplay()
+	public bool CheckCanStartGame(out string statusMessage)
 	{
-		if (m_HostIpText == null) return;
+		int connectedCount = m_LobbyPlayers.Count;
 
-		if (IsServer)
+		if (!IsServer)
 		{
-			string ip = GetLocalIPv4Address();
-			m_HostIpText.text = $"接続先IP: {ip}";
-			m_HostIpText.gameObject.SetActive(true);
+			statusMessage = "ホストのゲーム開始を待機しています...";
+			return false;
+		}
+
+		bool allSeated = true;
+		bool allReady = true;
+		bool allNamesValid = true;
+
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			var p = m_LobbyPlayers[i];
+			if (p.Team == ETeamType.None) allSeated = false;
+			if (!p.IsReady) allReady = false;
+			if (!IsValidPlayerName(p.PlayerName.ToString())) allNamesValid = false;
+		}
+
+		bool canStart = (connectedCount >= m_CurrentRequiredPlayers) && allSeated && allReady && allNamesValid;
+
+		if (canStart)
+		{
+			statusMessage = "全員の準備が完了しました: ゲーム開始ボタンを押してください";
+		}
+		else if (connectedCount < m_CurrentRequiredPlayers)
+		{
+			statusMessage = $"待機中: あと {m_CurrentRequiredPlayers - connectedCount} 台の接続が必要です";
+		}
+		else if (!allNamesValid)
+		{
+			statusMessage = "プレイヤー名が未入力または不正なプレイヤーがいます";
+		}
+		else if (!allSeated)
+		{
+			statusMessage = "チーム未所属のプレイヤーがいます";
 		}
 		else
 		{
-			m_HostIpText.gameObject.SetActive(false);
+			statusMessage = "全員のReady完了を待機しています...";
+		}
+
+		return canStart;
+	}
+
+	// --- RPC通信処理 ---
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestJoinTeamServerRpc(ulong clientId, ETeamType targetTeam)
+	{
+		if (targetTeam == ETeamType.None) return;
+
+		int count = 0;
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].Team == targetTeam) count++;
+		}
+
+		if (count >= MaxTeamMembers)
+		{
+			Debug.LogWarning($"[LobbyManager] {targetTeam} は満員です (最大 {MaxTeamMembers} 名)。");
+			return;
+		}
+
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				var data = m_LobbyPlayers[i];
+				data.Team = targetTeam;
+				data.IsReady = false;
+				m_LobbyPlayers[i] = data;
+
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+				break;
+			}
 		}
 	}
 
-	private string GetLocalIPv4Address()
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestLeaveTeamServerRpc(ulong clientId)
+	{
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				var data = m_LobbyPlayers[i];
+				data.Team = ETeamType.None;
+				data.IsReady = false;
+				m_LobbyPlayers[i] = data;
+
+				SessionPlayerDataStore.Instance?.UnseatPlayer(clientId);
+				break;
+			}
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestUpdatePlayerNameServerRpc(ulong clientId, FixedString64Bytes newName)
+	{
+		string nameStr = newName.ToString().Trim();
+		if (!IsValidPlayerName(nameStr)) return;
+
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				var data = m_LobbyPlayers[i];
+				if (data.IsReady) return;
+
+				data.PlayerName = nameStr;
+				m_LobbyPlayers[i] = data;
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+				break;
+			}
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestUpdateCharacterTypeServerRpc(ulong clientId, ECharacterType characterType)
+	{
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				var data = m_LobbyPlayers[i];
+				if (data.IsReady) return;
+
+				data.CharacterType = characterType;
+				m_LobbyPlayers[i] = data;
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+				break;
+			}
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestUpdateHighlightColorServerRpc(ulong clientId, EHighlightColor highlightColor)
+	{
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				var data = m_LobbyPlayers[i];
+				if (data.IsReady) return;
+
+				data.HighlightColor = highlightColor;
+				m_LobbyPlayers[i] = data;
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+				break;
+			}
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestToggleReadyServerRpc(ulong clientId)
+	{
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				var data = m_LobbyPlayers[i];
+				if (data.Team == ETeamType.None) return;
+
+				data.IsReady = !data.IsReady;
+				m_LobbyPlayers[i] = data;
+
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+				break;
+			}
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	public void SwapPlayersServerRpc(ulong clientA, ulong clientB, RpcParams rpcParams = default)
+	{
+		if (rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
+		{
+			Debug.LogWarning("[LobbyManager] SwapPlayersはHostのみ実行可能です。");
+			return;
+		}
+
+		int indexA = -1;
+		int indexB = -1;
+
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientA) indexA = i;
+			if (m_LobbyPlayers[i].ClientId == clientB) indexB = i;
+		}
+
+		if (indexA >= 0 && indexB >= 0)
+		{
+			var dataA = m_LobbyPlayers[indexA];
+			var dataB = m_LobbyPlayers[indexB];
+
+			var tempTeam = dataA.Team;
+			dataA.Team = dataB.Team;
+			dataB.Team = tempTeam;
+
+			dataA.IsReady = false;
+			dataB.IsReady = false;
+
+			m_LobbyPlayers[indexA] = dataA;
+			m_LobbyPlayers[indexB] = dataB;
+
+			SessionPlayerDataStore.Instance?.SavePlayerData(dataA);
+			SessionPlayerDataStore.Instance?.SavePlayerData(dataB);
+		}
+	}
+
+	private void AutoAssignUnseatedPlayers()
+	{
+		int redCount = 0;
+		int blueCount = 0;
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].Team == ETeamType.Red) redCount++;
+			if (m_LobbyPlayers[i].Team == ETeamType.Blue) blueCount++;
+		}
+
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].Team == ETeamType.None)
+			{
+				var data = m_LobbyPlayers[i];
+				if (redCount <= blueCount && redCount < MaxTeamMembers)
+				{
+					data.Team = ETeamType.Red;
+					redCount++;
+				}
+				else
+				{
+					data.Team = ETeamType.Blue;
+					blueCount++;
+				}
+				data.IsReady = true;
+				m_LobbyPlayers[i] = data;
+
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+			}
+		}
+	}
+
+	private void StartGameTransition()
+	{
+		if (m_IsGameStarting) return;
+		m_IsGameStarting = true;
+
+		if (SessionPlayerDataStore.Instance != null)
+		{
+			for (int i = 0; i < m_LobbyPlayers.Count; i++)
+			{
+				SessionPlayerDataStore.Instance.SavePlayerData(m_LobbyPlayers[i]);
+			}
+		}
+
+		string targetScene = m_UseLevelDesignScene ? m_LevelDesignSceneName : m_GameSceneName;
+		if (!string.IsNullOrEmpty(targetScene))
+		{
+			// 全端末(ホストおよび全クライアント)へ即座にロード中UIの表示を通知
+			NotifyGameSceneLoadStartedRpc();
+			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+		}
+		else
+		{
+			m_IsGameStarting = false;
+			Debug.LogWarning("[LobbyManager] 遷移先シーン名が設定されていません。");
+		}
+	}
+
+	private void ReturnToTitleScene()
+	{
+		if (!string.IsNullOrEmpty(m_TitleSceneName))
+		{
+			SceneManager.LoadScene(m_TitleSceneName);
+		}
+	}
+
+	public static string GetLocalIPv4Address()
 	{
 		try
 		{
@@ -287,7 +721,7 @@ public class LobbyManager : NetworkBehaviour
 					continue;
 				}
 
-				// 仮想アダプタ名（WSL, VirtualBox, vEthernet, Hyper-V, VMwareなど）を除外
+				// 仮想アダプタ名(WSL, VirtualBox, vEthernet, Hyper-V, VMwareなど)を除外
 				string name = ni.Name.ToLower();
 				string desc = ni.Description.ToLower();
 				if (name.Contains("vethernet") || name.Contains("wsl") || name.Contains("virtual") ||
@@ -331,91 +765,14 @@ public class LobbyManager : NetworkBehaviour
 				}
 			}
 		}
-		catch (System.Exception ex)
+		catch (Exception ex)
 		{
 			Debug.LogWarning($"[LobbyManager] ローカルIP取得エラー: {ex.Message}");
 		}
 
 		return "127.0.0.1";
 	}
-
-	/// <summary>
-	/// デバッグ用: 必要人数を 4人 -> 2人 -> 1人 -> 4人 とトグル切り替えします。
-	/// </summary>
-	private void CycleMinPlayersDebug()
-	{
-		if (!IsServer) return;
-
-		if (m_CurrentRequiredPlayers == 4) m_CurrentRequiredPlayers = 2;
-		else if (m_CurrentRequiredPlayers == 2) m_CurrentRequiredPlayers = 1;
-		else m_CurrentRequiredPlayers = 4;
-
-		UpdateDebugMinPlayersText();
-		UpdateUI();
-	}
-
-	private void UpdateDebugMinPlayersText()
-	{
-		if (m_DebugMinPlayersText != null)
-		{
-			m_DebugMinPlayersText.text = $"[Debug] 開始人数: {m_CurrentRequiredPlayers}人";
-		}
-	}
-
-	/// <summary>
-	/// デバッグ用: 遷移先シーンを 通常ゲームシーン <-> レベルデザインシーン でトグル切り替えします。
-	/// </summary>
-	private void ToggleTargetSceneDebug()
-	{
-		if (!IsServer) return;
-
-		m_UseLevelDesignScene = !m_UseLevelDesignScene;
-		UpdateDebugTargetSceneText();
-	}
-
-	private void UpdateDebugTargetSceneText()
-	{
-		if (m_DebugTargetSceneText != null)
-		{
-			string currentScene = m_UseLevelDesignScene
-				? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
-				: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
-
-			m_DebugTargetSceneText.text = $"[Debug] 遷移先: {currentScene}";
-		}
-	}
-
-	private void OnStartGameButtonClicked()
-	{
-		if (!IsServer) return;
-
-		string targetScene = m_UseLevelDesignScene ? m_LevelDesignSceneName : m_GameSceneName;
-		if (!string.IsNullOrEmpty(targetScene))
-		{
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
-		}
-		else
-		{
-			Debug.LogWarning("[LobbyManager] 遷移先シーン名が設定されていません。");
-		}
-	}
-
-	private void OnLeaveLobbyButtonClicked()
-	{
-		if (NetworkManager.Singleton != null)
-		{
-			NetworkManager.Singleton.Shutdown();
-		}
-
-		ReturnToTitleScene();
-	}
-
-	private void ReturnToTitleScene()
-	{
-		if (!string.IsNullOrEmpty(m_TitleSceneName))
-		{
-			SceneManager.LoadScene(m_TitleSceneName);
-		}
-	}
 }
+
+
 
