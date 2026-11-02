@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -5,7 +6,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// LobbySceneの最前面に重畳され、体験者向けのタイトル演出(START/設定/QUIT)を管理するクラス。
-/// STARTボタン押下やコントローラー入力により、自端末ローカルのみタイトル表示を解除してキャラクリ画面へ遷移させます。
+/// STARTボタン押下やUIInputReceiver等からの入力により、自端末ローカルのみタイトル表示を解除してキャラクリ画面へ遷移させます。
 /// </summary>
 public class TitleOverlayController : MonoBehaviour
 {
@@ -18,6 +19,9 @@ public class TitleOverlayController : MonoBehaviour
 	[SerializeField] private Button m_SettingsButton;
 	[SerializeField] private Button m_QuitButton;
 	[SerializeField] private TextMeshProUGUI m_PressPromptText;
+
+	public event Action OnTitleDismissed;
+	public event Action OnTitleShown;
 
 	private bool m_IsTitleActive;
 
@@ -47,11 +51,6 @@ public class TitleOverlayController : MonoBehaviour
 		}
 	}
 
-	private void Update()
-	{
-		HandleDismissInput();
-	}
-
 	private void SetupButtonListeners()
 	{
 		if (m_StartButton != null)
@@ -70,55 +69,6 @@ public class TitleOverlayController : MonoBehaviour
 		}
 	}
 
-	private void HandleDismissInput()
-	{
-		if (!m_IsTitleActive) return;
-
-		// 設定パネルが開いている場合はタイトル解除入力を無視
-		if (m_SettingsPanel != null && m_SettingsPanel.gameObject.activeSelf)
-		{
-			return;
-		}
-
-		// 観戦専用ホスト端末の場合は体験者ボタンでタイトル画面を解除しない
-		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
-		if (isServer && !NetworkConnectManager.IsPlayerHost)
-		{
-			return;
-		}
-
-		bool shouldDismiss = false;
-
-		// // ゲームパッド入力検知
-		// if (UnityEngine.InputSystem.Gamepad.current != null)
-		// {
-		// 	var gamepad = UnityEngine.InputSystem.Gamepad.current;
-		// 	if (gamepad.buttonSouth.wasPressedThisFrame ||
-		// 		gamepad.startButton.wasPressedThisFrame ||
-		// 		gamepad.buttonEast.wasPressedThisFrame)
-		// 	{
-		// 		shouldDismiss = true;
-		// 	}
-		// }
-
-		// // キーボード入力検知
-		// if (UnityEngine.InputSystem.Keyboard.current != null)
-		// {
-		// 	var keyboard = UnityEngine.InputSystem.Keyboard.current;
-		// 	if (keyboard.spaceKey.wasPressedThisFrame ||
-		// 		keyboard.enterKey.wasPressedThisFrame ||
-		// 		keyboard.numpadEnterKey.wasPressedThisFrame)
-		// 	{
-		// 		shouldDismiss = true;
-		// 	}
-		// }
-
-		if (shouldDismiss)
-		{
-			DismissTitle();
-		}
-	}
-
 	/// <summary>
 	/// タイトル表示を解除し、キャラクリ画面へ移行します。
 	/// </summary>
@@ -129,10 +79,12 @@ public class TitleOverlayController : MonoBehaviour
 		{
 			m_OverlayRoot.SetActive(false);
 		}
+
+		OnTitleDismissed?.Invoke();
 	}
 
 	/// <summary>
-	/// タイトル表示をアクティブにします(ゲーム終了後リセット等で利用)。
+	/// タイトル表示をアクティブにします(キャラクリ画面から戻る時やゲーム終了後リセット等で利用)。
 	/// </summary>
 	public void ShowTitle()
 	{
@@ -141,6 +93,8 @@ public class TitleOverlayController : MonoBehaviour
 		{
 			m_OverlayRoot.SetActive(true);
 		}
+
+		OnTitleShown?.Invoke();
 	}
 
 	/// <summary>
@@ -171,4 +125,3 @@ public class TitleOverlayController : MonoBehaviour
 #endif
 	}
 }
-

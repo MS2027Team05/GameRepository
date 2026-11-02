@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -390,6 +390,19 @@ public class NetworkConnectManager : NetworkBehaviour
 
 	private void HandlePlayersListChanged(NetworkListEvent<LobbyPlayerData> changeEvent)
 	{
+		if (NetworkManager.Singleton != null)
+		{
+			ulong localClientId = NetworkManager.Singleton.LocalClientId;
+			for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+			{
+				if (m_ConnectedPlayers[i].ClientId == localClientId)
+				{
+					LocalPlayerProfilePreferences.SetAssignedTeam(m_ConnectedPlayers[i].Team);
+					break;
+				}
+			}
+		}
+
 		UpdateGeneralPanelUI();
 	}
 
@@ -501,11 +514,56 @@ public class NetworkConnectManager : NetworkBehaviour
 	}
 
 	/// <summary>
+	/// チーム未所属(None)のプレイヤーをRed/Blueの空いている枠へ自動割り当てします。
+	/// </summary>
+	private void AutoAssignUnseatedPlayers()
+	{
+		if (!IsServer) return;
+
+		int redCount = 0;
+		int blueCount = 0;
+
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].Team == ETeamType.Red) redCount++;
+			else if (m_ConnectedPlayers[i].Team == ETeamType.Blue) blueCount++;
+		}
+
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].Team == ETeamType.None)
+			{
+				var data = m_ConnectedPlayers[i];
+				if (redCount <= blueCount && redCount < LobbyManager.MaxTeamMembers)
+				{
+					data.Team = ETeamType.Red;
+					redCount++;
+				}
+				else if (blueCount < LobbyManager.MaxTeamMembers)
+				{
+					data.Team = ETeamType.Blue;
+					blueCount++;
+				}
+				else if (redCount < LobbyManager.MaxTeamMembers)
+				{
+					data.Team = ETeamType.Red;
+					redCount++;
+				}
+
+				m_ConnectedPlayers[i] = data;
+			}
+		}
+	}
+
+	/// <summary>
 	/// ホスト操作により、全員を一括してLobbySceneへ同期遷移させます。
 	/// </summary>
 	public void ProceedToLobbyScene()
 	{
 		if (!IsServer) return;
+
+		// 未所属プレイヤーをRed/Blueの空いている枠へ自動割り当てして解消
+		AutoAssignUnseatedPlayers();
 
 		if (SessionPlayerDataStore.Instance != null)
 		{
