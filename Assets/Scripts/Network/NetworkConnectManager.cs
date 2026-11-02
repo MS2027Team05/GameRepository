@@ -1,92 +1,141 @@
-﻿using System.Text;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Text;
 using TMPro;
+using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
-/// タイトル画面でのネットワーク接続・初期化を管理するクラス。
-/// Host(観戦用/デバッグプレイヤー兼任)およびClientとしての接続、IPアドレス設定、
-/// およびJoinPanelの開閉(Start/Cancel)を担当します。
+/// 起動時接続シーン(TitleScene / Bootstrap)において、
+/// 接続前のJoinPanel管理、接続後のGeneralPanel・ClientPlayerPanel・HostPlayerPanelの排他表示、
+/// チーム割り当てのリアルタイム同期、およびLobbySceneへの同期遷移を統括するクラス。
 /// </summary>
-public class NetworkConnectManager : MonoBehaviour
+public class NetworkConnectManager : NetworkBehaviour
 {
-	[Header("パネル・メニューUI参照")]
-	[FormerlySerializedAs("titleMenuRoot")]
-	[SerializeField] private GameObject m_TitleMenuRoot;
-	[FormerlySerializedAs("joinPanel")]
+	[Header("接続前: JoinPanel UI参照")]
 	[SerializeField] private GameObject m_JoinPanel;
-	[FormerlySerializedAs("startButton")]
-	[SerializeField] private Button m_StartButton;
-	[FormerlySerializedAs("cancelButton")]
-	[SerializeField] private Button m_CancelButton;
-	[SerializeField] private Button m_SettingButton;
-	[SerializeField] private Button m_QuitButton;
-	[SerializeField] private SettingsPanelController m_SettingsPanel;
-
-	[Header("接続UI参照(ボタン・入力)")]
-	[FormerlySerializedAs("hostSpectatorButton")]
 	[SerializeField] private Button m_HostSpectatorButton;
-	[FormerlySerializedAs("hostPlayerButton")]
 	[SerializeField] private Button m_HostPlayerButton;
-	[FormerlySerializedAs("clientButton")]
 	[SerializeField] private Button m_ClientButton;
-	[FormerlySerializedAs("ipInputField")]
+	[SerializeField] private Button m_QuitButton;
 	[SerializeField] private TMP_InputField m_IpInputField;
-	[FormerlySerializedAs("statusText")]
 	[SerializeField] private TextMeshProUGUI m_StatusText;
 
-	[Header("接続設定")]
-	[FormerlySerializedAs("defaultPort")]
-	[SerializeField] private ushort m_DefaultPort;
+	[Header("接続後: 共通 GeneralPanel UI参照")]
+	[SerializeField] private GameObject m_GeneralPanel;
+	[SerializeField] private TextMeshProUGUI m_PlayerCountText;
+	[SerializeField] private TextMeshProUGUI m_MemberListText;
 
-	[Header("シーン遷移先")]
-	[FormerlySerializedAs("lobbySceneName")]
+	[Header("接続後: プレイヤー用 ClientPlayerPanel UI参照")]
+	[SerializeField] private GameObject m_ClientPlayerPanel;
+	[SerializeField] private Button m_JoinRedTeamButton;
+	[SerializeField] private Button m_JoinBlueTeamButton;
+	[SerializeField] private Button m_LeaveTeamButton;
+	[SerializeField] private Button m_ClientDisconnectButton;
+
+	[Header("接続後: ホスト用 HostPlayerPanel UI参照")]
+	[SerializeField] private GameObject m_HostPlayerPanel;
+	[SerializeField] private Button m_StartLobbyButton;
+	[SerializeField] private TextMeshProUGUI m_HostIpText;
+	[SerializeField] private Button m_HostDisconnectButton;
+
+	[Header("接続・遷移設定")]
+	[SerializeField] private ushort m_DefaultPort;
 	[SerializeField] private string m_LobbySceneName;
 
 	// デバッグ用兼任ホストかどうかの共有フラグ
 	public static bool IsPlayerHost { get; private set; }
 
 	private UnityTransport m_UnityTransport;
-	private readonly StringBuilder m_StatusStringBuilder = new StringBuilder();
+	private readonly StringBuilder m_StatusBuilder = new StringBuilder();
+	private readonly StringBuilder m_MemberInfoBuilder = new StringBuilder();
+	private string m_CachedHostIp = "127.0.0.1";
+
+	// 接続参加者のリアルタイム同期リスト
+	private readonly NetworkList<LobbyPlayerData> m_ConnectedPlayers = new NetworkList<LobbyPlayerData>();
 
 	private void Awake()
 	{
 		InitializeTransport();
-		SetupUIListeners();
+		SetupButtonListeners();
 		SetupInputConstraints();
 	}
 
 	private void Start()
 	{
-		if (NetworkManager.Singleton != null)
+		// 起動時はJoinPanelのみを有効化し、他パネルは完全に非表示
+		ShowJoinPanelOnly();
+
+		// 前回接続したIPアドレスを復元
+		if (m_IpInputField != null)
 		{
-			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
+			string savedIp = LocalPlayerProfilePreferences.GetTargetIp("127.0.0.1");
+			m_IpInputField.text = savedIp;
 		}
 
-		// 初期表示状態の設定(タイトルメニューを表示、JoinPanelおよびSettingsPanelは非表示)
-		SetJoinPanelActive(false);
-		if (m_SettingsPanel != null)
-		{
-			m_SettingsPanel.Close();
-		}
 		SetStatusMessage("待機中: Host起動またはClient接続を選択してください");
 	}
 
-	private void OnDestroy()
+	public override void OnNetworkSpawn()
 	{
-		if (NetworkManager.Singleton != null)
+		EnsureSessionDataStore();
+
+		m_ConnectedPlayers.OnListChanged += HandlePlayersListChanged;
+
+		if (IsServer)
 		{
-			NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
+			NetworkManager.Singleton.OnClientConnectedCallback += HandleServerClientConnected;
+			NetworkManager.Singleton.OnClientDisconnectCallback += HandleServerClientDisconnected;
+
+			m_CachedHostIp = GetLocalIPv4Address();
+			if (m_HostIpText != null)
+			{
+				m_HostIpText.text = $"Host IP: {m_CachedHostIp}";
+			}
+
+			// プレイヤー兼任ホストの場合のみホスト端末自身をプレイヤーリストに追加
+			if (IsPlayerHost)
+			{
+				AddPlayer(NetworkManager.Singleton.LocalClientId);
+			}
+
+			ShowConnectedPanels(isHost: true);
+		}
+		else
+		{
+			// クライアント側でサーバー切断を検知
+			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnectedFromServer;
+
+			ShowConnectedPanels(isHost: false);
 		}
 
-		if (m_SettingsPanel != null)
+		UpdateGeneralPanelUI();
+	}
+
+	public override void OnNetworkDespawn()
+	{
+		m_ConnectedPlayers.OnListChanged -= HandlePlayersListChanged;
+
+		if (NetworkManager.Singleton != null)
 		{
-			m_SettingsPanel.OnClosed -= HandleSettingsClosed;
+			if (IsServer)
+			{
+				NetworkManager.Singleton.OnClientConnectedCallback -= HandleServerClientConnected;
+				NetworkManager.Singleton.OnClientDisconnectCallback -= HandleServerClientDisconnected;
+			}
+			else
+			{
+				NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnectedFromServer;
+			}
 		}
+
+		base.OnNetworkDespawn();
 	}
 
 	private void InitializeTransport()
@@ -99,43 +148,15 @@ public class NetworkConnectManager : MonoBehaviour
 
 	private void SetupInputConstraints()
 	{
-		// IPv4形式(xxx.xxx.xxx.xxx: 最大15文字)に制限
 		if (m_IpInputField != null)
 		{
 			m_IpInputField.characterLimit = 15;
 		}
 	}
 
-	private void SetupUIListeners()
+	private void SetupButtonListeners()
 	{
-		// タイトル画面と接続パネルの切り替え
-		if (m_StartButton != null)
-		{
-			m_StartButton.onClick.AddListener(() => SetJoinPanelActive(true));
-		}
-
-		if (m_CancelButton != null)
-		{
-			m_CancelButton.onClick.AddListener(() => SetJoinPanelActive(false));
-		}
-
-		// 設定画面・終了ボタン
-		if (m_SettingButton != null)
-		{
-			m_SettingButton.onClick.AddListener(OpenSettingsPanel);
-		}
-
-		if (m_QuitButton != null)
-		{
-			m_QuitButton.onClick.AddListener(QuitGame);
-		}
-
-		if (m_SettingsPanel != null)
-		{
-			m_SettingsPanel.OnClosed += HandleSettingsClosed;
-		}
-
-		// 接続ボタン
+		// JoinPanel ボタン
 		if (m_HostSpectatorButton != null)
 		{
 			m_HostSpectatorButton.onClick.AddListener(() => StartAsHost(false));
@@ -150,34 +171,80 @@ public class NetworkConnectManager : MonoBehaviour
 		{
 			m_ClientButton.onClick.AddListener(StartAsClient);
 		}
+
+		if (m_QuitButton != null)
+		{
+			m_QuitButton.onClick.AddListener(QuitGame);
+		}
+
+		// ClientPlayerPanel ボタン
+		if (m_JoinRedTeamButton != null)
+		{
+			m_JoinRedTeamButton.onClick.AddListener(() => RequestSelectTeam(ETeamType.Red));
+		}
+
+		if (m_JoinBlueTeamButton != null)
+		{
+			m_JoinBlueTeamButton.onClick.AddListener(() => RequestSelectTeam(ETeamType.Blue));
+		}
+
+		if (m_LeaveTeamButton != null)
+		{
+			m_LeaveTeamButton.onClick.AddListener(() => RequestSelectTeam(ETeamType.None));
+		}
+
+		if (m_ClientDisconnectButton != null)
+		{
+			m_ClientDisconnectButton.onClick.AddListener(DisconnectClientAndReturnToJoinPanel);
+		}
+
+		// HostPlayerPanel ボタン
+		if (m_StartLobbyButton != null)
+		{
+			m_StartLobbyButton.onClick.AddListener(ProceedToLobbyScene);
+		}
+
+		if (m_HostDisconnectButton != null)
+		{
+			m_HostDisconnectButton.onClick.AddListener(ShutdownHostAndReturnToJoinPanel);
+		}
 	}
 
 	/// <summary>
-	/// JoinPanelの表示/非表示を切り替えます。
+	/// JoinPanelのみを表示し、接続後パネルをすべて非表示にします(初期状態・切断時)。
 	/// </summary>
-	/// <param name="isActive">trueの場合はJoinPanelを表示しメインメニューを非表示</param>
-	public void SetJoinPanelActive(bool isActive)
+	public void ShowJoinPanelOnly()
 	{
-		if (m_JoinPanel != null)
-		{
-			m_JoinPanel.SetActive(isActive);
-		}
+		if (m_JoinPanel != null) m_JoinPanel.SetActive(true);
+		if (m_GeneralPanel != null) m_GeneralPanel.SetActive(false);
+		if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(false);
+		if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(false);
+	}
 
-		if (m_TitleMenuRoot != null)
-		{
-			m_TitleMenuRoot.SetActive(!isActive);
-		}
+	/// <summary>
+	/// 接続成功時にJoinPanelを閉じ、GeneralPanelおよび端末ロールに応じたパネルを表示します。
+	/// </summary>
+	private void ShowConnectedPanels(bool isHost)
+	{
+		if (m_JoinPanel != null) m_JoinPanel.SetActive(false);
+		if (m_GeneralPanel != null) m_GeneralPanel.SetActive(true);
 
-		if (!isActive)
+		if (isHost)
 		{
-			SetStatusMessage("待機中: Host起動またはClient接続を選択してください");
+			if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(true);
+			// 兼任ホストの場合はクライアント用チーム操作パネルも合わせて表示
+			if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(IsPlayerHost);
+		}
+		else
+		{
+			if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(true);
+			if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(false);
 		}
 	}
 
 	/// <summary>
-	/// ホストとしてセッションを開始します。
+	/// ホストとして接続を開始します。
 	/// </summary>
-	/// <param name="asPlayer">trueの場合はプレイヤー兼任(デバッグ用)、falseの場合は観戦専用(本番用)</param>
 	public void StartAsHost(bool asPlayer)
 	{
 		if (NetworkManager.Singleton == null)
@@ -192,22 +259,14 @@ public class NetworkConnectManager : MonoBehaviour
 		ushort port = m_DefaultPort > 0 ? m_DefaultPort : (ushort)7777;
 		if (m_UnityTransport != null)
 		{
-			// "0.0.0.0" をリッスンアドレスに指定し、LAN(192.168.x.x)や別PCからの接続を待ち受け可能にする
 			m_UnityTransport.SetConnectionData("127.0.0.1", port, "0.0.0.0");
 		}
 
 		bool started = NetworkManager.Singleton.StartHost();
-		if (started)
-		{
-			SetStatusMessage("Host起動成功。LobbySceneへ遷移します");
-			if (!string.IsNullOrEmpty(m_LobbySceneName))
-			{
-				NetworkManager.Singleton.SceneManager.LoadScene(m_LobbySceneName, LoadSceneMode.Single);
-			}
-		}
-		else
+		if (!started)
 		{
 			SetStatusMessage("エラー: Host起動に失敗しました");
+			ShowJoinPanelOnly();
 		}
 	}
 
@@ -225,8 +284,15 @@ public class NetworkConnectManager : MonoBehaviour
 		IsPlayerHost = false;
 
 		string targetIp = GetTargetIpAddress();
-		ushort port = m_DefaultPort > 0 ? m_DefaultPort : (ushort)7777;
+		if (!IsValidIpAddress(targetIp))
+		{
+			SetStatusMessage("エラー: IPアドレスの形式が不正です(例: 192.168.1.10)");
+			return;
+		}
 
+		LocalPlayerProfilePreferences.SetTargetIp(targetIp);
+
+		ushort port = m_DefaultPort > 0 ? m_DefaultPort : (ushort)7777;
 		if (m_UnityTransport != null)
 		{
 			m_UnityTransport.SetConnectionData(targetIp, port);
@@ -237,7 +303,14 @@ public class NetworkConnectManager : MonoBehaviour
 		if (!started)
 		{
 			SetStatusMessage("エラー: Client接続開始に失敗しました");
+			ShowJoinPanelOnly();
 		}
+	}
+
+	private bool IsValidIpAddress(string ip)
+	{
+		if (string.IsNullOrWhiteSpace(ip)) return false;
+		return IPAddress.TryParse(ip.Trim(), out _);
 	}
 
 	private string GetTargetIpAddress()
@@ -246,56 +319,277 @@ public class NetworkConnectManager : MonoBehaviour
 		{
 			return m_IpInputField.text.Trim();
 		}
-
-		// 入力が空の場合はローカルホスト(デバッグ用)をデフォルトとする
 		return "127.0.0.1";
 	}
 
-
-	private void HandleClientDisconnect(ulong clientId)
+	private void HandleServerClientConnected(ulong clientId)
 	{
-		// 自機が切断された場合のハンドリング
-		if (NetworkManager.Singleton != null && clientId == NetworkManager.Singleton.LocalClientId)
+		AddPlayer(clientId);
+	}
+
+	private void HandleServerClientDisconnected(ulong clientId)
+	{
+		RemovePlayer(clientId);
+	}
+
+	private void HandleClientDisconnectedFromServer(ulong clientId)
+	{
+		if (!IsServer && NetworkManager.Singleton != null &&
+			(clientId == NetworkManager.Singleton.LocalClientId || clientId == NetworkManager.ServerClientId))
 		{
-			SetStatusMessage("サーバーから切断されました。");
+			DisconnectClientAndReturnToJoinPanel();
+			SetStatusMessage("サーバーとの接続が切断されました。");
 		}
+	}
+
+	private void EnsureSessionDataStore()
+	{
+		if (IsServer && SessionPlayerDataStore.Instance == null)
+		{
+			var storeObj = new GameObject("SessionPlayerDataStore");
+			storeObj.AddComponent<SessionPlayerDataStore>();
+		}
+	}
+
+	private void AddPlayer(ulong clientId)
+	{
+		if (!IsServer) return;
+
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].ClientId == clientId) return;
+		}
+
+		LobbyPlayerData initialData;
+		if (SessionPlayerDataStore.Instance != null)
+		{
+			initialData = SessionPlayerDataStore.Instance.GetOrCreatePlayerData(clientId);
+		}
+		else
+		{
+			FixedString64Bytes defaultName = $"Player {clientId}";
+			initialData = new LobbyPlayerData(clientId, defaultName);
+		}
+
+		m_ConnectedPlayers.Add(initialData);
+	}
+
+	private void RemovePlayer(ulong clientId)
+	{
+		if (!IsServer) return;
+
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].ClientId == clientId)
+			{
+				m_ConnectedPlayers.RemoveAt(i);
+				break;
+			}
+		}
+	}
+
+	private void HandlePlayersListChanged(NetworkListEvent<LobbyPlayerData> changeEvent)
+	{
+		UpdateGeneralPanelUI();
+	}
+
+	private void UpdateGeneralPanelUI()
+	{
+		int count = m_ConnectedPlayers.Count;
+
+		if (m_PlayerCountText != null)
+		{
+			m_PlayerCountText.text = $"参加人数: {count} / 4";
+		}
+
+		if (m_MemberListText != null)
+		{
+			m_MemberInfoBuilder.Clear();
+			m_MemberInfoBuilder.Append("【参加プレイヤー一覧】\n");
+
+			int redCount = 0;
+			int blueCount = 0;
+
+			for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+			{
+				var p = m_ConnectedPlayers[i];
+				string teamStr;
+				if (p.Team == ETeamType.Red)
+				{
+					teamStr = "<color=#FF5555>[RED]</color>";
+					redCount++;
+				}
+				else if (p.Team == ETeamType.Blue)
+				{
+					teamStr = "<color=#5588FF>[BLUE]</color>";
+					blueCount++;
+				}
+				else
+				{
+					teamStr = "[未所属]";
+				}
+
+				m_MemberInfoBuilder.Append($"・#{p.ClientId} {p.PlayerName} : {teamStr}\n");
+			}
+
+			m_MemberInfoBuilder.Append($"\n(Red: {redCount}/2, Blue: {blueCount}/2)");
+			m_MemberListText.text = m_MemberInfoBuilder.ToString();
+		}
+	}
+
+	private void RequestSelectTeam(ETeamType team)
+	{
+		if (NetworkManager.Singleton == null) return;
+		ulong localId = NetworkManager.Singleton.LocalClientId;
+
+		LocalPlayerProfilePreferences.SetAssignedTeam(team);
+
+		if (team == ETeamType.None)
+		{
+			RequestLeaveTeamServerRpc(localId);
+		}
+		else
+		{
+			RequestJoinTeamServerRpc(localId, team);
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestJoinTeamServerRpc(ulong clientId, ETeamType targetTeam)
+	{
+		if (targetTeam == ETeamType.None) return;
+
+		int count = 0;
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].Team == targetTeam) count++;
+		}
+
+		// 各チーム最大2名
+		if (count >= LobbyManager.MaxTeamMembers)
+		{
+			return;
+		}
+
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].ClientId == clientId)
+			{
+				var data = m_ConnectedPlayers[i];
+				data.Team = targetTeam;
+				m_ConnectedPlayers[i] = data;
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+				break;
+			}
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestLeaveTeamServerRpc(ulong clientId)
+	{
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].ClientId == clientId)
+			{
+				var data = m_ConnectedPlayers[i];
+				data.Team = ETeamType.None;
+				m_ConnectedPlayers[i] = data;
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
+				break;
+			}
+		}
+	}
+
+	/// <summary>
+	/// ホスト操作により、全員を一括してLobbySceneへ同期遷移させます。
+	/// </summary>
+	public void ProceedToLobbyScene()
+	{
+		if (!IsServer) return;
+
+		if (SessionPlayerDataStore.Instance != null)
+		{
+			for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+			{
+				SessionPlayerDataStore.Instance.SavePlayerData(m_ConnectedPlayers[i]);
+			}
+		}
+
+		string targetScene = !string.IsNullOrEmpty(m_LobbySceneName) ? m_LobbySceneName : "LobbyScene";
+		if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
+		{
+			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+		}
+	}
+
+	/// <summary>
+	/// クライアントが切断してJoinPanel初期画面へ復帰します。
+	/// </summary>
+	public void DisconnectClientAndReturnToJoinPanel()
+	{
+		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+		{
+			NetworkManager.Singleton.Shutdown();
+		}
+
+		ShowJoinPanelOnly();
+		SetStatusMessage("切断しました。待機画面に戻ります");
+	}
+
+	/// <summary>
+	/// ホストが解散・シャットダウンしてJoinPanel初期画面へ復帰します。
+	/// </summary>
+	public void ShutdownHostAndReturnToJoinPanel()
+	{
+		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+		{
+			NetworkManager.Singleton.Shutdown();
+		}
+
+		ShowJoinPanelOnly();
+		SetStatusMessage("ホストを終了しました。待機画面に戻ります");
 	}
 
 	private void SetStatusMessage(string message)
 	{
 		if (m_StatusText == null) return;
+		m_StatusBuilder.Clear();
+		m_StatusBuilder.Append(message);
+		m_StatusText.text = m_StatusBuilder.ToString();
+	}
 
-		m_StatusStringBuilder.Clear();
-		m_StatusStringBuilder.Append(message);
-		m_StatusText.text = m_StatusStringBuilder.ToString();
+	private string GetLocalIPv4Address()
+	{
+		try
+		{
+			foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+			{
+				if (ni.OperationalStatus != OperationalStatus.Up ||
+					ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+				{
+					continue;
+				}
+
+				foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+				{
+					if (ua.Address.AddressFamily == AddressFamily.InterNetwork &&
+						!IPAddress.IsLoopback(ua.Address))
+					{
+						return ua.Address.ToString();
+					}
+				}
+			}
+		}
+		catch
+		{
+			// 例外発生時はローカルホストへフォールバック
+		}
+
+		return "127.0.0.1";
 	}
 
 	/// <summary>
-	/// 設定画面を開きます。タイトルメニューを非表示にします。
-	/// </summary>
-	public void OpenSettingsPanel()
-	{
-		if (m_TitleMenuRoot != null)
-		{
-			m_TitleMenuRoot.SetActive(false);
-		}
-
-		if (m_SettingsPanel != null)
-		{
-			m_SettingsPanel.Open();
-		}
-	}
-
-	private void HandleSettingsClosed()
-	{
-		if (m_TitleMenuRoot != null)
-		{
-			m_TitleMenuRoot.SetActive(true);
-		}
-	}
-
-	/// <summary>
-	/// ゲームを終了します。Editor環境ではPlayModeを終了します。
+	/// アプリケーションを終了します。
 	/// </summary>
 	public void QuitGame()
 	{

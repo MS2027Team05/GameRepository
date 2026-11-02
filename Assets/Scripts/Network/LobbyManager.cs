@@ -22,6 +22,7 @@ public class LobbyManager : NetworkBehaviour
 	[SerializeField] private string m_LevelDesignSceneName;
 	[FormerlySerializedAs("titleSceneName")]
 	[SerializeField] private string m_TitleSceneName;
+	[SerializeField] private string m_TutorialSceneName;
 
 	[Header("人数設定")]
 	[FormerlySerializedAs("defaultRequiredPlayers")]
@@ -47,6 +48,14 @@ public class LobbyManager : NetworkBehaviour
 	// 現在選択されている遷移先がレベルデザインシーンかどうか
 	private bool m_UseLevelDesignScene;
 	private bool m_IsGameStarting;
+	private bool m_SkipTutorial;
+
+	public bool SkipTutorial
+	{
+		get => m_SkipTutorial;
+		set => m_SkipTutorial = value;
+	}
+	public string TutorialSceneName { get => m_TutorialSceneName; }
 	private bool m_IsHandlingDisconnect;
 	private string m_CachedHostIp = "127.0.0.1";
 	private Coroutine m_DisconnectCoroutine;
@@ -85,8 +94,11 @@ public class LobbyManager : NetworkBehaviour
 
 			m_CachedHostIp = GetLocalIPv4Address();
 
-			// ホスト端末自身の情報を追加
-			AddPlayer(NetworkManager.Singleton.LocalClientId);
+			// プレイヤー兼任ホストの場合のみホスト端末自身をプレイヤーリストに追加
+			if (NetworkConnectManager.IsPlayerHost)
+			{
+				AddPlayer(NetworkManager.Singleton.LocalClientId);
+			}
 		}
 
 		// クライアント側でサーバーが切断された場合の検知
@@ -98,6 +110,9 @@ public class LobbyManager : NetworkBehaviour
 		}
 
 		NotifyDataChanged();
+
+		// ローカル端末に保存されている設定キャッシュをサーバーへ自動送信・適用
+		ApplyLocalCachedProfile();
 	}
 
 	public override void OnNetworkDespawn()
@@ -244,6 +259,33 @@ public class LobbyManager : NetworkBehaviour
 		OnLobbyDataChanged?.Invoke();
 	}
 
+	/// <summary>
+	/// ローカル端末の保存設定(PlayerPrefs)を読み込み、サーバーへ一括送信して反映させます。
+	/// </summary>
+	public void ApplyLocalCachedProfile()
+	{
+		if (NetworkManager.Singleton == null) return;
+
+		// 観戦専用ホスト端末(非プレイヤーホスト)の場合はプレイヤープロファイルを適用しない
+		if (IsServer && !NetworkConnectManager.IsPlayerHost)
+		{
+			return;
+		}
+
+		ulong localClientId = NetworkManager.Singleton.LocalClientId;
+		FixedString64Bytes profileName = $"Player {localClientId}";
+		if (TryGetLocalPlayerData(out var existingLocal) && IsValidPlayerName(existingLocal.PlayerName.ToString()))
+		{
+			profileName = existingLocal.PlayerName;
+		}
+
+		ECharacterType charType = LocalPlayerProfilePreferences.GetCharacterType();
+		EHighlightColor highlightColor = LocalPlayerProfilePreferences.GetHighlightColor();
+		ETeamType assignedTeam = LocalPlayerProfilePreferences.GetAssignedTeam();
+
+		RequestUpdateFullProfileServerRpc(localClientId, profileName, charType, highlightColor, assignedTeam);
+	}
+
 	private void HandleSceneEvent(SceneEvent sceneEvent)
 	{
 		if (sceneEvent == null) return;
@@ -305,6 +347,7 @@ public class LobbyManager : NetworkBehaviour
 	public void JoinTeam(ETeamType team)
 	{
 		if (NetworkManager.Singleton == null) return;
+		LocalPlayerProfilePreferences.SetAssignedTeam(team);
 		RequestJoinTeamServerRpc(NetworkManager.Singleton.LocalClientId, team);
 	}
 
@@ -322,6 +365,7 @@ public class LobbyManager : NetworkBehaviour
 			? ECharacterType.ModelB
 			: ECharacterType.ModelA;
 
+		LocalPlayerProfilePreferences.SetCharacterType(nextChar);
 		RequestUpdateCharacterTypeServerRpc(NetworkManager.Singleton.LocalClientId, nextChar);
 	}
 
@@ -330,6 +374,7 @@ public class LobbyManager : NetworkBehaviour
 		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
 
 		int nextColorIndex = ((int)localPlayer.HighlightColor + 1) % 6;
+		LocalPlayerProfilePreferences.SetHighlightColor((EHighlightColor)nextColorIndex);
 		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, (EHighlightColor)nextColorIndex);
 	}
 
@@ -340,6 +385,7 @@ public class LobbyManager : NetworkBehaviour
 	{
 		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
 
+		LocalPlayerProfilePreferences.SetHighlightColor(highlightColor);
 		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, highlightColor);
 	}
 
@@ -470,6 +516,17 @@ public class LobbyManager : NetworkBehaviour
 		return canStart;
 	}
 
+	private bool IsTeamFull(ETeamType team)
+	{
+		if (team == ETeamType.None) return false;
+		int count = 0;
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].Team == team) count++;
+		}
+		return count >= MaxTeamMembers;
+	}
+
 	// --- RPC通信処理 ---
 
 	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -517,6 +574,42 @@ public class LobbyManager : NetworkBehaviour
 				m_LobbyPlayers[i] = data;
 
 				SessionPlayerDataStore.Instance?.UnseatPlayer(clientId);
+				break;
+			}
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void RequestUpdateFullProfileServerRpc(
+		ulong clientId,
+		FixedString64Bytes profileName,
+		ECharacterType charType,
+		EHighlightColor highlightColor,
+		ETeamType assignedTeam)
+	{
+		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		{
+			if (m_LobbyPlayers[i].ClientId == clientId)
+			{
+				var data = m_LobbyPlayers[i];
+				if (data.IsReady) return;
+
+				string nameStr = profileName.ToString().Trim();
+				if (IsValidPlayerName(nameStr))
+				{
+					data.PlayerName = nameStr;
+				}
+
+				data.CharacterType = charType;
+				data.HighlightColor = highlightColor;
+
+				if (assignedTeam != ETeamType.None && !IsTeamFull(assignedTeam))
+				{
+					data.Team = assignedTeam;
+				}
+
+				m_LobbyPlayers[i] = data;
+				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}
@@ -682,7 +775,16 @@ public class LobbyManager : NetworkBehaviour
 			}
 		}
 
-		string targetScene = m_UseLevelDesignScene ? m_LevelDesignSceneName : m_GameSceneName;
+		string targetScene;
+		if (!m_SkipTutorial && !string.IsNullOrEmpty(m_TutorialSceneName))
+		{
+			targetScene = m_TutorialSceneName;
+		}
+		else
+		{
+			targetScene = m_UseLevelDesignScene ? m_LevelDesignSceneName : m_GameSceneName;
+		}
+
 		if (!string.IsNullOrEmpty(targetScene))
 		{
 			// 全端末(ホストおよび全クライアント)へ即座にロード中UIの表示を通知

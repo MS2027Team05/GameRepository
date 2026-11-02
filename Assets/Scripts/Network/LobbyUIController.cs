@@ -79,6 +79,11 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private TextMeshProUGUI m_DebugTargetSceneText;
 	[SerializeField] private Button m_DebugForceStartButton;
 
+	[Header("展示運用設定")]
+	[Tooltip("展示モード: クライアント画面でチーム選択やIP等の余計な情報を非表示にし、キャラクリに特化させます")]
+	[SerializeField] private bool m_IsExhibitionMode;
+	[SerializeField] private Toggle m_SkipTutorialToggle;
+
 	private readonly StringBuilder m_InfoStringBuilder = new StringBuilder();
 
 	private void Awake()
@@ -90,6 +95,8 @@ public class LobbyUIController : MonoBehaviour
 
 		SetupUIListeners();
 	}
+
+
 
 	private void Start()
 	{
@@ -143,11 +150,19 @@ public class LobbyUIController : MonoBehaviour
 			m_PlayerControlPanel.SetActive(showPlayerControls);
 		}
 
-		// ④ デバッグパネル: サーバーかつデバッグホストかつデバッグビルド/Editorのみ表示
-		bool showDebugPanel = isServer && isPlayerHost && isDebugBuild;
+		// ④ デバッグ操作(ステージ切替・必要人数切替): デバッグ兼任ホスト時のみ表示(本番観戦ホスト時は非表示)
+		bool showDebugControls = isServer && isPlayerHost;
 		if (m_DebugPanel != null)
 		{
-			m_DebugPanel.SetActive(showDebugPanel);
+			m_DebugPanel.SetActive(showDebugControls);
+		}
+		if (m_DebugToggleSceneButton != null)
+		{
+			m_DebugToggleSceneButton.gameObject.SetActive(showDebugControls);
+		}
+		if (m_DebugCycleMinPlayersButton != null)
+		{
+			m_DebugCycleMinPlayersButton.gameObject.SetActive(showDebugControls);
 		}
 
 		// ⑤ ロード中パネル: 初期状態では非表示
@@ -160,6 +175,36 @@ public class LobbyUIController : MonoBehaviour
 		if (m_DisconnectNoticePanel != null)
 		{
 			m_DisconnectNoticePanel.SetActive(false);
+		}
+
+		// ⑦ 展示モード時のクライアントUI整理(チーム固定・ノイズ排除)
+		if (m_IsExhibitionMode && !isServer)
+		{
+			if (m_SharedInfoPanel != null) m_SharedInfoPanel.SetActive(false);
+			if (m_JoinRedTeamButton != null) m_JoinRedTeamButton.gameObject.SetActive(false);
+			if (m_JoinBlueTeamButton != null) m_JoinBlueTeamButton.gameObject.SetActive(false);
+			if (m_LeaveTeamButton != null) m_LeaveTeamButton.gameObject.SetActive(false);
+			if (m_ClientLeaveLobbyButton != null) m_ClientLeaveLobbyButton.gameObject.SetActive(false);
+
+			SetSlotButtonsInteractable(false);
+		}
+	}
+
+	private void SetSlotButtonsInteractable(bool interactable)
+	{
+		if (m_RedSlotButtons != null)
+		{
+			for (int i = 0; i < m_RedSlotButtons.Length; i++)
+			{
+				if (m_RedSlotButtons[i] != null) m_RedSlotButtons[i].interactable = interactable;
+			}
+		}
+		if (m_BlueSlotButtons != null)
+		{
+			for (int i = 0; i < m_BlueSlotButtons.Length; i++)
+			{
+				if (m_BlueSlotButtons[i] != null) m_BlueSlotButtons[i].interactable = interactable;
+			}
 		}
 	}
 
@@ -207,6 +252,17 @@ public class LobbyUIController : MonoBehaviour
 		if (m_LeaveLobbyButton != null)
 		{
 			m_LeaveLobbyButton.onClick.AddListener(() => m_LobbyManager?.LeaveLobby());
+		}
+
+		if (m_SkipTutorialToggle != null)
+		{
+			m_SkipTutorialToggle.onValueChanged.AddListener(isOn =>
+			{
+				if (m_LobbyManager != null)
+				{
+					m_LobbyManager.SkipTutorial = isOn;
+				}
+			});
 		}
 
 		// プレイヤー操作

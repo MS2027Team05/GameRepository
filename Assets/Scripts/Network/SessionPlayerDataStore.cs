@@ -121,6 +121,22 @@ public class SessionPlayerDataStore : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 全プレイヤーの準備完了(IsReady)状態を解除します(ゲーム終了後のホットロード用)。
+	/// </summary>
+	public void ResetAllReadyStates()
+	{
+		if (!IsServer) return;
+
+		var keys = new List<ulong>(m_PlayerDataCache.Keys);
+		foreach (var clientId in keys)
+		{
+			var data = m_PlayerDataCache[clientId];
+			data.IsReady = false;
+			m_PlayerDataCache[clientId] = data;
+		}
+	}
+
+	/// <summary>
 	/// セッション終了時やロビー解散時に全キャッシュをクリアします。
 	/// </summary>
 	public void ClearAll()

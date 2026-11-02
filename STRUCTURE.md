@@ -37,8 +37,13 @@ GameRepository/
 │   │   │   ├── LobbyUIController.cs     # ロビー画面UI表示・端末ロール別パネル制御
 │   │   │   ├── LobbyCharacterDisplayManager.cs # ロビー内3Dモデル表示・台座同期制御
 │   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
+│   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(名前・キャラ・色・固定チーム)永続化・自動反映
 │   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・シーン間データ引継ぎ管理
-│   │   │   └── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
+│   │   │   ├── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
+│   │   │   ├── TitleOverlayController.cs # [EntryPoint] ロビー内タイトル画面演出・個別開始制御
+│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1キー緊急管理・診断メニュー制御
+│   │   │   ├── GameSessionResetCoordinator.cs # [EntryPoint] ゲーム終了時の動的オブジェクト破棄・セッション初期化・ロビー復帰制御
+│   │   │   └── TutorialManager.cs       # [EntryPoint] チーム別チュートリアル進捗監視・同期遷移制御
 │   │   ├── Shader/              # シェーダー連携・描画制御スクリプト
 │   │   │   ├── PlayerOutline.cs         # アウトライン描画制御
 │   │   │   ├── PlayerSilhouette.cs      # チーム別アウトライン・味方/観戦者向け遮蔽シルエット描画制御

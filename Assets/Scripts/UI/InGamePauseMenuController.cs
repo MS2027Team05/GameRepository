@@ -379,6 +379,12 @@ public class InGamePauseMenuController : MonoBehaviour
 			NetworkManager.Singleton.Shutdown();
 		}
 
+		if (GameSessionResetCoordinator.Instance != null)
+		{
+			GameSessionResetCoordinator.Instance.EndGameAndReturnToLobby();
+			return;
+		}
+
 		ReturnToTitleScene();
 	}
 

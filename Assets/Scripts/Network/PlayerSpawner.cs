@@ -118,6 +118,32 @@ public class PlayerSpawner : NetworkBehaviour
 		rotation = isRedTeam ? Quaternion.LookRotation(Vector3.right) : Quaternion.LookRotation(Vector3.left);
 	}
 
+	/// <summary>
+	/// スポーンされた全プレイヤーキャラクターのNetworkObjectを明示的にDespawnし破棄します。
+	/// </summary>
+	public void DespawnAllPlayers()
+	{
+		if (!IsServer) return;
+
+		for (int i = m_SpawnedPlayerObjects.Count - 1; i >= 0; i--)
+		{
+			GameObject player = m_SpawnedPlayerObjects[i];
+			if (player != null)
+			{
+				NetworkObject netObj = player.GetComponent<NetworkObject>();
+				if (netObj != null && netObj.IsSpawned)
+				{
+					netObj.Despawn(true);
+				}
+				else
+				{
+					Destroy(player);
+				}
+			}
+		}
+		m_SpawnedPlayerObjects.Clear();
+	}
+
 	public override void OnNetworkDespawn()
 	{
 		if (IsServer)
