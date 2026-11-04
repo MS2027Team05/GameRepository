@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -57,6 +57,7 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 	[Header("参照")]
 	[SerializeField] private LobbyManager m_LobbyManager;
 	[SerializeField] private PlayerAppearanceCatalog m_AppearanceCatalog;
+	[SerializeField] private LobbyCharacterDisplayManager m_CharacterDisplayManager;
 
 	[Header("開閉トリガーボタン")]
 	[Tooltip("モデル変更ウィンドウを開閉するボタン(ChangeModel)")]
@@ -76,6 +77,14 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 	[Tooltip("有効時、項目を選択した直後に自動でピッカーウィンドウを閉じます")]
 	[SerializeField] private bool m_CloseOnSelect;
 
+	[Header("ローカルプレイヤー追従設定")]
+	[Tooltip("自身の足元に追従移動させるUIルート(ChangeModel, ChangeColor, Pickerをまとめた親RectTransform)")]
+	[SerializeField] private RectTransform m_FollowTargetRoot;
+	[Tooltip("Canvas座標系での追従オフセット(X: 左右オフセット, Y: 上下オフセット)")]
+	[SerializeField] private Vector2 m_FollowCanvasOffset;
+	[Tooltip("Canvas枠外への見切れを防止するための左右余白パディング")]
+	[SerializeField] private float m_CanvasMarginX = 20f;
+
 	[Header("選択肢リスト")]
 	[SerializeField] private ModelOptionItem[] m_ModelOptions;
 	[SerializeField] private ColorOptionItem[] m_ColorOptions;
@@ -83,6 +92,8 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 	private EPickerMode m_CurrentMode;
 	private bool m_CanCustomize;
 	private bool m_IsInitialized;
+	private RectTransform m_CachedCanvasRect;
+	private Camera m_CachedUiCamera;
 
 	/// <summary>
 	/// 初期化処理を行います。LobbyManager参照の注入とイベント登録を実行します。
@@ -97,6 +108,13 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 		{
 			m_LobbyManager = FindFirstObjectByType<LobbyManager>();
 		}
+
+		if (m_CharacterDisplayManager == null)
+		{
+			m_CharacterDisplayManager = FindFirstObjectByType<LobbyCharacterDisplayManager>();
+		}
+
+		ResolveCanvasReferences();
 
 		if (m_IsInitialized)
 		{
@@ -139,6 +157,102 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 
 		UpdateModelOptionsState(localPlayer.CharacterType, canCustomize);
 		UpdateColorOptionsState(localPlayer.HighlightColor, canCustomize);
+		UpdateFollowUIPosition(localPlayer);
+	}
+
+	/// <summary>
+	/// ローカルプレイヤーが立っている台座のワールド座標からScreen座標・Canvasローカル座標へ変換し、UIのX座標を追従配置します。
+	/// </summary>
+	public void UpdateFollowUIPosition(LobbyPlayerData localPlayer)
+	{
+		if (m_FollowTargetRoot == null || localPlayer.Team == ETeamType.None)
+		{
+			return;
+		}
+
+		if (m_CharacterDisplayManager == null)
+		{
+			m_CharacterDisplayManager = FindFirstObjectByType<LobbyCharacterDisplayManager>();
+			if (m_CharacterDisplayManager == null)
+			{
+				return;
+			}
+		}
+
+		if (!m_CharacterDisplayManager.TryGetPlayerSlotWorldPosition(localPlayer.ClientId, out Vector3 worldPos))
+		{
+			return;
+		}
+
+		Camera mainCam = Camera.main;
+		if (mainCam == null)
+		{
+			return;
+		}
+
+		ResolveCanvasReferences();
+		if (m_CachedCanvasRect == null)
+		{
+			return;
+		}
+
+		Vector3 screenPoint = mainCam.WorldToScreenPoint(worldPos);
+		if (screenPoint.z <= 0.001f)
+		{
+			return;
+		}
+
+		if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+			m_CachedCanvasRect,
+			new Vector2(screenPoint.x, screenPoint.y),
+			m_CachedUiCamera,
+			out Vector2 canvasLocalPoint))
+		{
+			// 親RectTransform(m_FollowTargetRoot.parent)のローカル座標に変換するか、
+			// m_FollowTargetRootの親がCanvasルートであればcanvasLocalPointをそのまま利用
+			RectTransform parentRect = m_FollowTargetRoot.parent as RectTransform;
+			Vector2 targetPos;
+
+			if (parentRect != null && parentRect != m_CachedCanvasRect)
+			{
+				Vector3 worldCanvasPoint = m_CachedCanvasRect.TransformPoint(canvasLocalPoint);
+				targetPos = parentRect.InverseTransformPoint(worldCanvasPoint);
+			}
+			else
+			{
+				targetPos = canvasLocalPoint;
+			}
+
+			// X座標を台座に合わせ、Y座標はオフセットまたは元の基準高さを維持
+			float newX = targetPos.x + m_FollowCanvasOffset.x;
+			float newY = m_FollowCanvasOffset.y != 0f ? targetPos.y + m_FollowCanvasOffset.y : m_FollowTargetRoot.anchoredPosition.y;
+
+			// 画面左右端への見切れ防止クランプ
+			float halfCanvasWidth = m_CachedCanvasRect.rect.width * 0.5f;
+			float halfUIWidth = m_FollowTargetRoot.rect.width * 0.5f;
+			float minX = -halfCanvasWidth + halfUIWidth + m_CanvasMarginX;
+			float maxX = halfCanvasWidth - halfUIWidth - m_CanvasMarginX;
+
+			if (minX <= maxX)
+			{
+				newX = Mathf.Clamp(newX, minX, maxX);
+			}
+
+			m_FollowTargetRoot.anchoredPosition = new Vector2(newX, newY);
+		}
+	}
+
+	private void ResolveCanvasReferences()
+	{
+		if (m_CachedCanvasRect == null)
+		{
+			Canvas canvas = GetComponentInParent<Canvas>();
+			if (canvas != null)
+			{
+				m_CachedCanvasRect = canvas.transform as RectTransform;
+				m_CachedUiCamera = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+			}
+		}
 	}
 
 	/// <summary>

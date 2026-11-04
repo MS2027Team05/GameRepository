@@ -213,8 +213,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 5
-  m_fontSizeBase: 5
+  m_fontSize: 3
+  m_fontSizeBase: 3
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -271,7 +271,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.01814
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_LocalPosition.y
@@ -279,7 +279,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.68365
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_LocalRotation.w
@@ -364,7 +364,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.01814
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_LocalPosition.y
@@ -372,7 +372,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.68365
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_LocalRotation.w

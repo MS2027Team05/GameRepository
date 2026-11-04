@@ -39,6 +39,19 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 		public Renderer PedestalRenderer { get => m_PedestalRenderer; }
 
 		/// <summary>
+		/// キャラクターモデルが配置される目標ワールド座標を取得します。
+		/// </summary>
+		public Vector3 GetTargetWorldPosition()
+		{
+			if (m_SpawnPoint == null)
+			{
+				return Vector3.zero;
+			}
+
+			return m_SpawnPoint.position + m_SpawnPoint.TransformDirection(m_PositionOffset);
+		}
+
+		/// <summary>
 		/// スロットのキャラクター表示状態・頭上ネームおよび台座演出を更新します。
 		/// </summary>
 		public void UpdateDisplay(
@@ -46,7 +59,8 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 			LobbyPlayerData playerData,
 			LobbyPlayerDisplay displayPrefab,
 			Color pedestalEmissionColor,
-			Color nameTextColor)
+			Color nameTextColor,
+			Transform parentTransform = null)
 		{
 			if (m_PedestalPropertyBlock == null)
 			{
@@ -64,7 +78,7 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 				return;
 			}
 
-			LobbyPlayerDisplay display = GetOrInstantiateDisplay(displayPrefab);
+			LobbyPlayerDisplay display = GetOrInstantiateDisplay(displayPrefab, parentTransform);
 			if (display == null)
 			{
 				return;
@@ -111,7 +125,11 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 			m_PedestalRenderer.SetPropertyBlock(m_PedestalPropertyBlock);
 		}
 
-		private LobbyPlayerDisplay GetOrInstantiateDisplay(LobbyPlayerDisplay displayPrefab)
+		/// <summary>
+		/// スロットに紐づくキャラクター表示用Prefabインスタンスを取得または生成します。
+		/// 親TransformとしてCharacterStand(localScale 1,1,1)を指定し、非均等スケールによる歪みを防止します。
+		/// </summary>
+		private LobbyPlayerDisplay GetOrInstantiateDisplay(LobbyPlayerDisplay displayPrefab, Transform parentTransform)
 		{
 			if (m_SpawnPoint == null)
 			{
@@ -122,8 +140,8 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 			{
 				Vector3 targetPos = m_SpawnPoint.position + m_SpawnPoint.TransformDirection(m_PositionOffset);
 				Quaternion targetRot = m_SpawnPoint.rotation * Quaternion.Euler(m_RotationOffset);
-				m_DisplayInstance = Instantiate(displayPrefab, targetPos, targetRot);
-				m_DisplayInstance.transform.SetParent(m_SpawnPoint, true);
+				Transform parent = parentTransform != null ? parentTransform : m_SpawnPoint;
+				m_DisplayInstance = Instantiate(displayPrefab, targetPos, targetRot, parent);
 			}
 
 			return m_DisplayInstance;
@@ -244,8 +262,51 @@ public class LobbyCharacterDisplayManager : MonoBehaviour
 				emissionColor = previewColor;
 			}
 
-			slots[i].UpdateDisplay(isOccupied, data, m_DisplayPlayerPrefab, emissionColor, nameTextColor);
+			slots[i].UpdateDisplay(isOccupied, data, m_DisplayPlayerPrefab, emissionColor, nameTextColor, transform);
 		}
+	}
+
+	/// <summary>
+	/// 指定したクライアントIDのプレイヤーが配置されている台座スロットの目標ワールド座標を取得します。
+	/// </summary>
+	/// <param name="clientId">対象クライアントID</param>
+	/// <param name="worldPosition">台座スロットの目標ワールド座標</param>
+	/// <returns>スロットが見つかった場合true</returns>
+	public bool TryGetPlayerSlotWorldPosition(ulong clientId, out Vector3 worldPosition)
+	{
+		worldPosition = Vector3.zero;
+
+		if (m_RedSlots != null)
+		{
+			for (int i = 0; i < m_CachedRedPlayers.Count && i < m_RedSlots.Length; i++)
+			{
+				if (m_CachedRedPlayers[i].ClientId == clientId)
+				{
+					if (m_RedSlots[i] != null)
+					{
+						worldPosition = m_RedSlots[i].GetTargetWorldPosition();
+						return true;
+					}
+				}
+			}
+		}
+
+		if (m_BlueSlots != null)
+		{
+			for (int i = 0; i < m_CachedBluePlayers.Count && i < m_BlueSlots.Length; i++)
+			{
+				if (m_CachedBluePlayers[i].ClientId == clientId)
+				{
+					if (m_BlueSlots[i] != null)
+					{
+						worldPosition = m_BlueSlots[i].GetTargetWorldPosition();
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
 	}
 
 	private void CleanupAllSlots()
