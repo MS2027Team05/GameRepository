@@ -1321,7 +1321,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7759699945475106358, guid: c53e738407b79e64497117c383e60fd9, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.00000786805
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7759699945475106358, guid: c53e738407b79e64497117c383e60fd9, type: 3}
       propertyPath: m_LocalPosition.y
@@ -9897,6 +9897,10 @@ PrefabInstance:
     - target: {fileID: 8884315457708879718, guid: 813441407447bc942926eea402d7a67c, type: 3}
       propertyPath: m_Name
       value: DisconnectPanel
+      objectReference: {fileID: 0}
+    - target: {fileID: 8884315457708879718, guid: 813441407447bc942926eea402d7a67c, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
