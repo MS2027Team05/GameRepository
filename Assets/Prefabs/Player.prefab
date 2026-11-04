@@ -1225,6 +1225,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d6f8175cd5d17044a8ff22eeed86e96, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAppearance
+  m_AppearanceCatalog: {fileID: 11400000, guid: 63c00479311eda84194acbf4acda3d83, type: 2}
   m_ManModel: {fileID: 6057017828986958686}
   m_WomanModel: {fileID: 7871783815013169394}
   m_ManRenderers:
@@ -1235,9 +1236,9 @@ MonoBehaviour:
   - {fileID: 4237472994145664109}
   - {fileID: 287789537841788865}
   m_UseDebugAppearance: 1
-  m_DebugGender: 0
-  m_DebugMaterial: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
-  m_DebugTeamMaterial: {fileID: 2100000, guid: 3f4aba630f13053419b234b7768eca15, type: 2}
+  m_DebugCharacterType: 0
+  m_DebugColor: 0
+  m_DebugTeam: 0
 --- !u!114 &4402567928680259289
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2476,7 +2477,7 @@ PrefabInstance:
     - target: {fileID: 8144208826691130677, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
+      objectReference: {fileID: 2100000, guid: a3c003ee9858a4a43a0f095db30e7cd7, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

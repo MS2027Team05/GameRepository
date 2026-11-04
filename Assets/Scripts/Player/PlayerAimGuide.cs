@@ -138,10 +138,25 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	}
 
 	/// <summary>
+	/// 外見変更後にプレイヤーの本体マテリアルを再キャッシュし、半透明用マテリアルを再生成します。
+	/// </summary>
+	public void RefreshPlayerMaterials()
+	{
+		CachePlayerMaterials();
+
+		if (m_IsAiming)
+		{
+			SetPlayerTransparent(true);
+		}
+	}
+
+	/// <summary>
 	/// Playerの見た目用マテリアルを保存し、半透明用の複製を作成します。
 	/// </summary>
 	private void CachePlayerMaterials()
 	{
+		DestroyTransparentMaterials();
+
 		Renderer[] allRenderers = GetComponentsInChildren<Renderer>(true);
 		List<Renderer> targetRenderers = new List<Renderer>();
 
@@ -1099,7 +1114,14 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 			m_AimFloatTween.Kill();
 		}
 
-		// 実行時に生成した半透明用マテリアルを破棄
+		DestroyTransparentMaterials();
+	}
+
+	/// <summary>
+	/// 実行時に生成した半透明用マテリアルを破棄します。
+	/// </summary>
+	private void DestroyTransparentMaterials()
+	{
 		if (m_TransparentMaterials == null)
 		{
 			return;
@@ -1107,6 +1129,11 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		foreach (Material[] materials in m_TransparentMaterials)
 		{
+			if (materials == null)
+			{
+				continue;
+			}
+
 			foreach (Material material in materials)
 			{
 				if (material != null)
@@ -1115,5 +1142,7 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 				}
 			}
 		}
+
+		m_TransparentMaterials = null;
 	}
 }

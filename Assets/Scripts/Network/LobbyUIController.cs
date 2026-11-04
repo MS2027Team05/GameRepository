@@ -1,14 +1,11 @@
-﻿using System;
-using System.Text;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
 /// ロビー画面のUI表示およびパネル切り替え制御を担当するクラス。
-/// キャラクリUI(モデル・カラー・名前・READY)、タイトル復帰切り替え、
+/// キャラクリUI(名前・READY・外見ピッカー連携)、タイトル復帰切り替え、
 /// ホスト操作、デバッグ操作、および3D台座・モデルオブジェクトの表示/非表示を一元管理します。
 /// </summary>
 public class LobbyUIController : MonoBehaviour
@@ -16,6 +13,7 @@ public class LobbyUIController : MonoBehaviour
 	[Header("マネージャー・コントローラー参照")]
 	[SerializeField] private LobbyManager m_LobbyManager;
 	[SerializeField] private TitleOverlayController m_TitleOverlay;
+	[SerializeField] private LobbyAppearancePickerUI m_AppearancePickerUI;
 
 	[Header("パネルルート参照")]
 	[SerializeField] private GameObject m_HostControlPanel;
@@ -28,36 +26,12 @@ public class LobbyUIController : MonoBehaviour
 	[Tooltip("ロビー内の3Dキャラクターモデルおよび台座(円柱)の親オブジェクト")]
 	[SerializeField] private GameObject m_CharacterDisplayRoot;
 
-	[Header("プレイヤー操作UI参照(キャラクリ特化)")]
+	[Header("プレイヤー操作UI参照")]
 	[SerializeField] private TMP_InputField m_PlayerNameInput;
-	[SerializeField] private Button m_ToggleCharacterButton;
-	[SerializeField] private TextMeshProUGUI m_CharacterText;
-	[SerializeField] private Button m_CycleColorButton;
-	[SerializeField] private TextMeshProUGUI m_ColorText;
 	[SerializeField] private Button m_ReadyButton;
 	[SerializeField] private TextMeshProUGUI m_ReadyButtonText;
 	[SerializeField] private TextMeshProUGUI m_TeamBadgeText;
 	[SerializeField] private Button m_BackToTitleButton;
-
-	[Serializable]
-	public struct ColorPaletteItem
-	{
-		[Tooltip("対象のハイライトカラー種別")]
-		[FormerlySerializedAs("ColorType")]
-		public EHighlightColor m_ColorType;
-		[Tooltip("クリック可能なボタン")]
-		[FormerlySerializedAs("Button")]
-		public Button m_Button;
-		[Tooltip("カラープレビュー用のImage(任意)")]
-		[FormerlySerializedAs("ColorImage")]
-		public Image m_ColorImage;
-		[Tooltip("現在選択中を示す枠線やアイコン(任意)")]
-		[FormerlySerializedAs("SelectedIndicator")]
-		public GameObject m_SelectedIndicator;
-	}
-
-	[Header("サブカラーパレットUI参照")]
-	[SerializeField] private ColorPaletteItem[] m_ColorPaletteItems;
 
 	[Header("ホスト操作UI参照")]
 	[SerializeField] private Button m_StartGameButton;
@@ -71,17 +45,26 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private TextMeshProUGUI m_DebugTargetSceneText;
 	[SerializeField] private Button m_DebugForceStartButton;
 
-	private readonly StringBuilder m_InfoStringBuilder = new StringBuilder();
-
 	private void Awake()
 	{
 		if (m_LobbyManager == null)
 		{
 			m_LobbyManager = FindFirstObjectByType<LobbyManager>();
 		}
+
 		if (m_TitleOverlay == null)
 		{
 			m_TitleOverlay = FindFirstObjectByType<TitleOverlayController>();
+		}
+
+		if (m_AppearancePickerUI == null)
+		{
+			m_AppearancePickerUI = GetComponentInChildren<LobbyAppearancePickerUI>(true);
+		}
+
+		if (m_AppearancePickerUI != null)
+		{
+			m_AppearancePickerUI.Initialize(m_LobbyManager);
 		}
 
 		SetupUIListeners();
@@ -132,30 +115,60 @@ public class LobbyUIController : MonoBehaviour
 		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
 		bool isTitleActive = m_TitleOverlay != null && m_TitleOverlay.IsTitleActive;
 
-		// ① ホスト操作パネル: サーバー(Host)かつタイトル画面非表示時のみ表示
+		// 1. ホスト操作パネル: サーバー(Host)かつタイトル画面非表示時のみ表示
 		if (m_HostControlPanel != null)
 		{
 			m_HostControlPanel.SetActive(isServer && !isTitleActive);
 		}
 
-		// ② ロード中パネル・切断通知パネル: 初期状態では非表示
-		if (m_LoadingPanel != null) m_LoadingPanel.SetActive(false);
-		if (m_DisconnectNoticePanel != null) m_DisconnectNoticePanel.SetActive(false);
+		// 2. ロード中パネル・切断通知パネル: 初期状態では非表示
+		if (m_LoadingPanel != null)
+		{
+			m_LoadingPanel.SetActive(false);
+		}
 
-		// ③ プレイヤー操作・キャラクリ3D・デバッグの表示制御
+		if (m_DisconnectNoticePanel != null)
+		{
+			m_DisconnectNoticePanel.SetActive(false);
+		}
+
+		// 3. プレイヤー操作・キャラクリ3D・デバッグの表示制御
 		if (isServer && !isPlayerHost)
 		{
 			// 本番観戦ホスト: プレイヤー操作UIおよびデバッグUIは非表示、3D台座・モデルはタイトル非表示時に表示
-			if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(false);
-			if (m_DebugPanel != null) m_DebugPanel.SetActive(false);
-			if (m_CharacterDisplayRoot != null) m_CharacterDisplayRoot.SetActive(!isTitleActive);
+			if (m_PlayerControlPanel != null)
+			{
+				m_PlayerControlPanel.SetActive(false);
+			}
+
+			if (m_DebugPanel != null)
+			{
+				m_DebugPanel.SetActive(false);
+			}
+
+			if (m_CharacterDisplayRoot != null)
+			{
+				m_CharacterDisplayRoot.SetActive(!isTitleActive);
+			}
 		}
 		else
 		{
 			// クライアントおよび兼任ホスト: タイトル表示中はキャラクリUI、3D表示、デバッグパネルをすべて非表示
 			bool showControls = !isTitleActive;
-			if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(showControls);
-			if (m_CharacterDisplayRoot != null) m_CharacterDisplayRoot.SetActive(showControls);
+			if (m_PlayerControlPanel != null)
+			{
+				m_PlayerControlPanel.SetActive(showControls);
+			}
+
+			if (m_CharacterDisplayRoot != null)
+			{
+				m_CharacterDisplayRoot.SetActive(showControls);
+			}
+
+			if (!showControls && m_AppearancePickerUI != null)
+			{
+				m_AppearancePickerUI.ClosePicker();
+			}
 
 			// デバッグパネルは兼任ホストかつタイトル解除時のみ表示
 			bool showDebugControls = isServer && isPlayerHost && !isTitleActive;
@@ -183,7 +196,10 @@ public class LobbyUIController : MonoBehaviour
 		if (!isServer || isPlayerHost)
 		{
 			// クライアントまたは兼任ホストならキャラクリUIを表示
-			if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(true);
+			if (m_PlayerControlPanel != null)
+			{
+				m_PlayerControlPanel.SetActive(true);
+			}
 
 			// 兼任ホストの場合はデバッグパネルも合わせて表示
 			if (isServer && isPlayerHost)
@@ -191,12 +207,19 @@ public class LobbyUIController : MonoBehaviour
 				SetDebugControlsActive(true);
 			}
 		}
+
+		RefreshAllUI();
 	}
 
 	private void HandleTitleShown()
 	{
 		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
 		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
+
+		if (m_AppearancePickerUI != null)
+		{
+			m_AppearancePickerUI.ClosePicker();
+		}
 
 		// タイトルが表示されている間はホスト用パネルを非表示
 		if (m_HostControlPanel != null)
@@ -213,16 +236,31 @@ public class LobbyUIController : MonoBehaviour
 		if (!isServer || isPlayerHost)
 		{
 			// キャラクリUI、デバッグパネルを非表示
-			if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(false);
+			if (m_PlayerControlPanel != null)
+			{
+				m_PlayerControlPanel.SetActive(false);
+			}
+
 			SetDebugControlsActive(false);
 		}
 	}
 
 	private void SetDebugControlsActive(bool active)
 	{
-		if (m_DebugPanel != null) m_DebugPanel.SetActive(active);
-		if (m_DebugToggleSceneButton != null) m_DebugToggleSceneButton.gameObject.SetActive(active);
-		if (m_DebugCycleMinPlayersButton != null) m_DebugCycleMinPlayersButton.gameObject.SetActive(active);
+		if (m_DebugPanel != null)
+		{
+			m_DebugPanel.SetActive(active);
+		}
+
+		if (m_DebugToggleSceneButton != null)
+		{
+			m_DebugToggleSceneButton.gameObject.SetActive(active);
+		}
+
+		if (m_DebugCycleMinPlayersButton != null)
+		{
+			m_DebugCycleMinPlayersButton.gameObject.SetActive(active);
+		}
 	}
 
 	/// <summary>
@@ -230,18 +268,26 @@ public class LobbyUIController : MonoBehaviour
 	/// </summary>
 	public void ReturnToTitleOverlay()
 	{
+		if (m_AppearancePickerUI != null)
+		{
+			m_AppearancePickerUI.ClosePicker();
+		}
+
 		if (m_HostControlPanel != null)
 		{
 			m_HostControlPanel.SetActive(false);
 		}
+
 		if (m_PlayerControlPanel != null)
 		{
 			m_PlayerControlPanel.SetActive(false);
 		}
+
 		if (m_CharacterDisplayRoot != null)
 		{
 			m_CharacterDisplayRoot.SetActive(false);
 		}
+
 		SetDebugControlsActive(false);
 
 		if (m_TitleOverlay != null)
@@ -252,10 +298,30 @@ public class LobbyUIController : MonoBehaviour
 
 	private void ShowLoadingPanel()
 	{
-		if (m_HostControlPanel != null) m_HostControlPanel.SetActive(false);
-		if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(false);
-		if (m_DebugPanel != null) m_DebugPanel.SetActive(false);
-		if (m_CharacterDisplayRoot != null) m_CharacterDisplayRoot.SetActive(false);
+		if (m_AppearancePickerUI != null)
+		{
+			m_AppearancePickerUI.ClosePicker();
+		}
+
+		if (m_HostControlPanel != null)
+		{
+			m_HostControlPanel.SetActive(false);
+		}
+
+		if (m_PlayerControlPanel != null)
+		{
+			m_PlayerControlPanel.SetActive(false);
+		}
+
+		if (m_DebugPanel != null)
+		{
+			m_DebugPanel.SetActive(false);
+		}
+
+		if (m_CharacterDisplayRoot != null)
+		{
+			m_CharacterDisplayRoot.SetActive(false);
+		}
 
 		if (m_LoadingPanel != null)
 		{
@@ -265,11 +331,35 @@ public class LobbyUIController : MonoBehaviour
 
 	private void ShowDisconnectNoticePanel()
 	{
-		if (m_HostControlPanel != null) m_HostControlPanel.SetActive(false);
-		if (m_PlayerControlPanel != null) m_PlayerControlPanel.SetActive(false);
-		if (m_DebugPanel != null) m_DebugPanel.SetActive(false);
-		if (m_LoadingPanel != null) m_LoadingPanel.SetActive(false);
-		if (m_CharacterDisplayRoot != null) m_CharacterDisplayRoot.SetActive(false);
+		if (m_AppearancePickerUI != null)
+		{
+			m_AppearancePickerUI.ClosePicker();
+		}
+
+		if (m_HostControlPanel != null)
+		{
+			m_HostControlPanel.SetActive(false);
+		}
+
+		if (m_PlayerControlPanel != null)
+		{
+			m_PlayerControlPanel.SetActive(false);
+		}
+
+		if (m_DebugPanel != null)
+		{
+			m_DebugPanel.SetActive(false);
+		}
+
+		if (m_LoadingPanel != null)
+		{
+			m_LoadingPanel.SetActive(false);
+		}
+
+		if (m_CharacterDisplayRoot != null)
+		{
+			m_CharacterDisplayRoot.SetActive(false);
+		}
 
 		if (m_DisconnectNoticePanel != null)
 		{
@@ -301,33 +391,11 @@ public class LobbyUIController : MonoBehaviour
 			});
 		}
 
-		// プレイヤー操作(キャラクリ特化)
+		// プレイヤー操作
 		if (m_PlayerNameInput != null)
 		{
-			m_PlayerNameInput.characterLimit = 12;
-			m_PlayerNameInput.onEndEdit.AddListener(name => m_LobbyManager?.SetPlayerName(name));
-		}
-
-		if (m_ToggleCharacterButton != null)
-		{
-			m_ToggleCharacterButton.onClick.AddListener(() => m_LobbyManager?.ToggleCharacter());
-		}
-
-		if (m_CycleColorButton != null)
-		{
-			m_CycleColorButton.onClick.AddListener(() => m_LobbyManager?.CycleHighlightColor());
-		}
-
-		if (m_ColorPaletteItems != null)
-		{
-			for (int i = 0; i < m_ColorPaletteItems.Length; i++)
-			{
-				var item = m_ColorPaletteItems[i];
-				if (item.m_Button != null)
-				{
-					item.m_Button.onClick.AddListener(() => m_LobbyManager?.SetHighlightColor(item.m_ColorType));
-				}
-			}
+			m_PlayerNameInput.characterLimit = LobbyManager.MaxPlayerNameLength;
+			m_PlayerNameInput.onEndEdit.AddListener(playerName => m_LobbyManager?.SetPlayerName(playerName));
 		}
 
 		if (m_ReadyButton != null)
@@ -359,7 +427,10 @@ public class LobbyUIController : MonoBehaviour
 
 	private void RefreshAllUI()
 	{
-		if (m_LobbyManager == null || NetworkManager.Singleton == null) return;
+		if (m_LobbyManager == null || NetworkManager.Singleton == null)
+		{
+			return;
+		}
 
 		UpdatePlayerControls();
 		UpdateHostControls();
@@ -368,10 +439,14 @@ public class LobbyUIController : MonoBehaviour
 
 	private void UpdatePlayerControls()
 	{
-		if (!m_LobbyManager.TryGetLocalPlayerData(out var localPlayer)) return;
+		if (!m_LobbyManager.TryGetLocalPlayerData(out var localPlayer))
+		{
+			return;
+		}
 
 		bool isSeated = localPlayer.Team != ETeamType.None;
 		bool isReady = localPlayer.IsReady;
+		bool canCustomize = isSeated && !isReady;
 
 		if (m_PlayerNameInput != null)
 		{
@@ -382,40 +457,9 @@ public class LobbyUIController : MonoBehaviour
 			}
 		}
 
-		if (m_ToggleCharacterButton != null)
+		if (m_AppearancePickerUI != null)
 		{
-			m_ToggleCharacterButton.interactable = !isReady && isSeated;
-		}
-
-		if (m_CharacterText != null)
-		{
-			m_CharacterText.text = $"モデル: {localPlayer.CharacterType}";
-		}
-
-		if (m_CycleColorButton != null)
-		{
-			m_CycleColorButton.interactable = !isReady && isSeated;
-		}
-
-		if (m_ColorText != null)
-		{
-			m_ColorText.text = $"カラー: {localPlayer.HighlightColor}";
-		}
-
-		if (m_ColorPaletteItems != null)
-		{
-			for (int i = 0; i < m_ColorPaletteItems.Length; i++)
-			{
-				var item = m_ColorPaletteItems[i];
-				if (item.m_Button != null)
-				{
-					item.m_Button.interactable = !isReady && isSeated;
-				}
-				if (item.m_SelectedIndicator != null)
-				{
-					item.m_SelectedIndicator.SetActive(isSeated && item.m_ColorType == localPlayer.HighlightColor);
-				}
-			}
+			m_AppearancePickerUI.RefreshState(localPlayer, canCustomize);
 		}
 
 		if (m_ReadyButton != null)
@@ -448,7 +492,10 @@ public class LobbyUIController : MonoBehaviour
 	private void UpdateHostControls()
 	{
 		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
-		if (!isServer) return;
+		if (!isServer)
+		{
+			return;
+		}
 
 		bool canStart = m_LobbyManager.CheckCanStartGame(out _);
 

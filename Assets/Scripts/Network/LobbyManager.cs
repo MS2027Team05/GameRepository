@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -33,7 +33,13 @@ public class LobbyManager : NetworkBehaviour
 	[SerializeField] private float m_DisconnectReturnDelay;
 
 	// 各チームの最大人数(2vs2)
-	public const int MaxTeamMembers = 2;
+	private const int m_MaxTeamMembers = 2;
+	private const int m_MaxPlayerNameLength = 12;
+	private const int m_MaxPlayerNameBytes = 60;
+
+	public static int MaxTeamMembers { get => m_MaxTeamMembers; }
+	public static int MaxPlayerNameLength { get => m_MaxPlayerNameLength; }
+	public static int MaxPlayerNameBytes { get => m_MaxPlayerNameBytes; }
 
 	// ロビーデータや開始条件が変化した際に発火するイベント
 	public event Action OnLobbyDataChanged;
@@ -55,6 +61,7 @@ public class LobbyManager : NetworkBehaviour
 		get => m_SkipTutorial;
 		set => m_SkipTutorial = value;
 	}
+
 	public string TutorialSceneName { get => m_TutorialSceneName; }
 	private bool m_IsHandlingDisconnect;
 	private string m_CachedHostIp = "127.0.0.1";
@@ -72,8 +79,8 @@ public class LobbyManager : NetworkBehaviour
 	public string TargetSceneName
 	{
 		get => m_UseLevelDesignScene
-		? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
-		: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
+			? (!string.IsNullOrEmpty(m_LevelDesignSceneName) ? m_LevelDesignSceneName : "未設定(LevelDesign)")
+			: (!string.IsNullOrEmpty(m_GameSceneName) ? m_GameSceneName : "未設定(GameScene)");
 	}
 
 	private void Awake()
@@ -94,10 +101,19 @@ public class LobbyManager : NetworkBehaviour
 
 			m_CachedHostIp = GetLocalIPv4Address();
 
-			// プレイヤー兼任ホストの場合のみホスト端末自身をプレイヤーリストに追加
-			if (NetworkConnectManager.IsPlayerHost)
+			// タイトルシーン等で既に接続済みの全クライアントをロビーリストへ初期登録
+			IReadOnlyList<ulong> connectedIds = NetworkManager.Singleton.ConnectedClientsIds;
+			for (int i = 0; i < connectedIds.Count; i++)
 			{
-				AddPlayer(NetworkManager.Singleton.LocalClientId);
+				ulong clientId = connectedIds[i];
+
+				// 観戦専用ホスト(非プレイヤーホスト)の場合はホスト端末自身を除外
+				if (clientId == NetworkManager.ServerClientId && !NetworkConnectManager.IsPlayerHost)
+				{
+					continue;
+				}
+
+				AddPlayer(clientId);
 			}
 		}
 
@@ -166,6 +182,11 @@ public class LobbyManager : NetworkBehaviour
 
 	private void HandleClientConnected(ulong clientId)
 	{
+		if (clientId == NetworkManager.ServerClientId && !NetworkConnectManager.IsPlayerHost)
+		{
+			return;
+		}
+
 		AddPlayer(clientId);
 		NotifyDataChanged();
 	}
@@ -178,7 +199,10 @@ public class LobbyManager : NetworkBehaviour
 
 	private void AddPlayer(ulong clientId)
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
@@ -204,7 +228,10 @@ public class LobbyManager : NetworkBehaviour
 
 	private void RemovePlayer(ulong clientId)
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
@@ -264,7 +291,10 @@ public class LobbyManager : NetworkBehaviour
 	/// </summary>
 	public void ApplyLocalCachedProfile()
 	{
-		if (NetworkManager.Singleton == null) return;
+		if (NetworkManager.Singleton == null)
+		{
+			return;
+		}
 
 		// 観戦専用ホスト端末(非プレイヤーホスト)の場合はプレイヤープロファイルを適用しない
 		if (IsServer && !NetworkConnectManager.IsPlayerHost)
@@ -273,22 +303,19 @@ public class LobbyManager : NetworkBehaviour
 		}
 
 		ulong localClientId = NetworkManager.Singleton.LocalClientId;
-		FixedString64Bytes profileName = $"Player {localClientId}";
-		if (TryGetLocalPlayerData(out var existingLocal) && IsValidPlayerName(existingLocal.PlayerName.ToString()))
-		{
-			profileName = existingLocal.PlayerName;
-		}
-
 		ECharacterType charType = LocalPlayerProfilePreferences.GetCharacterType();
 		EHighlightColor highlightColor = LocalPlayerProfilePreferences.GetHighlightColor();
 		ETeamType assignedTeam = LocalPlayerProfilePreferences.GetAssignedTeam();
 
-		RequestUpdateFullProfileServerRpc(localClientId, profileName, charType, highlightColor, assignedTeam);
+		RequestUpdateCachedAppearanceServerRpc(localClientId, charType, highlightColor, assignedTeam);
 	}
 
 	private void HandleSceneEvent(SceneEvent sceneEvent)
 	{
-		if (sceneEvent == null) return;
+		if (sceneEvent == null)
+		{
+			return;
+		}
 
 		// シーンロード開始イベントを検知(ホスト・クライアント双方で受信)
 		if (sceneEvent.SceneEventType == SceneEventType.Load)
@@ -313,25 +340,33 @@ public class LobbyManager : NetworkBehaviour
 		NotifyGameSceneLoadStarted();
 	}
 
-	public const int MaxPlayerNameLength = 12;
-	public const int MaxPlayerNameBytes = 60;
-
 	/// <summary>
 	/// プレイヤーネームが有効な形式(1文字以上、最大文字数以内、UTF-8バイト数上限以内、空白のみでない)かを判定します。
 	/// </summary>
 	public static bool IsValidPlayerName(string name)
 	{
-		if (string.IsNullOrWhiteSpace(name)) return false;
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			return false;
+		}
+
 		string trimmed = name.Trim();
-		if (trimmed.Length < 1 || trimmed.Length > MaxPlayerNameLength) return false;
-		return System.Text.Encoding.UTF8.GetByteCount(trimmed) <= MaxPlayerNameBytes;
+		if (trimmed.Length < 1 || trimmed.Length > m_MaxPlayerNameLength)
+		{
+			return false;
+		}
+
+		return System.Text.Encoding.UTF8.GetByteCount(trimmed) <= m_MaxPlayerNameBytes;
 	}
 
 	// --- 外部公開API (UIControllerから呼び出し) ---
 
 	public void SetPlayerName(string newName)
 	{
-		if (NetworkManager.Singleton == null) return;
+		if (NetworkManager.Singleton == null)
+		{
+			return;
+		}
 
 		string trimmed = newName != null ? newName.Trim() : string.Empty;
 		if (!IsValidPlayerName(trimmed))
@@ -346,44 +381,48 @@ public class LobbyManager : NetworkBehaviour
 
 	public void JoinTeam(ETeamType team)
 	{
-		if (NetworkManager.Singleton == null) return;
+		if (NetworkManager.Singleton == null)
+		{
+			return;
+		}
+
 		LocalPlayerProfilePreferences.SetAssignedTeam(team);
 		RequestJoinTeamServerRpc(NetworkManager.Singleton.LocalClientId, team);
 	}
 
 	public void LeaveTeam()
 	{
-		if (NetworkManager.Singleton == null) return;
+		if (NetworkManager.Singleton == null)
+		{
+			return;
+		}
+
 		RequestLeaveTeamServerRpc(NetworkManager.Singleton.LocalClientId);
 	}
 
-	public void ToggleCharacter()
+	/// <summary>
+	/// 指定したキャラクターモデル種別(男/女)をローカルプレイヤーに設定します。
+	/// </summary>
+	public void SetCharacterType(ECharacterType characterType)
 	{
-		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
+		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null)
+		{
+			return;
+		}
 
-		var nextChar = localPlayer.CharacterType == ECharacterType.ModelA
-			? ECharacterType.ModelB
-			: ECharacterType.ModelA;
-
-		LocalPlayerProfilePreferences.SetCharacterType(nextChar);
-		RequestUpdateCharacterTypeServerRpc(NetworkManager.Singleton.LocalClientId, nextChar);
-	}
-
-	public void CycleHighlightColor()
-	{
-		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
-
-		int nextColorIndex = ((int)localPlayer.HighlightColor + 1) % 6;
-		LocalPlayerProfilePreferences.SetHighlightColor((EHighlightColor)nextColorIndex);
-		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, (EHighlightColor)nextColorIndex);
+		LocalPlayerProfilePreferences.SetCharacterType(characterType);
+		RequestUpdateCharacterTypeServerRpc(NetworkManager.Singleton.LocalClientId, characterType);
 	}
 
 	/// <summary>
-	/// 指定したハイライトカラーをローカルプレイヤーに設定します。
+	/// 指定したカラーをローカルプレイヤーに設定します。
 	/// </summary>
 	public void SetHighlightColor(EHighlightColor highlightColor)
 	{
-		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null) return;
+		if (!TryGetLocalPlayerData(out var localPlayer) || localPlayer.IsReady || NetworkManager.Singleton == null)
+		{
+			return;
+		}
 
 		LocalPlayerProfilePreferences.SetHighlightColor(highlightColor);
 		RequestUpdateHighlightColorServerRpc(NetworkManager.Singleton.LocalClientId, highlightColor);
@@ -391,8 +430,15 @@ public class LobbyManager : NetworkBehaviour
 
 	public void ToggleReady()
 	{
-		if (!TryGetLocalPlayerData(out var localPlayer) || NetworkManager.Singleton == null) return;
-		if (localPlayer.Team == ETeamType.None) return;
+		if (!TryGetLocalPlayerData(out var localPlayer) || NetworkManager.Singleton == null)
+		{
+			return;
+		}
+
+		if (localPlayer.Team == ETeamType.None)
+		{
+			return;
+		}
 
 		// プレイヤーネームが不正な場合はReady状態への移行をブロック
 		if (!IsValidPlayerName(localPlayer.PlayerName.ToString()))
@@ -405,18 +451,33 @@ public class LobbyManager : NetworkBehaviour
 
 	public void CycleMinPlayersDebug()
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
-		if (m_CurrentRequiredPlayers == 4) m_CurrentRequiredPlayers = 2;
-		else if (m_CurrentRequiredPlayers == 2) m_CurrentRequiredPlayers = 1;
-		else m_CurrentRequiredPlayers = 4;
+		if (m_CurrentRequiredPlayers == 4)
+		{
+			m_CurrentRequiredPlayers = 2;
+		}
+		else if (m_CurrentRequiredPlayers == 2)
+		{
+			m_CurrentRequiredPlayers = 1;
+		}
+		else
+		{
+			m_CurrentRequiredPlayers = 4;
+		}
 
 		NotifyDataChanged();
 	}
 
 	public void ToggleTargetSceneDebug()
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		m_UseLevelDesignScene = !m_UseLevelDesignScene;
 		NotifyDataChanged();
@@ -424,7 +485,10 @@ public class LobbyManager : NetworkBehaviour
 
 	public void ForceStartGameDebug()
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		AutoAssignUnseatedPlayers();
 		StartGameTransition();
@@ -432,7 +496,10 @@ public class LobbyManager : NetworkBehaviour
 
 	public void StartGame()
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		StartGameTransition();
 	}
@@ -485,9 +552,18 @@ public class LobbyManager : NetworkBehaviour
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
 			var p = m_LobbyPlayers[i];
-			if (p.Team == ETeamType.None) allSeated = false;
-			if (!p.IsReady) allReady = false;
-			if (!IsValidPlayerName(p.PlayerName.ToString())) allNamesValid = false;
+			if (p.Team == ETeamType.None)
+			{
+				allSeated = false;
+			}
+			if (!p.IsReady)
+			{
+				allReady = false;
+			}
+			if (!IsValidPlayerName(p.PlayerName.ToString()))
+			{
+				allNamesValid = false;
+			}
 		}
 
 		bool canStart = (connectedCount >= m_CurrentRequiredPlayers) && allSeated && allReady && allNamesValid;
@@ -518,13 +594,21 @@ public class LobbyManager : NetworkBehaviour
 
 	private bool IsTeamFull(ETeamType team)
 	{
-		if (team == ETeamType.None) return false;
+		if (team == ETeamType.None)
+		{
+			return false;
+		}
+
 		int count = 0;
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
-			if (m_LobbyPlayers[i].Team == team) count++;
+			if (m_LobbyPlayers[i].Team == team)
+			{
+				count++;
+			}
 		}
-		return count >= MaxTeamMembers;
+
+		return count >= m_MaxTeamMembers;
 	}
 
 	// --- RPC通信処理 ---
@@ -532,17 +616,23 @@ public class LobbyManager : NetworkBehaviour
 	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
 	private void RequestJoinTeamServerRpc(ulong clientId, ETeamType targetTeam)
 	{
-		if (targetTeam == ETeamType.None) return;
+		if (targetTeam == ETeamType.None)
+		{
+			return;
+		}
 
 		int count = 0;
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
-			if (m_LobbyPlayers[i].Team == targetTeam) count++;
+			if (m_LobbyPlayers[i].Team == targetTeam)
+			{
+				count++;
+			}
 		}
 
-		if (count >= MaxTeamMembers)
+		if (count >= m_MaxTeamMembers)
 		{
-			Debug.LogWarning($"[LobbyManager] {targetTeam} は満員です (最大 {MaxTeamMembers} 名)。");
+			Debug.LogWarning($"[LobbyManager] {targetTeam} は満員です (最大 {m_MaxTeamMembers} 名)。");
 			return;
 		}
 
@@ -580,9 +670,8 @@ public class LobbyManager : NetworkBehaviour
 	}
 
 	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-	private void RequestUpdateFullProfileServerRpc(
+	private void RequestUpdateCachedAppearanceServerRpc(
 		ulong clientId,
-		FixedString64Bytes profileName,
 		ECharacterType charType,
 		EHighlightColor highlightColor,
 		ETeamType assignedTeam)
@@ -592,18 +681,15 @@ public class LobbyManager : NetworkBehaviour
 			if (m_LobbyPlayers[i].ClientId == clientId)
 			{
 				var data = m_LobbyPlayers[i];
-				if (data.IsReady) return;
-
-				string nameStr = profileName.ToString().Trim();
-				if (IsValidPlayerName(nameStr))
+				if (data.IsReady)
 				{
-					data.PlayerName = nameStr;
+					return;
 				}
 
 				data.CharacterType = charType;
 				data.HighlightColor = highlightColor;
 
-				if (assignedTeam != ETeamType.None && !IsTeamFull(assignedTeam))
+				if (data.Team == ETeamType.None && assignedTeam != ETeamType.None && !IsTeamFull(assignedTeam))
 				{
 					data.Team = assignedTeam;
 				}
@@ -619,14 +705,20 @@ public class LobbyManager : NetworkBehaviour
 	private void RequestUpdatePlayerNameServerRpc(ulong clientId, FixedString64Bytes newName)
 	{
 		string nameStr = newName.ToString().Trim();
-		if (!IsValidPlayerName(nameStr)) return;
+		if (!IsValidPlayerName(nameStr))
+		{
+			return;
+		}
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
 			if (m_LobbyPlayers[i].ClientId == clientId)
 			{
 				var data = m_LobbyPlayers[i];
-				if (data.IsReady) return;
+				if (data.IsReady)
+				{
+					return;
+				}
 
 				data.PlayerName = nameStr;
 				m_LobbyPlayers[i] = data;
@@ -644,7 +736,10 @@ public class LobbyManager : NetworkBehaviour
 			if (m_LobbyPlayers[i].ClientId == clientId)
 			{
 				var data = m_LobbyPlayers[i];
-				if (data.IsReady) return;
+				if (data.IsReady)
+				{
+					return;
+				}
 
 				data.CharacterType = characterType;
 				m_LobbyPlayers[i] = data;
@@ -662,7 +757,10 @@ public class LobbyManager : NetworkBehaviour
 			if (m_LobbyPlayers[i].ClientId == clientId)
 			{
 				var data = m_LobbyPlayers[i];
-				if (data.IsReady) return;
+				if (data.IsReady)
+				{
+					return;
+				}
 
 				data.HighlightColor = highlightColor;
 				m_LobbyPlayers[i] = data;
@@ -680,7 +778,10 @@ public class LobbyManager : NetworkBehaviour
 			if (m_LobbyPlayers[i].ClientId == clientId)
 			{
 				var data = m_LobbyPlayers[i];
-				if (data.Team == ETeamType.None) return;
+				if (data.Team == ETeamType.None)
+				{
+					return;
+				}
 
 				data.IsReady = !data.IsReady;
 				m_LobbyPlayers[i] = data;
@@ -705,8 +806,14 @@ public class LobbyManager : NetworkBehaviour
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
-			if (m_LobbyPlayers[i].ClientId == clientA) indexA = i;
-			if (m_LobbyPlayers[i].ClientId == clientB) indexB = i;
+			if (m_LobbyPlayers[i].ClientId == clientA)
+			{
+				indexA = i;
+			}
+			if (m_LobbyPlayers[i].ClientId == clientB)
+			{
+				indexB = i;
+			}
 		}
 
 		if (indexA >= 0 && indexB >= 0)
@@ -735,8 +842,14 @@ public class LobbyManager : NetworkBehaviour
 		int blueCount = 0;
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
-			if (m_LobbyPlayers[i].Team == ETeamType.Red) redCount++;
-			if (m_LobbyPlayers[i].Team == ETeamType.Blue) blueCount++;
+			if (m_LobbyPlayers[i].Team == ETeamType.Red)
+			{
+				redCount++;
+			}
+			if (m_LobbyPlayers[i].Team == ETeamType.Blue)
+			{
+				blueCount++;
+			}
 		}
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
@@ -744,7 +857,7 @@ public class LobbyManager : NetworkBehaviour
 			if (m_LobbyPlayers[i].Team == ETeamType.None)
 			{
 				var data = m_LobbyPlayers[i];
-				if (redCount <= blueCount && redCount < MaxTeamMembers)
+				if (redCount <= blueCount && redCount < m_MaxTeamMembers)
 				{
 					data.Team = ETeamType.Red;
 					redCount++;
@@ -764,7 +877,10 @@ public class LobbyManager : NetworkBehaviour
 
 	private void StartGameTransition()
 	{
-		if (m_IsGameStarting) return;
+		if (m_IsGameStarting)
+		{
+			return;
+		}
 		m_IsGameStarting = true;
 
 		if (SessionPlayerDataStore.Instance != null)
@@ -827,7 +943,7 @@ public class LobbyManager : NetworkBehaviour
 				string name = ni.Name.ToLower();
 				string desc = ni.Description.ToLower();
 				if (name.Contains("vethernet") || name.Contains("wsl") || name.Contains("virtual") ||
-					desc.Contains("virtual") || desc.Contains("hyper-v") || desc.Contains("vmware"))
+					desc.Contains("virtual") || name.Contains("hyper-v") || desc.Contains("hyper-v") || desc.Contains("vmware"))
 				{
 					continue;
 				}
@@ -837,7 +953,7 @@ public class LobbyManager : NetworkBehaviour
 				{
 					if (addr.Address.AddressFamily == AddressFamily.InterNetwork)
 					{
-						// 有線LAN(Ethernet)を最優先で返却
+						// 有線LAN(Ethernet)を優先で返却
 						if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
 						{
 							return addr.Address.ToString();
@@ -875,6 +991,3 @@ public class LobbyManager : NetworkBehaviour
 		return "127.0.0.1";
 	}
 }
-
-
-

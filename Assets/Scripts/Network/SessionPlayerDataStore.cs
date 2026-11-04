@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -51,7 +51,10 @@ public class SessionPlayerDataStore : MonoBehaviour
 
 	private void HandleClientDisconnected(ulong clientId)
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		m_PlayerDataCache.Remove(clientId);
 	}
@@ -61,7 +64,10 @@ public class SessionPlayerDataStore : MonoBehaviour
 	/// </summary>
 	public void SavePlayerData(LobbyPlayerData data)
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		m_PlayerDataCache[data.ClientId] = data;
 	}
@@ -83,8 +89,8 @@ public class SessionPlayerDataStore : MonoBehaviour
 			clientId,
 			defaultName,
 			ETeamType.None,
-			ECharacterType.ModelA,
-			EHighlightColor.Default,
+			ECharacterType.Man,
+			EHighlightColor.Black,
 			false);
 
 		if (IsServer)
@@ -125,7 +131,10 @@ public class SessionPlayerDataStore : MonoBehaviour
 	/// </summary>
 	public void ResetAllReadyStates()
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		var keys = new List<ulong>(m_PlayerDataCache.Keys);
 		foreach (var clientId in keys)

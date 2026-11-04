@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -40,7 +40,7 @@ public class PlayerSilhouette : MonoBehaviour
 	private static readonly int m_StencilCompId = Shader.PropertyToID("_StencilComp");
 	private static readonly int m_StencilPassId = Shader.PropertyToID("_StencilPass");
 
-	// レンダリングキュー定数(不透明壁描画後の3010でZTest Greaterを評価して確実に壁裏描画)
+	// レンダリングキュー定数(不透明壁描画後の3010でZTest Greaterを評価して壁裏描画)
 	private const int m_StencilMaskQueue = 2010;
 	private const int m_SilhouetteQueue = 3010;
 	private const int m_OutlineQueue = 2020;
@@ -100,9 +100,18 @@ public class PlayerSilhouette : MonoBehaviour
 
 		RestoreOriginalMaterials();
 
-		if (m_OutlineInstance != null) Destroy(m_OutlineInstance);
-		if (m_StencilMaskInstance != null) Destroy(m_StencilMaskInstance);
-		if (m_SilhouetteInstance != null) Destroy(m_SilhouetteInstance);
+		if (m_OutlineInstance != null)
+		{
+			Destroy(m_OutlineInstance);
+		}
+		if (m_StencilMaskInstance != null)
+		{
+			Destroy(m_StencilMaskInstance);
+		}
+		if (m_SilhouetteInstance != null)
+		{
+			Destroy(m_SilhouetteInstance);
+		}
 	}
 
 	private void HandleProfileChanged()
@@ -131,6 +140,28 @@ public class PlayerSilhouette : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// 外見マテリアル差し替え前に、アウトライン等を除外した元の本体マテリアル配列へ一旦復元します。
+	/// </summary>
+	public void RestoreBaseMaterials()
+	{
+		RestoreOriginalMaterials();
+	}
+
+	/// <summary>
+	/// 外見マテリアル差し替え後に、現在の本体マテリアル配列を再キャッシュしてチーム演出を再適用します。
+	/// </summary>
+	public void RefreshBaseMaterials()
+	{
+		if (m_Renderers == null)
+		{
+			m_Renderers = CollectRenderers();
+		}
+
+		CacheOriginalMaterials();
+		ApplyTeamSettings();
+	}
+
 	private Renderer[] CollectRenderers()
 	{
 		var all = GetComponentsInChildren<Renderer>(true);
@@ -150,7 +181,10 @@ public class PlayerSilhouette : MonoBehaviour
 		for (int i = 0; i < all.Length; i++)
 		{
 			var r = all[i];
-			if (r == null) continue;
+			if (r == null)
+			{
+				continue;
+			}
 
 			// LineRendererやTrailRenderer等の特殊ライン演出は除外
 			if (r is LineRenderer || r is TrailRenderer || r is ParticleSystemRenderer)
@@ -196,7 +230,10 @@ public class PlayerSilhouette : MonoBehaviour
 
 	private void RestoreOriginalMaterials()
 	{
-		if (m_OriginalMaterials == null) return;
+		if (m_OriginalMaterials == null)
+		{
+			return;
+		}
 
 		foreach (var kvp in m_OriginalMaterials)
 		{
@@ -268,7 +305,10 @@ public class PlayerSilhouette : MonoBehaviour
 	/// </summary>
 	public void ApplyTeamSettings()
 	{
-		if (m_IsAiming) return;
+		if (m_IsAiming)
+		{
+			return;
+		}
 
 		ETeamType myTeam = m_Profile != null ? m_Profile.Team : ETeamType.None;
 
@@ -277,7 +317,7 @@ public class PlayerSilhouette : MonoBehaviour
 		ETeamType localPlayerTeam = GetLocalPlayerTeam();
 
 		// 遮蔽シルエットの表示可否: 観戦者または自チーム(味方)の場合のみ有効
-		// 自端末のチームが確定している場合、敵チーム(myTeam != localPlayerTeam)は完全に除外
+		// 自端末のチームが確定している場合、敵チーム(myTeam != localPlayerTeam)は除外
 		bool isAlly;
 		if (localPlayerTeam != ETeamType.None && myTeam != ETeamType.None)
 		{
@@ -351,7 +391,10 @@ public class PlayerSilhouette : MonoBehaviour
 			return;
 		}
 
-		if (renderers == null || transparentMaterials == null) return;
+		if (renderers == null || transparentMaterials == null)
+		{
+			return;
+		}
 
 		// 遮蔽シルエットの表示可否を判定
 		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
@@ -373,17 +416,32 @@ public class PlayerSilhouette : MonoBehaviour
 		for (int i = 0; i < renderers.Length; i++)
 		{
 			var r = renderers[i];
-			if (r == null || i >= transparentMaterials.Length) continue;
+			if (r == null || i >= transparentMaterials.Length)
+			{
+				continue;
+			}
 
 			var baseMats = transparentMaterials[i];
-			if (baseMats == null) continue;
+			if (baseMats == null)
+			{
+				continue;
+			}
 
 			// 半透明マテリアルの末尾にアウトライン・シルエット用マテリアルを付与
 			bool needStencilMask = (m_UseOutline || shouldShowSilhouette) && m_StencilMaskInstance != null;
 			int extraCount = 0;
-			if (needStencilMask) extraCount++;
-			if (shouldShowSilhouette && m_SilhouetteInstance != null) extraCount++;
-			if (m_UseOutline && m_OutlineInstance != null) extraCount++;
+			if (needStencilMask)
+			{
+				extraCount++;
+			}
+			if (shouldShowSilhouette && m_SilhouetteInstance != null)
+			{
+				extraCount++;
+			}
+			if (m_UseOutline && m_OutlineInstance != null)
+			{
+				extraCount++;
+			}
 
 			var newMats = new Material[baseMats.Length + extraCount];
 			baseMats.CopyTo(newMats, 0);
@@ -408,13 +466,25 @@ public class PlayerSilhouette : MonoBehaviour
 
 	private void RebuildMaterials(bool useOutline, bool useSilhouette)
 	{
-		if (m_Renderers == null || m_OriginalMaterials == null) return;
+		if (m_Renderers == null || m_OriginalMaterials == null)
+		{
+			return;
+		}
 
 		bool needStencilMask = (useOutline || useSilhouette) && m_StencilMaskInstance != null;
 		int extraCount = 0;
-		if (needStencilMask) extraCount++;
-		if (useSilhouette && m_SilhouetteInstance != null) extraCount++;
-		if (useOutline && m_OutlineInstance != null) extraCount++;
+		if (needStencilMask)
+		{
+			extraCount++;
+		}
+		if (useSilhouette && m_SilhouetteInstance != null)
+		{
+			extraCount++;
+		}
+		if (useOutline && m_OutlineInstance != null)
+		{
+			extraCount++;
+		}
 
 		foreach (var r in m_Renderers)
 		{
@@ -454,4 +524,3 @@ public class PlayerSilhouette : MonoBehaviour
 	}
 #endif
 }
-

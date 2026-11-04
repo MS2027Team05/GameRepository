@@ -7,20 +7,20 @@ using UnityEngine;
 /// </summary>
 public static class LocalPlayerProfilePreferences
 {
-	private const string KeyCharacterType = "Exhibition_CharacterType";
-	private const string KeyHighlightColor = "Exhibition_HighlightColor";
-	private const string KeyAssignedTeam = "Exhibition_AssignedTeam";
-	private const string KeyTargetIp = "Exhibition_TargetIP";
+	private const string m_KeyCharacterType = "Exhibition_CharacterType";
+	private const string m_KeyHighlightColor = "Exhibition_HighlightColor";
+	private const string m_KeyAssignedTeam = "Exhibition_AssignedTeam";
+	private const string m_KeyTargetIp = "Exhibition_TargetIP";
 
 	/// <summary>
 	/// 保存されたキャラクターモデル種別を取得します。
 	/// </summary>
 	public static ECharacterType GetCharacterType()
 	{
-		int value = PlayerPrefs.GetInt(KeyCharacterType, (int)ECharacterType.ModelA);
+		int value = PlayerPrefs.GetInt(m_KeyCharacterType, (int)ECharacterType.Man);
 		return System.Enum.IsDefined(typeof(ECharacterType), (byte)value)
 			? (ECharacterType)(byte)value
-			: ECharacterType.ModelA;
+			: ECharacterType.Man;
 	}
 
 	/// <summary>
@@ -28,7 +28,7 @@ public static class LocalPlayerProfilePreferences
 	/// </summary>
 	public static void SetCharacterType(ECharacterType characterType)
 	{
-		PlayerPrefs.SetInt(KeyCharacterType, (int)characterType);
+		PlayerPrefs.SetInt(m_KeyCharacterType, (int)characterType);
 		PlayerPrefs.Save();
 	}
 
@@ -37,10 +37,10 @@ public static class LocalPlayerProfilePreferences
 	/// </summary>
 	public static EHighlightColor GetHighlightColor()
 	{
-		int value = PlayerPrefs.GetInt(KeyHighlightColor, (int)EHighlightColor.Default);
+		int value = PlayerPrefs.GetInt(m_KeyHighlightColor, (int)EHighlightColor.Black);
 		return System.Enum.IsDefined(typeof(EHighlightColor), (byte)value)
 			? (EHighlightColor)(byte)value
-			: EHighlightColor.Default;
+			: EHighlightColor.Black;
 	}
 
 	/// <summary>
@@ -48,7 +48,7 @@ public static class LocalPlayerProfilePreferences
 	/// </summary>
 	public static void SetHighlightColor(EHighlightColor highlightColor)
 	{
-		PlayerPrefs.SetInt(KeyHighlightColor, (int)highlightColor);
+		PlayerPrefs.SetInt(m_KeyHighlightColor, (int)highlightColor);
 		PlayerPrefs.Save();
 	}
 
@@ -58,7 +58,7 @@ public static class LocalPlayerProfilePreferences
 	/// </summary>
 	public static ETeamType GetAssignedTeam()
 	{
-		int value = PlayerPrefs.GetInt(KeyAssignedTeam, (int)ETeamType.None);
+		int value = PlayerPrefs.GetInt(m_KeyAssignedTeam, (int)ETeamType.None);
 		return System.Enum.IsDefined(typeof(ETeamType), (byte)value)
 			? (ETeamType)(byte)value
 			: ETeamType.None;
@@ -69,7 +69,7 @@ public static class LocalPlayerProfilePreferences
 	/// </summary>
 	public static void SetAssignedTeam(ETeamType team)
 	{
-		PlayerPrefs.SetInt(KeyAssignedTeam, (int)team);
+		PlayerPrefs.SetInt(m_KeyAssignedTeam, (int)team);
 		PlayerPrefs.Save();
 	}
 
@@ -78,7 +78,7 @@ public static class LocalPlayerProfilePreferences
 	/// </summary>
 	public static string GetTargetIp(string fallbackIp = "127.0.0.1")
 	{
-		return PlayerPrefs.GetString(KeyTargetIp, fallbackIp);
+		return PlayerPrefs.GetString(m_KeyTargetIp, fallbackIp);
 	}
 
 	/// <summary>
@@ -88,7 +88,7 @@ public static class LocalPlayerProfilePreferences
 	{
 		if (!string.IsNullOrEmpty(ip))
 		{
-			PlayerPrefs.SetString(KeyTargetIp, ip.Trim());
+			PlayerPrefs.SetString(m_KeyTargetIp, ip.Trim());
 			PlayerPrefs.Save();
 		}
 	}
@@ -98,9 +98,9 @@ public static class LocalPlayerProfilePreferences
 	/// </summary>
 	public static void SaveProfile(ECharacterType characterType, EHighlightColor highlightColor, ETeamType team)
 	{
-		PlayerPrefs.SetInt(KeyCharacterType, (int)characterType);
-		PlayerPrefs.SetInt(KeyHighlightColor, (int)highlightColor);
-		PlayerPrefs.SetInt(KeyAssignedTeam, (int)team);
+		PlayerPrefs.SetInt(m_KeyCharacterType, (int)characterType);
+		PlayerPrefs.SetInt(m_KeyHighlightColor, (int)highlightColor);
+		PlayerPrefs.SetInt(m_KeyAssignedTeam, (int)team);
 		PlayerPrefs.Save();
 	}
 }

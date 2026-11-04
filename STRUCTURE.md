@@ -35,9 +35,11 @@ GameRepository/
 │   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
 │   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー通信同期・ゲーム開始制御
 │   │   │   ├── LobbyUIController.cs     # ロビー画面UI表示・端末ロール別パネル制御
+│   │   │   ├── LobbyAppearancePickerUI.cs # ロビー内モデル(男女)・カラー(12色)共通選択ピッカーUI制御
 │   │   │   ├── LobbyCharacterDisplayManager.cs # ロビー内3Dモデル表示・台座同期制御
+│   │   │   ├── LobbyPlayerDisplay.cs    # ロビー台座用の表示特化キャラクター外見・頭上3Dネーム追従制御
 │   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
-│   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(名前・キャラ・色・固定チーム)永続化・自動反映
+│   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(キャラ・色・固定チーム・IP)永続化・自動反映
 │   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・シーン間データ引継ぎ管理
 │   │   │   ├── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
 │   │   │   ├── TitleOverlayController.cs # [EntryPoint] ロビー内タイトル画面演出・個別開始制御
@@ -53,6 +55,7 @@ GameRepository/
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
 │   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御
+│   │       ├── PlayerAppearanceCatalog.cs # 男女別12色マテリアル・チームマテリアル・UIプレビュー色管理用ScriptableObject
 │   │       ├── Interfaces/      # 各サブモジュール用インターフェース
 │   │       │   ├── IAimGuide.cs         # 常時レティクル・地上予備浮上・着地点追跡/シフト制御インターフェース
 │   │       │   ├── IBallCarrier.cs      # ボール所持・単押しパス・追尾パスチャージ制御インターフェース
@@ -69,7 +72,7 @@ GameRepository/
 │   │       ├── LockOnManager.cs         # ロックオン制御(ILockOnProvider実装・優先度付き対象検索)
 │   │       ├── PlayerAimGuide.cs        # 常時レティクル・地上予備浮上・着地点追跡およびエイム照準制御
 │   │       ├── PlayerAnimationController.cs # 地上移動速度に基づくAnimator状態切り替え・移動状態の通信同期
-│   │       ├── PlayerAppearance.cs      # プレイヤー外見(性別モデル・マテリアル・カラー)管理制御
+│   │       ├── PlayerAppearance.cs      # プレイヤー外見(性別モデル・12色マテリアル・チームカラー)管理制御
 │   │       ├── PlayerBallCarrier.cs     # プレイヤーのボール所持・キャッチ・単押しパス/追尾パス制御
 │   │       ├── PlayerCameraEffect.cs    # 三人称視点カメラ旋回(接地面法線追従)・高速移動時FOV変更・カメラシェイク制御・視点リセット
 │   │       ├── PlayerEdgeDiagnostics.cs # 角部・接地境界脱落時の挙動解析・診断HUD描画制御
