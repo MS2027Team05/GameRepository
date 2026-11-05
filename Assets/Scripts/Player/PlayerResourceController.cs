@@ -10,29 +10,40 @@ using UnityEngine;
 public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 {
 	[Header("リソース容量")]
+	[Tooltip("リソースの最大容量です。0以上の値を設定してください。")]
 	[SerializeField] private float m_MaxResource;
+	[Tooltip("プレイヤー生成時の初期リソース量です。最大容量までに制限されます。")]
 	[SerializeField] private float m_InitialResource;
 
 	[Header("移動アクション消費")]
+	[Tooltip("移動アクション1回あたりの基本消費量です。")]
 	[SerializeField] private float m_MoveBaseCost;
+	[Tooltip("移動距離1mあたりに追加する消費量です。0にすると距離による加算はありません。")]
 	[SerializeField] private float m_MoveCostPerMeter;
+	[Tooltip("移動アクション1回の消費量の上限です。基本消費量にも適用されます。")]
 	[SerializeField] private float m_MaxMoveCost;
 
 	[Header("遅延急速回復")]
 	// アクション終了から、自然回復を開始するまでの無行動待機秒数
+	[Tooltip("アクション終了後、急速回復を開始するまでの待機時間です(秒)。")]
 	[SerializeField] private float m_RecoveryDelay;
 
 	// 急速回復量(リソース単位/秒。既存Inspectorの設定値を引き継ぐ)
+	[Tooltip("急速回復中に1秒あたり回復するリソース量です。")]
 	[SerializeField] private float m_RecoveryPerSecond;
 
 	[Header("味方パス受取ボーナス")]
+	[Tooltip("味方からのパス受取成立時に加算するリソース量です。最大容量を超えません。")]
 	[SerializeField] private float m_PassReceiveBonus;
 
 	[Header("自プレイヤー専用ゲージUI")]
+	[Tooltip("自分のリソースを表示するゲージUIです。Owner以外には表示しません。")]
 	[SerializeField] private PlayerResourceGaugeUI m_ResourceGauge;
 
 	[Header("デバッグ専用回復エフェクト")]
+	[Tooltip("デバッグ専用です。ONで自分の回復時に電気エフェクトを表示します。他プレイヤーへは同期しません。")]
 	[SerializeField] private bool m_EnableDebugRecoveryEffect;
+	[Tooltip("デバッグ専用の回復エフェクト制御コンポーネントです。通常回復と味方パス回復の表示に使用します。")]
 	[SerializeField] private PlayerRecoveryEffectController m_DebugRecoveryEffectController;
 
 	private IGravityMover m_GravityMover;

@@ -19,14 +19,22 @@ using UnityEngine;
 public class BallController : NetworkBehaviour
 {
 	[Header("ボールの当たり判定")]
+	[Tooltip("ボールの物理衝突とキャッチ判定に使用するColliderです。")]
 	[SerializeField] private Collider m_PhysicsCollider;
+	[Tooltip("ボール周辺の検知に使用するSensor用Colliderです。")]
 	[SerializeField] private Collider m_SensorCollider;
 
 	[Header("シュート設定")]
+	[Tooltip("ボールを射出するときの初速度に使用する値です(おおむねm/s)。")]
 	[SerializeField] private float m_ShootPower;
 
 	[Header("再キャッチ防止")]
+	[Tooltip("射出または強制解放した元の所持者が、再びキャッチできるまでの時間です(秒)。")]
 	[SerializeField] private float m_RepickupDelay;
+
+	[Header("味方パス受取ボーナス判定")]
+	[Tooltip("味方パス回復の資格を失効させるボール速度のしきい値です(m/s)。この速度以下になると資格が失われ、再加速しても復活しません。")]
+	[SerializeField] private float m_PassBonusMinSpeed;
 
 	private readonly NetworkVariable<ulong> m_CurrentHolderId =
 		new NetworkVariable<ulong>();
@@ -103,6 +111,37 @@ public class BallController : NetworkBehaviour
 		{
 			ApplyHolderState(true);
 		}
+	}
+
+	private void FixedUpdate()
+	{
+		if (!IsSpawned || !IsServer)
+		{
+			return;
+		}
+
+		UpdatePassBonusEligibility();
+	}
+
+	/// <summary>
+	/// 射出後のボール速度が設定値以下になったら、味方パスの回復資格を失効させます。
+	/// 一度失効した資格は、ボールが再加速しても復活しません。
+	/// </summary>
+	private void UpdatePassBonusEligibility()
+	{
+		if (!m_IsPassInFlight || m_Rigidbody == null)
+		{
+			return;
+		}
+
+		float minimumSpeed = Mathf.Max(0.0f, m_PassBonusMinSpeed);
+		if (m_Rigidbody.linearVelocity.sqrMagnitude > minimumSpeed * minimumSpeed)
+		{
+			return;
+		}
+
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
 	}
 
 	/// <summary>
@@ -196,6 +235,9 @@ public class BallController : NetworkBehaviour
 		{
 			return false;
 		}
+
+		// キャッチ直前の速度を確認します。AttachToHolder後は速度が0になるため先に判定。
+		UpdatePassBonusEligibility();
 
 		if (!AttachToHolder(
 			holderNetworkObject,

@@ -8,9 +8,11 @@ using UnityEngine;
 public class PlayerResourceGaugeUI : MonoBehaviour
 {
 	[Header("ゲージ表示用Image (Image Type: Filled)")]
+	[Tooltip("リソース残量を表示するImageです。Image TypeをFilledに設定してください。")]
 	[SerializeField] private UnityEngine.UI.Image m_FillImage;
 
 	[Header("現在値 / 最大値の表示用TextMeshPro")]
+	[Tooltip("現在値と最大値を表示するTextMeshProUGUIです。")]
 	[SerializeField] private TextMeshProUGUI m_ResourceText;
 
 	/// <summary>

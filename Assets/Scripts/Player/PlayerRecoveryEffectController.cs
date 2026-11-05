@@ -8,13 +8,19 @@ using UnityEngine.Rendering;
 public class PlayerRecoveryEffectController : MonoBehaviour
 {
 	[Header("デバッグ稲妻の表示範囲(プレイヤーのローカル座標)")]
+	[Tooltip("デバッグ用稲妻の中心位置です。このオブジェクトを基準としたローカル座標で指定します。")]
 	[SerializeField] private Vector3 m_LightningCenter;
+	[Tooltip("デバッグ用稲妻がプレイヤーの周囲に広がる半径です(Unity単位)。")]
 	[SerializeField] private float m_LightningRadius;
+	[Tooltip("デバッグ用稲妻が上下に分布する高さです(Unity単位)。")]
 	[SerializeField] private float m_LightningHeight;
 
 	[Header("デバッグ稲妻の見た目")]
+	[Tooltip("デバッグ用稲妻の白い芯の太さです(Unity単位)。周囲の光はこれより太く描画します。")]
 	[SerializeField] private float m_LightningWidth;
+	[Tooltip("デバッグ用稲妻の形状を更新する間隔です(秒)。0より大きい値が必要です。")]
 	[SerializeField] private float m_LightningRefreshInterval;
+	[Tooltip("味方パス受取時の放射状の稲妻を表示する時間です(秒)。0より大きい値が必要です。")]
 	[SerializeField] private float m_PassBurstDuration;
 
 	private const int m_ContinuousBoltCount = 7;
