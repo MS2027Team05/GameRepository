@@ -2,6 +2,12 @@
 
 本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
 
+試合開始・得点後の再開は`Game/MatchManager`を入口とし、サーバーが共通のカウントダウン終了時刻を同期します。
+`Network/PlayerSpawner`は生成時の陣営別配置を保持してOwnerへ再配置・行動制限を通知し、`Ball/BallController`は所持解除・初期位置への復帰・物理停止を担当します。
+`UI/MatchHudController`は同期された終了時刻からカウントダウンを表示します。カウントダウン中は試合時計を停止し、得点と秒未満を含む残り時間を維持します。
+再開時は`PreparingRestart`で待機し、各`PlayerController`がOwner側で位置を即時反映して返す完了応答を`PlayerSpawner`が確認した後に、`Countdown`へ遷移します。
+復帰時の表示初期化は`PlayerController.Respawn`から各専門モジュールへ委譲します。カメラは視点・追従・FOVを即時に復帰姿勢へ戻し、地上移動は速度履歴を消去します。アニメーションはOwnerが復帰世代を同期し、全端末でAnimatorの初期状態を再評価します。
+
 ```text
 GameRepository/
 ├── .agents/                     # AIエージェント設定およびカスタムスキル格納
