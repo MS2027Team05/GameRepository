@@ -44,6 +44,10 @@ public class BallController : NetworkBehaviour
 	private ulong m_LastHolderClientId;
 	private float m_RepickupUnlockTime;
 
+	// Host側で、最後の正常なシュートが味方パスとして受取可能か記録します。
+	private bool m_IsPassInFlight;
+	private ETeamType m_LastPasserTeam;
+
 	/// <summary>
 	/// ボールがシュートされたときにHost側で通知します。
 	/// </summary>
@@ -209,6 +213,25 @@ public class BallController : NetworkBehaviour
 		m_HasHolder.Value =
 			true;
 
+		// 所持確定時に一度だけ判定し、強制ドロップや敵からの取得では付与しません。
+		bool isFriendlyPass = m_IsPassInFlight &&
+			holderClientId != m_LastHolderClientId &&
+			m_LastPasserTeam != ETeamType.None;
+
+		if (isFriendlyPass)
+		{
+			PlayerNetworkProfile receiverProfile = holderNetworkObject.GetComponent<PlayerNetworkProfile>();
+			isFriendlyPass = receiverProfile != null && receiverProfile.Team == m_LastPasserTeam;
+		}
+
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
+
+		if (isFriendlyPass)
+		{
+			holder.NotifyFriendlyPassReceivedServer();
+		}
+
 		return true;
 	}
 
@@ -239,6 +262,19 @@ public class BallController : NetworkBehaviour
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
 
+		// TryShoot成功時のみ使用するパス元チームを先に取得しておきます。
+		ETeamType passerTeam = ETeamType.None;
+		if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			m_CurrentHolderNetworkObjectId.Value,
+			out NetworkObject previousHolderObject))
+		{
+			PlayerNetworkProfile profile = previousHolderObject.GetComponent<PlayerNetworkProfile>();
+			if (profile != null)
+			{
+				passerTeam = profile.Team;
+			}
+		}
+
 		StartRepickupLock(
 			previousHolderClientId);
 
@@ -259,6 +295,9 @@ public class BallController : NetworkBehaviour
 		m_Rigidbody.linearVelocity =
 			shootDirection *
 			m_ShootPower;
+
+		m_LastPasserTeam = passerTeam;
+		m_IsPassInFlight = true;
 
 		// BallPhysicsControllerへ、
 		// シュート開始を通知します。
@@ -301,6 +340,10 @@ public class BallController : NetworkBehaviour
 
 		m_CurrentHolderId.Value =
 			0;
+
+		// 強制解放されたボールは、味方パスボーナスの対象外です。
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
 
 		// シュートではない解放として、
 		// BallPhysicsControllerへ通知します。

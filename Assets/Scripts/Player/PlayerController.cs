@@ -576,11 +576,18 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		if (wasChargingElectric)
 		{
-			if (m_ElectricAction != null && m_ElectricAction.TryReleaseAndFire())
+			// 発射前にも残量を確認し、途中で不足した場合の無償発射を防止します。
+			float cost = m_ElectricAction != null
+				? m_ElectricAction.RequiredCost
+				: float.PositiveInfinity;
+
+			if (m_PlayerResource != null &&
+				m_PlayerResource.CanAfford(cost) &&
+				m_ElectricAction != null &&
+				m_ElectricAction.TryReleaseAndFire())
 			{
-				float cost = m_ElectricAction.RequiredCost;
-				m_PlayerResource?.TryConsume(cost);
-				m_PlayerResource?.NotifyActionPerformed();
+				// CanAffordと発射確定の間でリソース値を変更しないため消費できます。
+				m_PlayerResource.TryConsume(cost);
 			}
 			else
 			{
