@@ -1,10 +1,16 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 /// <summary>
-/// 重力落下・ホバリング・物理移動を担当するモジュールのインターフェース。
+/// 等速直線移動(落下)・空中ホバリング・着地衝突処理を担当するモジュールのインターフェース。
 /// </summary>
 public interface IGravityMover
 {
+	/// <summary>
+	/// 飛行移動から地面・壁面への着地が完了した際に発火するイベント。
+	/// </summary>
+	event Action OnLanded;
+
 	/// <summary>
 	/// 指定された方向へ等速直線移動(落下)を開始します。
 	/// </summary>
@@ -40,20 +46,14 @@ public interface IGravityMover
 	void SetSpeedMultiplier(float multiplier);
 
 	/// <summary>
-	/// 足場に接地しているかどうかを取得します。
+	/// 指定された位置と回転へ移動し、移動・物理状態を初期化します。
 	/// </summary>
-	bool IsGrounded { get; }
+	/// <param name="position">復帰先のワールド座標</param>
+	/// <param name="rotation">復帰後のワールド回転</param>
+	void ResetMovement(Vector3 position, Quaternion rotation);
+
+	/// <summary>
+	/// 現在等速直線移動(落下)中であるかを取得します。
+	/// </summary>
 	bool IsFalling { get; }
-
-	/// <summary>
-	/// 地上移動用の入力ベクトルと基準となるカメラのTransformを設定します。
-	/// </summary>
-	/// <param name="moveInput">入力ベクトル(WASD/スティック)</param>
-	/// <param name="cameraTransform">視点基準となるカメラのTransform</param>
-	/// <summary>
-	/// 現在の接地面法線ベクトルを取得します。
-	/// </summary>
-	Vector3 CurrentGroundNormal { get; }
-
-	void SetMoveInput(Vector2 moveInput, Transform cameraTransform);
 }

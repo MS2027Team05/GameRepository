@@ -28,6 +28,6 @@ Material:
     - _OutlineWidth: 3
     - _StencilRef: 1
     m_Colors:
-    - _OutlineColor: {r: 1, g: 0.19999996, b: 0.19999996, a: 1}
+    - _OutlineColor: {r: 1, g: 0.19999993, b: 0.19999993, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

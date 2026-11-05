@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
@@ -6,39 +7,78 @@ using UnityEngine.Serialization;
 /// <summary>
 /// InputSystemからの入力を検知し、PlayerControllerが購読するC#イベントを発火するクラス。
 /// キーボードおよびゲームパッドに対応します。
+/// 入力の許可・禁止もこのクラス内で管理します。
 /// </summary>
 public class PlayerInputReceiver : MonoBehaviour
 {
 	[Header("Input Actions(任意設定: 未設定時はデフォルトキーが動作)")]
 	[FormerlySerializedAs("moveAction")]
 	[SerializeField] private InputActionReference m_MoveAction;
+
 	[SerializeField] private InputActionReference m_LookAction;
+
 	[FormerlySerializedAs("aimToggleAction")]
 	[SerializeField] private InputActionReference m_AimToggleAction;
+
 	[FormerlySerializedAs("confirmAction")]
 	[SerializeField] private InputActionReference m_ConfirmAction;
+
 	[FormerlySerializedAs("brakeAction")]
 	[SerializeField] private InputActionReference m_BrakeAction;
+
 	[FormerlySerializedAs("shootAction")]
 	[SerializeField] private InputActionReference m_ShootAction;
 
-	/// <summary>地上移動入力ベクトル(WASD/左スティック)</summary>
+	[FormerlySerializedAs("viewResetAction")]
+	[SerializeField] private InputActionReference m_ViewResetAction;
+
+	[SerializeField] private InputActionReference m_LockOnAction;
+
+	[Header("新アクションフロー用 Input Actions(R1移動 / L1干渉アクション)")]
+	[SerializeField] private InputActionReference m_MoveTriggerAction;
+	[SerializeField] private InputActionReference m_SubAction;
+
+	/// <summary>地上移動・空中着地点シフト入力ベクトル(WASD/左スティック)</summary>
 	public Vector2 MoveInput { get; private set; }
 
 	/// <summary>視点操作入力ベクトル(マウスDelta/右スティック)</summary>
 	public Vector2 LookInput { get; private set; }
 
-	/// <summary>エイムモードの開始・解除ボタン押下イベント</summary>
+	/// <summary>エイムモードの開始・解除ボタン押下イベント(旧フロー互換用)</summary>
 	public event Action OnAimTogglePressed;
 
-	/// <summary>落下方向決定(移動開始)ボタン押下イベント</summary>
+	/// <summary>落下方向決定(移動開始)ボタン押下イベント(旧フロー互換用)</summary>
 	public event Action OnConfirmPressed;
 
 	/// <summary>ブレーキ(停止)ボタン押下イベント</summary>
 	public event Action OnBrakePressed;
 
-	/// <summary>シュートボタン押下イベント。</summary>
+	/// <summary>シュートボタン押下イベント(旧フロー互換用)</summary>
 	public event Action OnShootPressed;
+
+	/// <summary>視点リセットボタン押下イベント</summary>
+	public event Action OnViewResetPressed;
+
+	/// <summary>ロックオンボタン押下イベント(旧フロー互換用)</summary>
+	public event Action OnLockOnPressed;
+
+	/// <summary>新フロー: 移動アクション(マウス右クリック / ゲームパッドR1)押下イベント</summary>
+	public event Action OnMoveActionPressed;
+
+	/// <summary>新フロー: 干渉サブアクション(マウス左クリック / ゲームパッドL1)押下開始イベント</summary>
+	public event Action OnSubActionStarted;
+
+	/// <summary>新フロー: 干渉サブアクション(マウス左クリック / ゲームパッドL1)離しイベント</summary>
+	public event Action OnSubActionReleased;
+
+	private static readonly HashSet<PlayerInputReceiver> m_ActiveReceivers = new HashSet<PlayerInputReceiver>();
+	private static bool m_IsGlobalPaused = false;
+
+	// PlayerControllerから入力を許可されたかどうか
+	private bool m_InputAllowed = false;
+
+	// Input Actionの登録が済んでいるかどうか
+	private bool m_ActionsBound = false;
 
 	/// <summary>
 	/// マウスカーソルのロック状態・表示状態を設定します。
@@ -46,42 +86,179 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <param name="locked">trueの場合、カーソルを画面中央にロックして非表示にします。</param>
 	public static void SetCursorLocked(bool locked)
 	{
-		Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+		Cursor.lockState = locked
+			? CursorLockMode.Locked
+			: CursorLockMode.None;
+
 		Cursor.visible = !locked;
 	}
 
+	/// <summary>
+	/// ポーズメニュー開閉時などに全プレイヤー入力の一時停止・再開を一括設定します。
+	/// </summary>
+	/// <param name="paused">trueの場合、プレイヤーの操作入力を一時停止します。</param>
+	public static void SetAllPaused(bool paused)
+	{
+		m_IsGlobalPaused = paused;
+
+		foreach (PlayerInputReceiver receiver in m_ActiveReceivers)
+		{
+			if (receiver != null)
+			{
+				receiver.UpdateInputState();
+			}
+		}
+	}
+
+	/// <summary>
+	/// コンポーネントの有効・無効に応じて入力を管理
+	/// </summary>
 	private void OnEnable()
 	{
-		EnableAction(m_MoveAction);
-		EnableAction(m_LookAction);
-		BindAction(m_AimToggleAction, HandleAimToggle);
-		BindAction(m_ConfirmAction, HandleConfirm);
-		BindAction(m_BrakeAction, HandleBrake);
-		BindAction(m_ShootAction, HandleShoot);
+		m_ActiveReceivers.Add(this);
+
+		// OnEnable時点で入力許可済みなら、入力を開始する
+		UpdateInputState();
 	}
 
 	private void OnDisable()
 	{
-		DisableAction(m_MoveAction);
-		DisableAction(m_LookAction);
-		UnbindAction(m_AimToggleAction, HandleAimToggle);
-		UnbindAction(m_ConfirmAction, HandleConfirm);
-		UnbindAction(m_BrakeAction, HandleBrake);
-		UnbindAction(m_ShootAction, HandleShoot);
+		m_ActiveReceivers.Remove(this);
+
+		// コンポーネントが無効になったら入力を停止する
+		StopInputActions();
+	}
+
+	private void OnDestroy()
+	{
+		m_ActiveReceivers.Remove(this);
+
+		// 破棄時にもイベント登録が残らないようにする
+		StopInputActions();
+	}
+
+	/// <summary>
+	/// PlayerControllerから入力の許可・禁止を設定します。
+	/// 自分が操作するPlayerに対してtrueを指定してください。
+	/// </summary>
+	public void SetInputAllowed(bool allowed)
+	{
+		m_InputAllowed = allowed;
+
+		UpdateInputState();
+	}
+
+	/// <summary>
+	/// 入力許可状態に応じてInput Actionの登録・解除を行います。
+	/// </summary>
+	private void UpdateInputState()
+	{
+		// 無効なコンポーネントまたはポーズ中は入力を開始しない
+		if (!isActiveAndEnabled || !m_InputAllowed || m_IsGlobalPaused)
+		{
+			StopInputActions();
+			return;
+		}
+
+		// 二重登録を防止する
+		if (m_ActionsBound)
+		{
+			return;
+		}
+
+		StartInputActions();
+	}
+
+	/// <summary>
+	/// Input Actionを有効化し、ボタンイベントを登録します。
+	/// </summary>
+	private void StartInputActions()
+	{
+		if (m_ActionsBound)
+		{
+			return;
+		}
+
+		// 移動・視点操作用Actionを有効化
+		EnableAction(m_MoveAction);
+		EnableAction(m_LookAction);
+
+		// 旧フロー用ボタン操作Actionを登録
+		BindAction(m_AimToggleAction, HandleAimToggle);
+		BindAction(m_ConfirmAction, HandleConfirm);
+		BindAction(m_BrakeAction, HandleBrake);
+		BindAction(m_ShootAction, HandleShoot);
+		BindAction(m_ViewResetAction, HandleViewReset);
+		BindAction(m_LockOnAction, HandleLockOn);
+
+		// 新フロー用ボタン操作Actionを登録
+		BindAction(m_MoveTriggerAction, HandleMoveTrigger);
+		BindPressReleaseAction(m_SubAction, HandleSubActionStarted, HandleSubActionCanceled);
+
+		m_ActionsBound = true;
+	}
+
+	/// <summary>
+	/// Input Actionのイベント登録を解除し、入力値をリセットします。
+	/// </summary>
+	private void StopInputActions()
+	{
+		if (m_ActionsBound)
+		{
+			// 登録したイベントを解除
+			UnbindAction(m_AimToggleAction, HandleAimToggle);
+			UnbindAction(m_ConfirmAction, HandleConfirm);
+			UnbindAction(m_BrakeAction, HandleBrake);
+			UnbindAction(m_ShootAction, HandleShoot);
+			UnbindAction(m_ViewResetAction, HandleViewReset);
+			UnbindAction(m_LockOnAction, HandleLockOn);
+			UnbindAction(m_MoveTriggerAction, HandleMoveTrigger);
+			UnbindPressReleaseAction(m_SubAction, HandleSubActionStarted, HandleSubActionCanceled);
+
+			// このクラスが有効化したActionを無効化
+			DisableAction(m_MoveAction);
+			DisableAction(m_LookAction);
+
+			DisableAction(m_AimToggleAction);
+			DisableAction(m_ConfirmAction);
+			DisableAction(m_BrakeAction);
+			DisableAction(m_ShootAction);
+			DisableAction(m_ViewResetAction);
+			DisableAction(m_LockOnAction);
+			DisableAction(m_MoveTriggerAction);
+			DisableAction(m_SubAction);
+
+			m_ActionsBound = false;
+		}
+
+		// 入力が残らないようにリセット
+		MoveInput = Vector2.zero;
+		LookInput = Vector2.zero;
 	}
 
 	private void Update()
 	{
+		// 自分が操作するPlayer以外、またはポーズ中は入力処理を行わない
+		if (!m_InputAllowed || !isActiveAndEnabled || m_IsGlobalPaused)
+		{
+			return;
+		}
+
 		UpdateMoveInput();
 		UpdateLookInput();
-		HandleCursorToggle();
+
 		// InputActionReferenceが未設定の場合のキーボード/ゲームパッド標準フォールバック
 		HandleKeyboardFallback();
 	}
 
+	private bool HasAction(InputActionReference actionRef)
+	{
+		return actionRef != null && actionRef.action != null;
+	}
+
 	private void EnableAction(InputActionReference actionRef)
 	{
-		if (actionRef != null && actionRef.action != null)
+		if (HasAction(actionRef))
 		{
 			actionRef.action.Enable();
 		}
@@ -89,7 +266,7 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private void DisableAction(InputActionReference actionRef)
 	{
-		if (actionRef != null && actionRef.action != null)
+		if (HasAction(actionRef))
 		{
 			actionRef.action.Disable();
 		}
@@ -97,7 +274,7 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private void UpdateMoveInput()
 	{
-		if (m_MoveAction != null && m_MoveAction.action != null)
+		if (HasAction(m_MoveAction))
 		{
 			MoveInput = m_MoveAction.action.ReadValue<Vector2>();
 			return;
@@ -108,15 +285,35 @@ public class PlayerInputReceiver : MonoBehaviour
 
 		if (Keyboard.current != null)
 		{
-			if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) input.y += 1f;
-			if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) input.y -= 1f;
-			if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) input.x -= 1f;
-			if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) input.x += 1f;
+			if (Keyboard.current.wKey.isPressed ||
+				Keyboard.current.upArrowKey.isPressed)
+			{
+				input.y += 1f;
+			}
+
+			if (Keyboard.current.sKey.isPressed ||
+				Keyboard.current.downArrowKey.isPressed)
+			{
+				input.y -= 1f;
+			}
+
+			if (Keyboard.current.aKey.isPressed ||
+				Keyboard.current.leftArrowKey.isPressed)
+			{
+				input.x -= 1f;
+			}
+
+			if (Keyboard.current.dKey.isPressed ||
+				Keyboard.current.rightArrowKey.isPressed)
+			{
+				input.x += 1f;
+			}
 		}
 
 		if (Gamepad.current != null)
 		{
 			Vector2 stick = Gamepad.current.leftStick.ReadValue();
+
 			if (stick.sqrMagnitude > input.sqrMagnitude)
 			{
 				input = stick;
@@ -128,7 +325,7 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private void UpdateLookInput()
 	{
-		if (m_LookAction != null && m_LookAction.action != null)
+		if (HasAction(m_LookAction))
 		{
 			LookInput = m_LookAction.action.ReadValue<Vector2>();
 			return;
@@ -137,7 +334,8 @@ public class PlayerInputReceiver : MonoBehaviour
 		// 未設定時のフォールバック(マウス移動デルタ / 右スティック)
 		Vector2 input = Vector2.zero;
 
-		if (Cursor.lockState == CursorLockMode.Locked && Mouse.current != null)
+		if (Cursor.lockState == CursorLockMode.Locked &&
+			Mouse.current != null)
 		{
 			input = Mouse.current.delta.ReadValue();
 		}
@@ -145,6 +343,7 @@ public class PlayerInputReceiver : MonoBehaviour
 		if (Gamepad.current != null)
 		{
 			Vector2 stick = Gamepad.current.rightStick.ReadValue();
+
 			if (stick.sqrMagnitude > input.sqrMagnitude)
 			{
 				input = stick;
@@ -154,37 +353,55 @@ public class PlayerInputReceiver : MonoBehaviour
 		LookInput = input;
 	}
 
-	/// <summary>
-	/// 開発・デバッグ用: Escapeキーでカーソルロックをトグル、画面クリックで再ロックします。
-	/// </summary>
-	private void HandleCursorToggle()
+	private void BindAction(
+		InputActionReference actionRef,
+		Action<InputAction.CallbackContext> callback)
 	{
-		if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		if (HasAction(actionRef))
 		{
-			bool isLocked = Cursor.lockState == CursorLockMode.Locked;
-			SetCursorLocked(!isLocked);
-		}
-		else if (Cursor.lockState != CursorLockMode.Locked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-		{
-			SetCursorLocked(true);
-		}
-	}
-
-	private void BindAction(InputActionReference actionRef, Action<InputAction.CallbackContext> callback)
-	{
-		if (actionRef != null && actionRef.action != null)
-		{
-			actionRef.action.Enable();
+			// 二重登録を防止してから登録
+			actionRef.action.performed -= callback;
 			actionRef.action.performed += callback;
+
+			actionRef.action.Enable();
 		}
 	}
 
-	private void UnbindAction(InputActionReference actionRef, Action<InputAction.CallbackContext> callback)
+	private void UnbindAction(
+		InputActionReference actionRef,
+		Action<InputAction.CallbackContext> callback)
 	{
-		if (actionRef != null && actionRef.action != null)
+		if (HasAction(actionRef))
 		{
 			actionRef.action.performed -= callback;
-			actionRef.action.Disable();
+		}
+	}
+
+	private void BindPressReleaseAction(
+		InputActionReference actionRef,
+		Action<InputAction.CallbackContext> startedCallback,
+		Action<InputAction.CallbackContext> canceledCallback)
+	{
+		if (HasAction(actionRef))
+		{
+			actionRef.action.started -= startedCallback;
+			actionRef.action.started += startedCallback;
+			actionRef.action.canceled -= canceledCallback;
+			actionRef.action.canceled += canceledCallback;
+
+			actionRef.action.Enable();
+		}
+	}
+
+	private void UnbindPressReleaseAction(
+		InputActionReference actionRef,
+		Action<InputAction.CallbackContext> startedCallback,
+		Action<InputAction.CallbackContext> canceledCallback)
+	{
+		if (HasAction(actionRef))
+		{
+			actionRef.action.started -= startedCallback;
+			actionRef.action.canceled -= canceledCallback;
 		}
 	}
 
@@ -208,16 +425,95 @@ public class PlayerInputReceiver : MonoBehaviour
 		OnShootPressed?.Invoke();
 	}
 
+	private void HandleViewReset(InputAction.CallbackContext context)
+	{
+		OnViewResetPressed?.Invoke();
+	}
+
+	private void HandleLockOn(InputAction.CallbackContext context)
+	{
+		OnLockOnPressed?.Invoke();
+	}
+
+	private void HandleMoveTrigger(InputAction.CallbackContext context)
+	{
+		OnMoveActionPressed?.Invoke();
+	}
+
+	private void HandleSubActionStarted(InputAction.CallbackContext context)
+	{
+		OnSubActionStarted?.Invoke();
+	}
+
+	private void HandleSubActionCanceled(InputAction.CallbackContext context)
+	{
+		OnSubActionReleased?.Invoke();
+	}
+
 	private void HandleKeyboardFallback()
 	{
-		if (Keyboard.current == null && Gamepad.current == null) return;
-
-		// エイム切り替え: Shiftキー または マウス右クリック または ゲームパッドL2/LB
-		if (m_AimToggleAction == null)
+		if (Keyboard.current == null && Mouse.current == null && Gamepad.current == null)
 		{
-			bool aimPressed = (Keyboard.current != null && (Keyboard.current.leftShiftKey.wasPressedThisFrame || Keyboard.current.rightShiftKey.wasPressedThisFrame))
-				|| (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
-				|| (Gamepad.current != null && Gamepad.current.leftShoulder.wasPressedThisFrame);
+			return;
+		}
+
+		// 新フロー移動アクション: マウス右クリック または ゲームパッドR1
+		if (!HasAction(m_MoveTriggerAction))
+		{
+			bool moveActionPressed =
+				(Mouse.current != null &&
+				 Mouse.current.rightButton.wasPressedThisFrame)
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.rightShoulder.wasPressedThisFrame);
+
+			if (moveActionPressed)
+			{
+				OnMoveActionPressed?.Invoke();
+			}
+		}
+
+		// 新フロー干渉サブアクション(押下開始・離し): マウス左クリック または ゲームパッドL1
+		if (!HasAction(m_SubAction))
+		{
+			bool subStarted =
+				(Mouse.current != null &&
+				 Mouse.current.leftButton.wasPressedThisFrame)
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.leftShoulder.wasPressedThisFrame);
+
+			if (subStarted)
+			{
+				OnSubActionStarted?.Invoke();
+			}
+
+			bool subReleased =
+				(Mouse.current != null &&
+				 Mouse.current.leftButton.wasReleasedThisFrame)
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.leftShoulder.wasReleasedThisFrame);
+
+			if (subReleased)
+			{
+				OnSubActionReleased?.Invoke();
+			}
+		}
+
+		// 旧フロー エイム切り替え: Shiftキー または マウス右クリック または ゲームパッドL1
+		if (!HasAction(m_AimToggleAction))
+		{
+			bool aimPressed =
+				(Keyboard.current != null &&
+				 (Keyboard.current.leftShiftKey.wasPressedThisFrame ||
+				  Keyboard.current.rightShiftKey.wasPressedThisFrame))
+				||
+				(Mouse.current != null &&
+				 Mouse.current.rightButton.wasPressedThisFrame)
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.leftShoulder.wasPressedThisFrame);
 
 			if (aimPressed)
 			{
@@ -225,12 +521,18 @@ public class PlayerInputReceiver : MonoBehaviour
 			}
 		}
 
-		// 決定(落下開始): Spaceキー または マウス左クリック または ゲームパッドAボタン
-		if (m_ConfirmAction == null)
+		// 旧フロー 決定(落下開始): Spaceキー または マウス左クリック または ゲームパッドAボタン
+		if (!HasAction(m_ConfirmAction))
 		{
-			bool confirmPressed = (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
-				|| (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-				|| (Gamepad.current != null && Gamepad.current.buttonSouth.wasPressedThisFrame);
+			bool confirmPressed =
+				(Keyboard.current != null &&
+				 Keyboard.current.spaceKey.wasPressedThisFrame)
+				||
+				(Mouse.current != null &&
+				 Mouse.current.leftButton.wasPressedThisFrame)
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.buttonSouth.wasPressedThisFrame);
 
 			if (confirmPressed)
 			{
@@ -238,11 +540,16 @@ public class PlayerInputReceiver : MonoBehaviour
 			}
 		}
 
-		// ブレーキ(停止): Fキー または Sキー または ゲームパッドBボタン
-		if (m_BrakeAction == null)
+		// ブレーキ(停止): Fキー または Sキー または ゲームパッドBボタン(旧フロー用フォールバック)
+		if (!HasAction(m_BrakeAction))
 		{
-			bool brakePressed = (Keyboard.current != null && (Keyboard.current.fKey.wasPressedThisFrame || Keyboard.current.sKey.wasPressedThisFrame))
-				|| (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame);
+			bool brakePressed =
+				(Keyboard.current != null &&
+				 (Keyboard.current.fKey.wasPressedThisFrame ||
+				  Keyboard.current.sKey.wasPressedThisFrame))
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.buttonEast.wasPressedThisFrame);
 
 			if (brakePressed)
 			{
@@ -250,16 +557,36 @@ public class PlayerInputReceiver : MonoBehaviour
 			}
 		}
 
-		// シュート: Eキー
-		if (m_ShootAction == null)
+		// シュート: Eキー(旧フロー用フォールバック)
+		if (!HasAction(m_ShootAction) &&
+			Keyboard.current != null &&
+			Keyboard.current.eKey.wasPressedThisFrame)
 		{
-			bool shootPressed =
-				Keyboard.current != null &&
-				Keyboard.current.eKey.wasPressedThisFrame;
+			OnShootPressed?.Invoke();
+		}
 
-			if (shootPressed)
+		// 視点リセット: Rキー(旧フロー用フォールバック)
+		if (!HasAction(m_ViewResetAction) &&
+			Keyboard.current != null &&
+			Keyboard.current.rKey.wasPressedThisFrame)
+		{
+			OnViewResetPressed?.Invoke();
+		}
+
+		// ロックオン: Lキー または Qキー または ゲームパッドL1(旧フロー用フォールバック)
+		if (!HasAction(m_LockOnAction))
+		{
+			bool lockOnPressed =
+				(Keyboard.current != null &&
+				 (Keyboard.current.lKey.wasPressedThisFrame ||
+				  Keyboard.current.qKey.wasPressedThisFrame))
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.leftShoulder.wasPressedThisFrame);
+
+			if (lockOnPressed)
 			{
-				OnShootPressed?.Invoke();
+				OnLockOnPressed?.Invoke();
 			}
 		}
 	}
