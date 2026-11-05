@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -18,6 +19,7 @@ public class MatchManager : NetworkBehaviour
 		Finished = 2,
 		Countdown = 3,
 		PreparingRestart = 4,
+		GoalCelebration = 5,
 	}
 
 	[SerializeField] private int m_MatchDurationSeconds;
@@ -28,9 +30,18 @@ public class MatchManager : NetworkBehaviour
 	[SerializeField] private BallController m_Ball;
 
 	private readonly NetworkVariable<double> m_CountdownEndTime = new NetworkVariable<double>();
+	private readonly NetworkVariable<ETeamType> m_GoalScoringTeam = new NetworkVariable<ETeamType>(
+		ETeamType.None,
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Server);
 	private double m_PlayTimeRemaining;
 	private bool m_IsStartRequested;
 	private bool m_IsGoalProcessing;
+	private readonly HashSet<ulong> m_PendingGoalEffectClients = new HashSet<ulong>();
+	private uint m_GoalEffectSequence;
+	private uint m_LocalGoalEffectSequence;
+	private int m_LocalGoalEffectCount;
+	private bool m_IsLocalGoalEffectPending;
 
 	[Header("ゴール判定のデバッグ設定")]
 	[InspectorName("ゴール得点を1回に制限")]
@@ -83,10 +94,16 @@ public class MatchManager : NetworkBehaviour
 	/// </summary>
 	public event Action<int> BlueScoreChanged;
 
+	/// <summary>
+	/// サーバーで確定したゴールの得点先チームを各表示端末へ通知します。
+	/// </summary>
+	public event Action<ETeamType> GoalScored;
+
 	public EMatchState MatchState => m_MatchState.Value;
 	public int RemainingTimeSeconds => m_RemainingTimeSeconds.Value;
 	public int RedScore => m_RedScore.Value;
 	public int BlueScore => m_BlueScore.Value;
+	public ETeamType GoalScoringTeam => m_GoalScoringTeam.Value;
 	public int CountdownRemainingSeconds => m_MatchState.Value == EMatchState.Countdown && NetworkManager != null
 		? Mathf.Max(0, Mathf.CeilToInt((float)(m_CountdownEndTime.Value - NetworkManager.ServerTime.Time)))
 		: 0;
@@ -121,6 +138,7 @@ public class MatchManager : NetworkBehaviour
 
 		if (IsServer)
 		{
+			NetworkManager.OnClientDisconnectCallback += HandleGoalEffectClientDisconnected;
 			ResetMatch();
 
 			if (m_StartAutomatically)
@@ -134,6 +152,13 @@ public class MatchManager : NetworkBehaviour
 
 	public override void OnNetworkDespawn()
 	{
+		if (IsServer)
+		{
+			NetworkManager.OnClientDisconnectCallback -= HandleGoalEffectClientDisconnected;
+		}
+		m_IsLocalGoalEffectPending = false;
+		m_LocalGoalEffectCount = 0;
+		m_PendingGoalEffectClients.Clear();
 		UnsubscribeFromNetworkVariables();
 
 		if (Instance == this)
@@ -144,6 +169,12 @@ public class MatchManager : NetworkBehaviour
 
 	private void Update()
 	{
+		if (IsSpawned && IsClient && m_IsLocalGoalEffectPending && m_LocalGoalEffectCount == 0)
+		{
+			m_IsLocalGoalEffectPending = false;
+			CompleteGoalEffectServerRpc(m_LocalGoalEffectSequence);
+		}
+
 		if (!IsSpawned || !IsServer)
 		{
 			return;
@@ -152,6 +183,11 @@ public class MatchManager : NetworkBehaviour
 		if (m_IsStartRequested && m_PlayerSpawner.IsSpawned && m_PlayerSpawner.IsReady && m_Ball.IsSpawned)
 		{
 			m_IsStartRequested = false;
+			BeginRestartPreparation();
+		}
+
+		if (m_MatchState.Value == EMatchState.GoalCelebration && m_PendingGoalEffectClients.Count == 0)
+		{
 			BeginRestartPreparation();
 		}
 
@@ -203,7 +239,11 @@ public class MatchManager : NetworkBehaviour
 
 		m_HasScoredGoal = false;
 		m_IsStartRequested = false;
+		m_GoalScoringTeam.Value = ETeamType.None;
 		m_IsGoalProcessing = false;
+		m_PendingGoalEffectClients.Clear();
+		m_IsLocalGoalEffectPending = false;
+		m_LocalGoalEffectCount = 0;
 		m_CountdownEndTime.Value = 0d;
 		m_PlayTimeRemaining = 0d;
 		m_RedScore.Value = 0;
@@ -326,9 +366,71 @@ public class MatchManager : NetworkBehaviour
 
 		m_PlayTimeRemaining = Math.Max(0d, m_MatchEndTime - NetworkManager.ServerTime.Time);
 		m_RemainingTimeSeconds.Value = Mathf.CeilToInt((float)m_PlayTimeRemaining);
-		BeginRestartPreparation();
+		BeginGoalCelebration(team);
 		m_IsGoalProcessing = false;
 		return true;
+	}
+
+	private void BeginGoalCelebration(ETeamType team)
+	{
+		m_GoalScoringTeam.Value = team;
+		m_MatchState.Value = EMatchState.GoalCelebration;
+		m_PlayerSpawner.SetMatchActionsEnabled(false);
+		m_Ball.SetMatchPaused(true);
+		m_GoalEffectSequence++;
+		m_PendingGoalEffectClients.Clear();
+		foreach (var client in NetworkManager.ConnectedClientsList)
+		{
+			if (client.ClientId != Unity.Netcode.NetworkManager.ServerClientId || IsHost)
+			{
+				m_PendingGoalEffectClients.Add(client.ClientId);
+			}
+		}
+		NotifyGoalScoredRpc(team, m_GoalEffectSequence);
+	}
+
+	[Rpc(SendTo.ClientsAndHost)]
+	private void NotifyGoalScoredRpc(ETeamType team, uint sequence, RpcParams rpcParams = default)
+	{
+		if (rpcParams.Receive.SenderClientId != Unity.Netcode.NetworkManager.ServerClientId) return;
+		m_LocalGoalEffectSequence = sequence;
+		m_LocalGoalEffectCount = 0;
+		m_IsLocalGoalEffectPending = true;
+		GoalScored?.Invoke(team);
+	}
+
+	/// <summary>
+	/// この端末で再生を開始したエフェクトを完了待ちへ登録します。
+	/// </summary>
+	public uint RegisterLocalGoalEffect()
+	{
+		if (m_IsLocalGoalEffectPending) m_LocalGoalEffectCount++;
+		return m_LocalGoalEffectSequence;
+	}
+
+	/// <summary>
+	/// 現在の得点演出に属するエフェクトの完了を受け付けます。
+	/// </summary>
+	public void CompleteLocalGoalEffect(uint sequence)
+	{
+		if (m_IsLocalGoalEffectPending && sequence == m_LocalGoalEffectSequence && m_LocalGoalEffectCount > 0)
+		{
+			m_LocalGoalEffectCount--;
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void CompleteGoalEffectServerRpc(uint sequence, RpcParams rpcParams = default)
+	{
+		if (m_MatchState.Value == EMatchState.GoalCelebration && sequence == m_GoalEffectSequence)
+		{
+			m_PendingGoalEffectClients.Remove(rpcParams.Receive.SenderClientId);
+		}
+	}
+
+	private void HandleGoalEffectClientDisconnected(ulong clientId)
+	{
+		m_PendingGoalEffectClients.Remove(clientId);
 	}
 
 	/// <summary>
@@ -343,6 +445,8 @@ public class MatchManager : NetworkBehaviour
 		}
 
 		m_RemainingTimeSeconds.Value = 0;
+		m_PendingGoalEffectClients.Clear();
+		m_IsLocalGoalEffectPending = false;
 		m_IsStartRequested = false;
 		m_MatchState.Value = EMatchState.Finished;
 		m_PlayerSpawner?.SetMatchActionsEnabled(false);
@@ -375,6 +479,11 @@ public class MatchManager : NetworkBehaviour
 
 	private void HandleMatchStateChanged(EMatchState previousValue, EMatchState newValue)
 	{
+		if (previousValue == EMatchState.GoalCelebration && newValue != EMatchState.GoalCelebration)
+		{
+			m_IsLocalGoalEffectPending = false;
+			m_LocalGoalEffectCount = 0;
+		}
 		MatchStateChanged?.Invoke(newValue);
 	}
 

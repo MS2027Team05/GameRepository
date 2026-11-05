@@ -7,6 +7,9 @@
 `UI/MatchHudController`は同期された終了時刻からカウントダウンを表示します。カウントダウン中は試合時計を停止し、得点と秒未満を含む残り時間を維持します。
 再開時は`PreparingRestart`で待機し、各`PlayerController`がOwner側で位置を即時反映して返す完了応答を`PlayerSpawner`が確認した後に、`Countdown`へ遷移します。
 復帰時の表示初期化は`PlayerController.Respawn`から各専門モジュールへ委譲します。カメラは視点・追従・FOVを即時に復帰姿勢へ戻し、地上移動は速度履歴を消去します。アニメーションはOwnerが復帰世代を同期し、全端末でAnimatorの初期状態を再評価します。
+ゴール演出は`MatchManager.TryAddGoalScore`で得点確定後にRPCで通知し、各端末の`GoalController`が得点先チームに対応する配置済みParticleSystemを再生します。ゴールごとのNetworkObjectやエフェクトの都度生成は使用しません。
+得点後は`GoalCelebration`で全プレイヤーとボールをその場に停止します。各端末の`GoalController`が子を含めた粒子の消滅を確認し、`MatchManager`が接続中の対象端末すべての完了を受信してから再配置へ進めます。`MatchHudController`は同じ状態に連動してInspector指定の得点メッセージを表示します。
+得点メッセージの文言はHUDのInspectorでチームごとに設定し、`MatchManager.GoalScoringTeam`が同期する得点先から選択します。
 
 ```text
 GameRepository/
