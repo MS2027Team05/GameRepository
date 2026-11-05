@@ -51,7 +51,10 @@ GameRepository/
 │   │   │   ├── PlayerSilhouette.cs      # チーム別アウトライン・味方/観戦者向け遮蔽シルエット描画制御
 │   │   │   └── ToolSilhouette.cs        # ツール類遮蔽時シルエット描画制御
 │   │   ├── Stage/               # ステージ・地形管理スクリプト
-│   │   │   └── StageSymmetricSynchronizer.cs # [EntryPoint] ステージ地形の点対称同期設定・データ保持コンポーネント
+│   │   │   ├── StageSymmetricSynchronizer.cs # [EntryPoint] ステージ地形の点対称同期設定・データ保持コンポーネント
+│   │   │   ├── StageRailRingBuilder.cs       # [EntryPoint] 外周レール(3種)・往復キューブ・外側足場一括生成コンポーネント
+│   │   │   ├── StageRailPatternSwitcher.cs   # 外周レール(3種+None)x足場(On/Off)2x3パターン切り替え・マルチ同期コンポーネント
+│   │   │   └── StageShuttleBlock.cs          # 4分割レール区間を往復移動するブロック(キューブ)コンポーネント
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
 │   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御
