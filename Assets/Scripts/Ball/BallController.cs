@@ -19,14 +19,22 @@ using UnityEngine;
 public class BallController : NetworkBehaviour
 {
 	[Header("ボールの当たり判定")]
+	[Tooltip("ボールの物理衝突とキャッチ判定に使用するColliderです。")]
 	[SerializeField] private Collider m_PhysicsCollider;
+	[Tooltip("ボール周辺の検知に使用するSensor用Colliderです。")]
 	[SerializeField] private Collider m_SensorCollider;
 
 	[Header("シュート設定")]
+	[Tooltip("ボールを射出するときの初速度に使用する値です(おおむねm/s)。")]
 	[SerializeField] private float m_ShootPower;
 
 	[Header("再キャッチ防止")]
+	[Tooltip("射出または強制解放した元の所持者が、再びキャッチできるまでの時間です(秒)。")]
 	[SerializeField] private float m_RepickupDelay;
+
+	[Header("味方パス受取ボーナス判定")]
+	[Tooltip("味方パス回復の資格を失効させるボール速度のしきい値です(m/s)。この速度以下になると資格が失われ、再加速しても復活しません。")]
+	[SerializeField] private float m_PassBonusMinSpeed;
 
 	private readonly NetworkVariable<ulong> m_CurrentHolderId =
 		new NetworkVariable<ulong>();
@@ -43,6 +51,10 @@ public class BallController : NetworkBehaviour
 	private bool m_HasRepickupLock;
 	private ulong m_LastHolderClientId;
 	private float m_RepickupUnlockTime;
+
+	// Host側で、最後の正常なシュートが味方パスとして受取可能か記録します。
+	private bool m_IsPassInFlight;
+	private ETeamType m_LastPasserTeam;
 
 	/// <summary>
 	/// ボールがシュートされたときにHost側で通知します。
@@ -99,6 +111,37 @@ public class BallController : NetworkBehaviour
 		{
 			ApplyHolderState(true);
 		}
+	}
+
+	private void FixedUpdate()
+	{
+		if (!IsSpawned || !IsServer)
+		{
+			return;
+		}
+
+		UpdatePassBonusEligibility();
+	}
+
+	/// <summary>
+	/// 射出後のボール速度が設定値以下になったら、味方パスの回復資格を失効させます。
+	/// 一度失効した資格は、ボールが再加速しても復活しません。
+	/// </summary>
+	private void UpdatePassBonusEligibility()
+	{
+		if (!m_IsPassInFlight || m_Rigidbody == null)
+		{
+			return;
+		}
+
+		float minimumSpeed = Mathf.Max(0.0f, m_PassBonusMinSpeed);
+		if (m_Rigidbody.linearVelocity.sqrMagnitude > minimumSpeed * minimumSpeed)
+		{
+			return;
+		}
+
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
 	}
 
 	/// <summary>
@@ -193,6 +236,9 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
+		// キャッチ直前の速度を確認します。AttachToHolder後は速度が0になるため先に判定。
+		UpdatePassBonusEligibility();
+
 		if (!AttachToHolder(
 			holderNetworkObject,
 			holder))
@@ -208,6 +254,25 @@ public class BallController : NetworkBehaviour
 
 		m_HasHolder.Value =
 			true;
+
+		// 所持確定時に一度だけ判定し、強制ドロップや敵からの取得では付与しません。
+		bool isFriendlyPass = m_IsPassInFlight &&
+			holderClientId != m_LastHolderClientId &&
+			m_LastPasserTeam != ETeamType.None;
+
+		if (isFriendlyPass)
+		{
+			PlayerNetworkProfile receiverProfile = holderNetworkObject.GetComponent<PlayerNetworkProfile>();
+			isFriendlyPass = receiverProfile != null && receiverProfile.Team == m_LastPasserTeam;
+		}
+
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
+
+		if (isFriendlyPass)
+		{
+			holder.NotifyFriendlyPassReceivedServer();
+		}
 
 		return true;
 	}
@@ -239,6 +304,19 @@ public class BallController : NetworkBehaviour
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
 
+		// TryShoot成功時のみ使用するパス元チームを先に取得しておきます。
+		ETeamType passerTeam = ETeamType.None;
+		if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			m_CurrentHolderNetworkObjectId.Value,
+			out NetworkObject previousHolderObject))
+		{
+			PlayerNetworkProfile profile = previousHolderObject.GetComponent<PlayerNetworkProfile>();
+			if (profile != null)
+			{
+				passerTeam = profile.Team;
+			}
+		}
+
 		StartRepickupLock(
 			previousHolderClientId);
 
@@ -259,6 +337,9 @@ public class BallController : NetworkBehaviour
 		m_Rigidbody.linearVelocity =
 			shootDirection *
 			m_ShootPower;
+
+		m_LastPasserTeam = passerTeam;
+		m_IsPassInFlight = true;
 
 		// BallPhysicsControllerへ、
 		// シュート開始を通知します。
@@ -301,6 +382,10 @@ public class BallController : NetworkBehaviour
 
 		m_CurrentHolderId.Value =
 			0;
+
+		// 強制解放されたボールは、味方パスボーナスの対象外です。
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
 
 		// シュートではない解放として、
 		// BallPhysicsControllerへ通知します。

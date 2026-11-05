@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -11,10 +11,13 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 {
 	[Header("自端末専用オブジェクト")]
 	[FormerlySerializedAs("playerCameraObject")]
+	[Tooltip("Owner本人が使用するカメラ用GameObjectです。")]
 	[SerializeField] private GameObject m_PlayerCameraObject;
 	[FormerlySerializedAs("inputReceiver")]
+	[Tooltip("プレイヤーの入力を受け取るコンポーネントです。未設定時は同じオブジェクトから取得します。")]
 	[SerializeField] private PlayerInputReceiver m_InputReceiver;
 	[FormerlySerializedAs("CinemachineCameraTransform")]
+	[Tooltip("視点補正に利用するCinemachineカメラ用のTransformです。")]
 	[SerializeField] private Transform m_CinemachineCameraTransform;
 
 	// ========================================================================
@@ -23,9 +26,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	// 各PGの実装および新フローへの移行作業が完了し次第、本フラグと旧フロー分岐コードを削除してください。
 	// ========================================================================
 	[Header("【移行完了後に削除】新アクションフロー切り替え")]
+	[Tooltip("移行中の新アクションフローを使用する一時フラグです。移行完了後に削除予定です。")]
 	[SerializeField] private bool m_UseReworkedActionFlow;
 
 	[Header("新アクションフロー設定")]
+	[Tooltip("L1の短押しと長押しを区別する時間です(秒)。0以下ではコード側の代替値を使用します。")]
 	[SerializeField] private float m_ShortTapMaxDuration;
 
 	// 各担当者が実装するインターフェース・コンポーネント参照
@@ -445,19 +450,22 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 				return;
 			}
 
-			if (m_PlayerResource != null && !m_PlayerResource.TryConsume(moveCost))
+			Vector3 airMoveDirection = m_AimGuide.AimMoveDirection;
+			if (airMoveDirection.sqrMagnitude <= 0.0001f)
 			{
 				return;
 			}
 
-			m_PlayerResource?.NotifyActionPerformed();
+			if (m_PlayerResource != null && !m_PlayerResource.TryConsume(moveCost))
+			{
+				return;
+			}
 
 			// 実際に空中再移動が成立したタイミングでのみ1回制限を消費
 			m_UsedMidFallAim = true;
 
 			Vector3 airTargetPoint = m_AimGuide.TargetLandingPoint;
 			Vector3 airTargetNormal = m_AimGuide.TargetLandingNormal;
-			Vector3 airMoveDirection = m_AimGuide.AimMoveDirection;
 
 			CurrentState = EPlayerState.Falling;
 			m_AimGuide.BeginLandingTracking(airTargetPoint, airTargetNormal);
@@ -467,14 +475,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
-		// 地上移動: リソースを消費し、立ち面法線方向へ少し浮上してから飛行を開始
-		if (m_PlayerResource != null && !m_PlayerResource.TryConsume(moveCost))
-		{
-			return;
-		}
-
-		m_PlayerResource?.NotifyActionPerformed();
-
+		// 地上移動: 予備浮上後の飛行開始直前にリソースを消費する。
 		Vector3 groundTargetPoint = m_AimGuide.TargetLandingPoint;
 		Vector3 groundTargetNormal = m_AimGuide.TargetLandingNormal;
 		RotatePlayerTowardAim(aimDirection);
@@ -486,17 +487,28 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 				return;
 			}
 
-			CurrentState = EPlayerState.Falling;
-			m_AimGuide.BeginLandingTracking(groundTargetPoint, groundTargetNormal);
-			m_GravityMover?.SetFallingTarget(groundTargetPoint, groundTargetNormal);
-			m_CameraEffect?.PlayFallEffect();
-
 			Vector3 toTarget = groundTargetPoint - transform.position;
 			Vector3 launchDirection = toTarget.sqrMagnitude > 0.001f
 				? toTarget.normalized
 				: m_AimGuide.AimMoveDirection;
 
-			m_GravityMover?.StartFalling(launchDirection);
+			// 実際に飛行できない場合、リソースを消費しない。
+			if (m_GravityMover == null || launchDirection.sqrMagnitude <= 0.0001f)
+			{
+				return;
+			}
+
+			// 予備浮上中のスタンなどでコールバックに到達しない場合は消費されない。
+			if (m_PlayerResource != null && !m_PlayerResource.TryConsume(moveCost))
+			{
+				return;
+			}
+
+			CurrentState = EPlayerState.Falling;
+			m_AimGuide.BeginLandingTracking(groundTargetPoint, groundTargetNormal);
+			m_GravityMover.SetFallingTarget(groundTargetPoint, groundTargetNormal);
+			m_CameraEffect?.PlayFallEffect();
+			m_GravityMover.StartFalling(launchDirection);
 		});
 	}
 
@@ -534,13 +546,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
-		// 非所持時: 電撃チャージ開始(リソース残量を事前確認)
-		if (m_ElectricAction != null && m_PlayerResource != null)
+		// 非所持時: 電撃コンポーネントがない間はチャージ状態へ移行しない。
+		if (m_ElectricAction == null || m_PlayerResource == null)
 		{
-			if (!m_PlayerResource.CanAfford(m_ElectricAction.RequiredCost))
-			{
-				return;
-			}
+			return;
+		}
+
+		if (!m_PlayerResource.CanAfford(m_ElectricAction.RequiredCost))
+		{
+			return;
 		}
 
 		m_IsSubActionHeld = true;
@@ -576,11 +590,18 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		if (wasChargingElectric)
 		{
-			if (m_ElectricAction != null && m_ElectricAction.TryReleaseAndFire())
+			// 発射前にも残量を確認し、途中で不足した場合の無償発射を防止します。
+			float cost = m_ElectricAction != null
+				? m_ElectricAction.RequiredCost
+				: float.PositiveInfinity;
+
+			if (m_PlayerResource != null &&
+				m_PlayerResource.CanAfford(cost) &&
+				m_ElectricAction != null &&
+				m_ElectricAction.TryReleaseAndFire())
 			{
-				float cost = m_ElectricAction.RequiredCost;
-				m_PlayerResource?.TryConsume(cost);
-				m_PlayerResource?.NotifyActionPerformed();
+				// CanAffordと発射確定の間でリソース値を変更しないため消費できます。
+				m_PlayerResource.TryConsume(cost);
 			}
 			else
 			{
