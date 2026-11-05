@@ -32,6 +32,7 @@ using UnityEngine;
 /// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(SphereCollider))]
 [RequireComponent(typeof(BallController))]
 public class BallPhysicsController : NetworkBehaviour
 {
@@ -61,6 +62,11 @@ public class BallPhysicsController : NetworkBehaviour
 		/// Surfaceへ向かっている状態です。
 		/// </summary>
 		SeekingSurface,
+
+		/// <summary>
+		/// BallSurface上でSurface Physicsを実行している状態です。
+		/// </summary>
+		Surface,
 
 		/// <summary>
 		/// AttachSurfaceへ吸着して
@@ -173,6 +179,49 @@ public class BallPhysicsController : NetworkBehaviour
 	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceStopSpeedThreshold;
 
+	[Header("BallSurface Physics")]
+
+	[Tooltip(
+		"Surface法線とは逆方向へ作用する重力加速度です。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_SurfaceGravityAcceleration;
+
+	[Tooltip(
+		"この法線方向衝突速度未満では再バウンドしません。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_SurfaceBounceSpeedThreshold;
+
+	[Tooltip(
+		"Surface Physicsのバウンド後に残す法線方向速度の割合です。")]
+	[Range(0.0f, 1.0f)]
+	[SerializeField] private float m_SurfaceBounceNormalRetention;
+
+	[Tooltip(
+		"Surface Physicsのバウンド時に残すSurface方向速度の割合です。")]
+	[Range(0.0f, 1.0f)]
+	[SerializeField] private float m_SurfaceBounceTangentialRetention;
+
+	[Tooltip(
+		"Surface Physicsのバウンド時に最低限保証する法線方向速度です。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_SurfaceMinBounceNormalSpeed;
+
+	[Tooltip(
+		"Surface Physicsのバウンド時の最大法線方向速度です。0なら制限しません。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_SurfaceMaxBounceNormalSpeed;
+
+	[Tooltip(
+		"Surface Physicsで接地後にSurface方向速度を減衰させる量です。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_SurfaceGroundDeceleration;
+
+	[Header("BallSurface Physics Debug")]
+
+	[Tooltip(
+		"ONにするとバウンドごとの滞空時間・World移動距離・Surface移動距離をConsoleへ出力します。")]
+	[SerializeField] private bool m_EnableBounceDistanceDebug;
+
 	[Header("停止後のAttachSurface探索")]
 
 	[Tooltip(
@@ -201,11 +250,13 @@ public class BallPhysicsController : NetworkBehaviour
 	private const float m_MinimumCalculationDistance = 0.001f;
 
 	private Rigidbody m_Rigidbody;
+	private SphereCollider m_BallCollider;
 	private BallController m_BallController;
 
 	private BallSurfaceGravity m_SurfaceGravity;
 	private BallSurfaceSearch m_SurfaceSearch;
 	private BallBounce m_Bounce;
+	private BallSurfaceSimulation m_SurfaceSimulation;
 
 	private EBallMotionState m_MotionState;
 
@@ -223,6 +274,19 @@ public class BallPhysicsController : NetworkBehaviour
 	private float m_NextSurfaceSearchTime;
 	private float m_NextAttractSearchTime;
 
+	private bool m_HasBounceDistanceDebugSample;
+	private bool m_BounceDebugCrossedConvexEdge;
+
+	private Vector3 m_PreviousBounceDebugWorldPosition;
+
+	private float m_BounceDebugWorldDistance;
+	private float m_BounceDebugSurfaceDistance;
+	private float m_BounceDebugAirTime;
+	private float m_BounceDebugStartSurfaceSpeed;
+	private float m_BounceDebugStartVerticalSpeed;
+
+	private int m_BounceDebugSequence;
+
 	/// <summary>
 	/// 必要なComponentを取得し、
 	/// ボール物理用の各専門クラスを生成します。
@@ -231,6 +295,9 @@ public class BallPhysicsController : NetworkBehaviour
 	{
 		m_Rigidbody =
 			GetComponent<Rigidbody>();
+
+		m_BallCollider =
+			GetComponent<SphereCollider>();
 
 		m_BallController =
 			GetComponent<BallController>();
@@ -244,10 +311,32 @@ public class BallPhysicsController : NetworkBehaviour
 		m_Bounce =
 			new BallBounce();
 
+		m_SurfaceSimulation =
+			new BallSurfaceSimulation();
+
+		ConfigureSurfaceSimulation();
+
 		// Unity標準重力ではなく
 		// 独自の疑似重力を使用します。
 		m_Rigidbody.useGravity =
 			false;
+	}
+
+	/// <summary>
+	/// InspectorのSurface Physics設定をSimulationへ反映します。
+	/// </summary>
+	private void ConfigureSurfaceSimulation()
+	{
+		m_SurfaceSimulation.ConfigurePhysics(
+			m_SurfaceGravityAcceleration,
+			m_SurfaceBounceSpeedThreshold,
+			m_SurfaceBounceNormalRetention,
+			m_SurfaceBounceTangentialRetention,
+			m_SurfaceMinBounceNormalSpeed,
+			m_SurfaceMaxBounceNormalSpeed,
+			m_SurfaceGroundDeceleration,
+			m_SurfaceStopSpeedThreshold,
+			GetBallWorldRadius());
 	}
 
 	/// <summary>
@@ -332,9 +421,22 @@ public class BallPhysicsController : NetworkBehaviour
 				UpdateSurfaceSeeking();
 				break;
 
+			case EBallMotionState.Surface:
+				UpdateSurfaceSimulation();
+				break;
+
 			case EBallMotionState.Idle:
 			case EBallMotionState.StuckToSurface:
 				break;
+		}
+
+		if (m_MotionState ==
+			EBallMotionState.Surface)
+		{
+			m_PrePhysicsVelocity =
+				Vector3.zero;
+
+			return;
 		}
 
 		// Unityの衝突解決前の速度として使用するため、
@@ -364,6 +466,12 @@ public class BallPhysicsController : NetworkBehaviour
 			return;
 		}
 
+		if (m_MotionState ==
+			EBallMotionState.Surface)
+		{
+			return;
+		}
+
 		if (collision.contactCount <= 0)
 		{
 			return;
@@ -376,9 +484,36 @@ public class BallPhysicsController : NetworkBehaviour
 			GetIncomingVelocity(
 				collision);
 
+		// BallSurfaceSourceが存在する面では、
+		// Rigidbody反射ではなくSurface Physicsへ移行します。
+		BallSurfaceSource surfaceSource =
+			collision.collider.GetComponent<BallSurfaceSource>();
+
+		if (surfaceSource != null)
+		{
+			if (TryEnterSurfaceSimulation(
+				surfaceSource,
+				contact,
+				incomingVelocity))
+			{
+				return;
+			}
+
+			Debug.LogWarning(
+				$"{name}: BallSurfaceへ接触しましたがSurface Physicsの初期化に失敗したため、接触地点付近で停止します。 Surface={surfaceSource.name}",
+				this);
+
+			StopSafelyAtSurfaceContact(
+				contact);
+
+			return;
+		}
+
 		float collisionSpeed =
 			incomingVelocity.magnitude;
 
+		// BallSurfaceSourceを持たない既存AttachSurfaceは、
+		// SuperBallUltraSmash側の従来処理を維持します。
 		if (IsAttachSurface(
 			collision.collider))
 		{
@@ -391,8 +526,6 @@ public class BallPhysicsController : NetworkBehaviour
 			return;
 		}
 
-		// AttachSurfaceではないColliderは、
-		// 重力対象を変更せず反射だけ行います。
 		HandleNormalCollision(
 			contact,
 			incomingVelocity);
@@ -598,6 +731,8 @@ public class BallPhysicsController : NetworkBehaviour
 	private void ApplyBounceVelocity(
 		Vector3 bounceVelocity)
 	{
+		m_SurfaceSimulation.Reset();
+
 		m_Rigidbody.isKinematic =
 			false;
 
@@ -631,6 +766,11 @@ public class BallPhysicsController : NetworkBehaviour
 			return;
 		}
 
+		m_SurfaceSimulation.Reset();
+
+		m_Rigidbody.isKinematic =
+			false;
+
 		Vector3 currentVelocity =
 			m_Rigidbody.linearVelocity;
 
@@ -638,6 +778,7 @@ public class BallPhysicsController : NetworkBehaviour
 			Mathf.Epsilon)
 		{
 			BeginSurfaceSeeking();
+
 			return;
 		}
 
@@ -666,6 +807,8 @@ public class BallPhysicsController : NetworkBehaviour
 		{
 			return;
 		}
+
+		m_SurfaceSimulation.Reset();
 
 		BeginSurfaceSeeking();
 	}
@@ -919,6 +1062,8 @@ public class BallPhysicsController : NetworkBehaviour
 	/// </summary>
 	private void BeginSurfaceSeeking()
 	{
+		m_SurfaceSimulation.Reset();
+
 		m_Rigidbody.isKinematic =
 			false;
 
@@ -1089,6 +1234,460 @@ public class BallPhysicsController : NetworkBehaviour
 	/// <summary>
 	/// ボールの現在のMotionStateを変更します。
 	/// </summary>
+
+
+	/// <summary>
+	/// BallSurfaceへロックしてSurface Physicsを開始します。
+	/// </summary>
+	private bool TryEnterSurfaceSimulation(
+		BallSurfaceSource surfaceSource,
+		ContactPoint contact,
+		Vector3 incomingVelocity)
+	{
+		if (surfaceSource == null ||
+			!surfaceSource.IsReady)
+		{
+			return false;
+		}
+
+		if (!surfaceSource.TryGetSurfaceHit(
+			contact.point,
+			contact.normal,
+			out RaycastHit surfaceHit))
+		{
+			return false;
+		}
+
+		if (surfaceHit.triangleIndex <
+			0)
+		{
+			return false;
+		}
+
+		// Transform Scaleなどが変わった場合にも
+		// 現在のBall半径をSurface Simulationへ反映します。
+		ConfigureSurfaceSimulation();
+
+		if (!m_SurfaceSimulation.TryInitialize(
+			surfaceSource,
+			surfaceHit.triangleIndex,
+			surfaceHit.point,
+			incomingVelocity))
+		{
+			return false;
+		}
+
+		// Dynamic Rigidbodyの間に速度を停止します。
+		m_Rigidbody.linearVelocity =
+			Vector3.zero;
+
+		m_Rigidbody.angularVelocity =
+			Vector3.zero;
+
+		m_Rigidbody.isKinematic =
+			true;
+
+		m_FlightDirection =
+			Vector3.zero;
+
+		m_PrePhysicsVelocity =
+			Vector3.zero;
+
+		m_SurfaceGravity.Clear();
+
+		ChangeMotionState(
+			EBallMotionState.Surface);
+
+		ApplySurfacePosition(
+			true);
+
+		return true;
+	}
+
+	/// <summary>
+	/// Surface Physicsを1Physics Step進めます。
+	/// </summary>
+	private void UpdateSurfaceSimulation()
+	{
+		if (!m_SurfaceSimulation.IsInitialized)
+		{
+			Debug.LogWarning(
+				$"{name}: Surface Physicsが未初期化の状態になったため、現在位置で停止します。",
+				this);
+
+			StopSurfaceMotionSafely();
+
+			return;
+		}
+
+		BallSurfaceSimulation.EAdvanceResult result =
+			m_SurfaceSimulation.Advance(
+				Time.fixedDeltaTime);
+
+		switch (result)
+		{
+			case BallSurfaceSimulation.EAdvanceResult.Moved:
+				ApplySurfacePosition(
+					false);
+				break;
+
+			case BallSurfaceSimulation.EAdvanceResult.ConcaveEdgeReached:
+			case BallSurfaceSimulation.EAdvanceResult.BoundaryEdgeReached:
+			case BallSurfaceSimulation.EAdvanceResult.UnsupportedEdgeReached:
+				ApplySurfacePosition(
+					false);
+				break;
+
+			case BallSurfaceSimulation.EAdvanceResult.NotInitialized:
+			case BallSurfaceSimulation.EAdvanceResult.InvalidGeometry:
+			case BallSurfaceSimulation.EAdvanceResult.TransitionLimitReached:
+				Debug.LogWarning(
+					$"{name}: Surface Physicsを継続できないため、現在位置で停止します。 Result={result}",
+					this);
+
+				StopSurfaceMotionSafely();
+				break;
+		}
+	}
+
+	/// <summary>
+	/// Surface Physicsの座標をWorld座標へ戻します。
+	/// </summary>
+	private void ApplySurfacePosition(
+		bool immediate)
+	{
+		if (!m_SurfaceSimulation.TryGetCurrentBallCenterOffset(
+			out Vector3 ballCenterOffset))
+		{
+			return;
+		}
+
+		Vector3 targetColliderCenter =
+			m_SurfaceSimulation.SurfacePoint +
+			ballCenterOffset;
+
+		Vector3 colliderCenterOffset =
+			transform.TransformVector(
+				m_BallCollider.center);
+
+		Vector3 targetRigidbodyPosition =
+			targetColliderCenter -
+			colliderCenterOffset;
+
+		MeasureBounceDistance(
+			targetRigidbodyPosition,
+			immediate);
+
+		if (immediate)
+		{
+			m_Rigidbody.position =
+				targetRigidbodyPosition;
+		}
+		else
+		{
+			m_Rigidbody.MovePosition(
+				targetRigidbodyPosition);
+		}
+	}
+
+	/// <summary>
+	/// バウンド1回分の移動距離を計測します。
+	/// </summary>
+	/// <remarks>
+	/// 1回のバウンド開始から次の着地までについて、
+	///
+	/// ・AirTime
+	/// ・WorldDistance
+	/// ・SurfaceDistance
+	/// ・StartSurfaceSpeed
+	/// ・StartVerticalSpeed
+	/// ・CrossedConvex
+	///
+	/// を集計します。
+	///
+	/// WorldDistanceは実際にWorld上でボール中心が進んだ経路長です。
+	/// SurfaceDistanceはSimulationが展開Surface上で
+	/// 実際に消費した経路長です。
+	///
+	/// Sharp Convex Edgeを越えたバウンドだけ距離が不自然に変化するかを
+	/// バウンド単位で比較するための一時デバッグです。
+	/// </remarks>
+	private void MeasureBounceDistance(
+		Vector3 targetRigidbodyPosition,
+		bool immediate)
+	{
+		if (!m_EnableBounceDistanceDebug)
+		{
+			ResetBounceDistanceDebug();
+
+			return;
+		}
+
+		int currentBounceSequence =
+			m_SurfaceSimulation.BounceSequence;
+
+		// 初回Surface接触でバウンドが成立しなかった場合は
+		// 計測対象が存在しません。
+		if (currentBounceSequence <=
+			0)
+		{
+			ResetBounceDistanceDebug();
+
+			return;
+		}
+
+		if (immediate ||
+			!m_HasBounceDistanceDebugSample)
+		{
+			BeginBounceDistanceDebug(
+				currentBounceSequence,
+				targetRigidbodyPosition);
+
+			return;
+		}
+
+		m_BounceDebugWorldDistance +=
+			Vector3.Distance(
+				m_PreviousBounceDebugWorldPosition,
+				targetRigidbodyPosition);
+
+		m_BounceDebugSurfaceDistance +=
+			m_SurfaceSimulation.SurfaceDistanceTravelledThisStep;
+
+		m_BounceDebugAirTime +=
+			Time.fixedDeltaTime;
+
+		if (m_SurfaceSimulation.DidTraverseConvexEdgeThisStep)
+		{
+			m_BounceDebugCrossedConvexEdge =
+				true;
+		}
+
+		m_PreviousBounceDebugWorldPosition =
+			targetRigidbodyPosition;
+
+		if (!m_SurfaceSimulation.DidSurfaceImpactThisStep)
+		{
+			return;
+		}
+
+		// このStep内で着地したので、
+		// 直前まで追跡していた1バウンド分を出力します。
+		Debug.Log(
+			$"[BounceDistanceDebug] " +
+			$"Bounce={m_BounceDebugSequence}, " +
+			$"AirTime={m_BounceDebugAirTime:F3}, " +
+			$"WorldDistance={m_BounceDebugWorldDistance:F3}, " +
+			$"SurfaceDistance={m_BounceDebugSurfaceDistance:F3}, " +
+			$"StartSurfaceSpeed={m_BounceDebugStartSurfaceSpeed:F3}, " +
+			$"StartVerticalSpeed={m_BounceDebugStartVerticalSpeed:F3}, " +
+			$"CrossedConvex={m_BounceDebugCrossedConvexEdge}",
+			this);
+
+		if (currentBounceSequence >
+			m_BounceDebugSequence)
+		{
+			// 着地後に再バウンドした場合は、
+			// 同じ位置から次のバウンド計測を開始します。
+			BeginBounceDistanceDebug(
+				currentBounceSequence,
+				targetRigidbodyPosition);
+
+			return;
+		}
+
+		// 再バウンドしなかった場合は計測終了です。
+		ResetBounceDistanceDebug();
+	}
+
+	/// <summary>
+	/// 新しいバウンドの距離計測を開始します。
+	/// </summary>
+	private void BeginBounceDistanceDebug(
+		int bounceSequence,
+		Vector3 worldPosition)
+	{
+		m_HasBounceDistanceDebugSample =
+			true;
+
+		m_BounceDebugSequence =
+			bounceSequence;
+
+		m_PreviousBounceDebugWorldPosition =
+			worldPosition;
+
+		m_BounceDebugWorldDistance =
+			0.0f;
+
+		m_BounceDebugSurfaceDistance =
+			0.0f;
+
+		m_BounceDebugAirTime =
+			0.0f;
+
+		m_BounceDebugStartSurfaceSpeed =
+			m_SurfaceSimulation.LastBounceSurfaceSpeed;
+
+		m_BounceDebugStartVerticalSpeed =
+			m_SurfaceSimulation.LastBounceVerticalSpeed;
+
+		m_BounceDebugCrossedConvexEdge =
+			false;
+	}
+
+	/// <summary>
+	/// バウンド距離計測用の一時状態を初期化します。
+	/// </summary>
+	private void ResetBounceDistanceDebug()
+	{
+		m_HasBounceDistanceDebugSample =
+			false;
+
+		m_BounceDebugCrossedConvexEdge =
+			false;
+
+		m_PreviousBounceDebugWorldPosition =
+			Vector3.zero;
+
+		m_BounceDebugWorldDistance =
+			0.0f;
+
+		m_BounceDebugSurfaceDistance =
+			0.0f;
+
+		m_BounceDebugAirTime =
+			0.0f;
+
+		m_BounceDebugStartSurfaceSpeed =
+			0.0f;
+
+		m_BounceDebugStartVerticalSpeed =
+			0.0f;
+
+		m_BounceDebugSequence =
+			0;
+	}
+
+	/// <summary>
+	/// SphereColliderの実ワールド半径を取得します。
+	/// </summary>
+	private float GetBallWorldRadius()
+	{
+		Vector3 lossyScale =
+			m_BallCollider.transform.lossyScale;
+
+		float maximumScale =
+			Mathf.Max(
+				Mathf.Abs(
+					lossyScale.x),
+				Mathf.Abs(
+					lossyScale.y),
+				Mathf.Abs(
+					lossyScale.z));
+
+		return m_BallCollider.radius *
+			maximumScale;
+	}
+
+	/// <summary>
+	/// BallSurfaceへの接触は成立したものの、
+	/// Triangleを取得できずSurface Physicsを開始できなかった場合に、
+	/// 接触地点の外側へボールを置いて安全に停止します。
+	/// </summary>
+	private void StopSafelyAtSurfaceContact(
+		ContactPoint contact)
+	{
+		Vector3 targetRigidbodyPosition =
+			m_Rigidbody.position;
+
+		bool hasSafePosition =
+			false;
+
+		Vector3 contactNormal =
+			contact.normal;
+
+		if (contactNormal.sqrMagnitude >
+			Mathf.Epsilon)
+		{
+			contactNormal.Normalize();
+
+			Vector3 colliderCenterOffset =
+				transform.TransformVector(
+					m_BallCollider.center);
+
+			Vector3 currentColliderCenter =
+				m_Rigidbody.position +
+				colliderCenterOffset;
+
+			// Contact Normalの向きに依存せず、
+			// 現在のBall中心が存在する側へ必ず退避させます。
+			if (Vector3.Dot(
+				currentColliderCenter -
+					contact.point,
+				contactNormal) <
+				0.0f)
+			{
+				contactNormal =
+					-contactNormal;
+			}
+
+			float safeCenterDistance =
+				GetBallWorldRadius() +
+				m_MinimumCalculationDistance;
+
+			Vector3 targetColliderCenter =
+				contact.point +
+				contactNormal *
+					safeCenterDistance;
+
+			targetRigidbodyPosition =
+				targetColliderCenter -
+				colliderCenterOffset;
+
+			hasSafePosition =
+				true;
+		}
+
+		StopSurfaceMotionSafely();
+
+		if (hasSafePosition)
+		{
+			m_Rigidbody.position =
+				targetRigidbodyPosition;
+		}
+	}
+
+	/// <summary>
+	/// Surface Physicsを安全停止し、
+	/// 周辺Surfaceの再探索を行わず現在位置を維持します。
+	/// </summary>
+	private void StopSurfaceMotionSafely()
+	{
+		m_SurfaceSimulation.Reset();
+
+		m_Rigidbody.linearVelocity =
+			Vector3.zero;
+
+		m_Rigidbody.angularVelocity =
+			Vector3.zero;
+
+		m_Rigidbody.isKinematic =
+			true;
+
+		m_FlightDirection =
+			Vector3.zero;
+
+		m_PrePhysicsVelocity =
+			Vector3.zero;
+
+		m_SurfaceGravity.Clear();
+
+		ResetBounceDistanceDebug();
+
+		ChangeMotionState(
+			EBallMotionState.Idle);
+	}
+
 	private void ChangeMotionState(
 		EBallMotionState newState)
 	{
@@ -1118,6 +1717,10 @@ public class BallPhysicsController : NetworkBehaviour
 			Vector3.zero;
 
 		m_SurfaceGravity.Clear();
+
+		m_SurfaceSimulation.Reset();
+
+		ResetBounceDistanceDebug();
 	}
 
 	/// <summary>
@@ -1150,6 +1753,10 @@ public class BallPhysicsController : NetworkBehaviour
 			Vector3.zero;
 
 		m_SurfaceGravity.Clear();
+
+		m_SurfaceSimulation.Reset();
+
+		ResetBounceDistanceDebug();
 
 		m_NextSurfaceSearchTime =
 			0.0f;

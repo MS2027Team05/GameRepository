@@ -21,8 +21,11 @@ GameRepository/
 │   ├── Scenes/                  # 各画面・遷移用シーン格納
 │   ├── Scripts/                 # プロジェクト固有のC#スクリプト
 │   │   ├── Ball/                # ボール物理・同期制御
+│   │   │   ├── Surface/                 # BallSurfaceのMesh解析・曲面上移動シミュレーション
+│   │   │   │   ├── BallSurfaceSource.cs # [EntryPoint] MeshColliderからSurfaceデータを構築
+│   │   │   │   └── SurfacePartial/      # Convex/Concave/Edge/Vertex別のSurface遷移処理
 │   │   │   ├── BallController.cs        # [EntryPoint] ボール状態管理・所持・シュート制御
-│   │   │   ├── BallPhysicsController.cs # ボール物理補正・バウンド制御
+│   │   │   ├── BallPhysicsController.cs # Free Flight・Surface Physics状態統括
 │   │   │   ├── BallBounce.cs            # ボールの跳ね返り挙動制御
 │   │   │   ├── BallSurfaceGravity.cs    # ボールの接地面重力・吸着制御
 │   │   │   ├── BallSurfaceSearch.cs     # ボール周辺の面探索制御
