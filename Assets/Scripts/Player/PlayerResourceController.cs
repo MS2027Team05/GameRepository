@@ -31,6 +31,10 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	[Header("自プレイヤー専用ゲージUI")]
 	[SerializeField] private PlayerResourceGaugeUI m_ResourceGauge;
 
+	[Header("デバッグ専用回復エフェクト")]
+	[SerializeField] private bool m_EnableDebugRecoveryEffect;
+	[SerializeField] private PlayerRecoveryEffectController m_DebugRecoveryEffectController;
+
 	private IGravityMover m_GravityMover;
 	private IAimGuide m_AimGuide;
 	private IElectricAction m_ElectricAction;
@@ -52,6 +56,9 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 
 	public override void OnNetworkSpawn()
 	{
+		// 他プレイヤーを含め、PrefabのParticleSystemが勝手に再生しないよう停止します。
+		m_DebugRecoveryEffectController?.StopAll();
+
 		if (m_ResourceGauge != null)
 		{
 			// Player Prefab内の子Canvasを想定し、他プレイヤーのHUDは非表示にします。
@@ -76,6 +83,8 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 
 	public override void OnNetworkDespawn()
 	{
+		m_DebugRecoveryEffectController?.StopAll();
+
 		if (m_ResourceGauge != null)
 		{
 			OnResourceChanged -= m_ResourceGauge.SetResource;
@@ -95,6 +104,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 		if (m_PlayerController != null &&
 			m_PlayerController.CurrentState == PlayerController.EPlayerState.Stunned)
 		{
+			SetDebugRegenerating(false);
 			return;
 		}
 
@@ -102,6 +112,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 		if (IsActionActive())
 		{
 			m_IdleElapsedTime = 0.0f;
+			SetDebugRegenerating(false);
 			return;
 		}
 
@@ -112,6 +123,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 
 		if (m_CurrentResource >= MaxResource || deltaTime <= 0.0f)
 		{
+			SetDebugRegenerating(false);
 			return;
 		}
 
@@ -120,7 +132,9 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 		float waitDuration = Mathf.Clamp(recoveryDelay - previousIdleTime, 0.0f, deltaTime);
 		float recoveryDuration = deltaTime - waitDuration;
 		float recoveryAmount = Mathf.Max(0.0f, m_RecoveryPerSecond) * recoveryDuration;
+		float previousResource = m_CurrentResource;
 		AddResource(recoveryAmount);
+		SetDebugRegenerating(m_CurrentResource > previousResource);
 	}
 
 	/// <summary>飛行・予備浮上・L1チャージ中は回復せず、無行動待機時間をリセットします。</summary>
@@ -199,7 +213,20 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	/// <summary>Hostがパス成立を認めた場合のみOwner側から呼び出されます。</summary>
 	public void ApplyFriendlyPassBonus()
 	{
+		float previousResource = m_CurrentResource;
 		AddResource(Mathf.Max(0.0f, m_PassReceiveBonus));
+
+		// 実際にリソースが増えた場合だけ、デバッグ用のパス回復エフェクトを再生します。
+		if (m_EnableDebugRecoveryEffect && m_CurrentResource > previousResource)
+		{
+			m_DebugRecoveryEffectController?.PlayPassBonus();
+		}
+	}
+
+	/// <summary>急速回復が進んでいる間だけ、デバッグ用の継続エフェクトを出します。</summary>
+	private void SetDebugRegenerating(bool isRegenerating)
+	{
+		m_DebugRecoveryEffectController?.SetRegenerating(m_EnableDebugRecoveryEffect && isRegenerating);
 	}
 
 	private void NotifyResourceChanged()
