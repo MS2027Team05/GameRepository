@@ -2782,7 +2782,7 @@ RectTransform:
   - {fileID: 1038678219}
   - {fileID: 696377421}
   - {fileID: 1304707253}
-  - {fileID: 1479730132}
+  - {fileID: 777042685}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -4324,6 +4324,68 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 773058549}
   m_CullTransparentMesh: 1
+--- !u!1 &777042684
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 777042685}
+  - component: {fileID: 777042686}
+  m_Layer: 5
+  m_Name: StaffMenuRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &777042685
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 777042684}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1479730132}
+  m_Father: {fileID: 510647427}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &777042686
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 777042684}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ad710cc1c3943bc9ba27cba2f140ef8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StaffInspectionMenuController
+  m_MenuRoot: {fileID: 1479730131}
+  m_ConnectionInfoText: {fileID: 419704943}
+  m_MemberListText: {fileID: 1616355865}
+  m_SetRedTeamButton: {fileID: 1738218206}
+  m_SetBlueTeamButton: {fileID: 1214206912}
+  m_LeaveTeamButton: {fileID: 316658882}
+  m_CycleMinPlayersButton: {fileID: 1935259170}
+  m_ForceStartButton: {fileID: 90876991}
+  m_ForceResetButton: {fileID: 760841715}
+  m_EmergencyDisconnectButton: {fileID: 955413520}
+  m_CloseButton: {fileID: 560372715}
+  m_SkipTutorialToggle: {fileID: 0}
+  m_BootstrapSceneName: TitleScene
 --- !u!1 &789851296
 GameObject:
   m_ObjectHideFlags: 0
@@ -8641,7 +8703,6 @@ GameObject:
   - component: {fileID: 1479730132}
   - component: {fileID: 1479730135}
   - component: {fileID: 1479730134}
-  - component: {fileID: 1479730133}
   m_Layer: 5
   m_Name: StaffPanel
   m_TagString: Untagged
@@ -8656,7 +8717,7 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1479730131}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -8671,38 +8732,13 @@ RectTransform:
   - {fileID: 760841714}
   - {fileID: 955413519}
   - {fileID: 560372714}
-  m_Father: {fileID: 510647427}
+  m_Father: {fileID: 777042685}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &1479730133
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1479730131}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0ad710cc1c3943bc9ba27cba2f140ef8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StaffInspectionMenuController
-  m_MenuRoot: {fileID: 1479730131}
-  m_ConnectionInfoText: {fileID: 419704943}
-  m_MemberListText: {fileID: 1616355865}
-  m_SetRedTeamButton: {fileID: 1738218206}
-  m_SetBlueTeamButton: {fileID: 1214206912}
-  m_LeaveTeamButton: {fileID: 316658882}
-  m_CycleMinPlayersButton: {fileID: 1935259170}
-  m_ForceStartButton: {fileID: 90876991}
-  m_ForceResetButton: {fileID: 760841715}
-  m_EmergencyDisconnectButton: {fileID: 955413520}
-  m_CloseButton: {fileID: 560372715}
-  m_SkipTutorialToggle: {fileID: 0}
-  m_BootstrapSceneName: TitleScene
 --- !u!114 &1479730134
 MonoBehaviour:
   m_ObjectHideFlags: 0
