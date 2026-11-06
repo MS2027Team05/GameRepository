@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -30,7 +31,7 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 
 		public ECharacterType CharacterType { get => m_CharacterType; }
 		public Button OptionButton { get => m_Button; }
-		public GameObject SelectedIndicator { get => m_SelectedIndicator; }
+		public GameObject SelectedIndicator { get => m_SelectedIndicator; set => m_SelectedIndicator = value; }
 	}
 
 	[Serializable]
@@ -51,7 +52,7 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 		public EHighlightColor ColorType { get => m_ColorType; }
 		public Button OptionButton { get => m_Button; }
 		public Image ColorPreviewImage { get => m_ColorPreviewImage; }
-		public GameObject SelectedIndicator { get => m_SelectedIndicator; }
+		public GameObject SelectedIndicator { get => m_SelectedIndicator; set => m_SelectedIndicator = value; }
 	}
 
 	[Header("参照")]
@@ -74,6 +75,8 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 	[SerializeField] private GameObject m_ModelSelectionPanel;
 	[Tooltip("カラー選択用の12色ボタン群を格納する親オブジェクト")]
 	[SerializeField] private GameObject m_ColorSelectionPanel;
+	[Tooltip("チェックマーク表示用フォントアセット(NotoSansJP等)")]
+	[SerializeField] private TMP_FontAsset m_CheckmarkFontAsset;
 	[Tooltip("有効時、項目を選択した直後に自動でピッカーウィンドウを閉じます")]
 	[SerializeField] private bool m_CloseOnSelect;
 
@@ -123,7 +126,7 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 
 		m_IsInitialized = true;
 		SetupListeners();
-		ApplyCatalogPreviewColors();
+		SetupOptionVisuals();
 		SetPickerMode(EPickerMode.None);
 	}
 
@@ -309,27 +312,126 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 		}
 	}
 
-	private void ApplyCatalogPreviewColors()
+	/// <summary>
+	/// モデル選択およびカラー選択ボタンのUI装飾(フォーカス枠・プレビュー色・チェックマーク)をセットアップします。
+	/// </summary>
+	private void SetupOptionVisuals()
 	{
-		if (m_AppearanceCatalog == null || m_ColorOptions == null)
+		SetupModelOptionVisuals();
+		SetupColorOptionVisuals();
+	}
+
+	private void SetupModelOptionVisuals()
+	{
+		if (m_ModelOptions == null)
+		{
+			return;
+		}
+
+		for (int i = 0; i < m_ModelOptions.Length; i++)
+		{
+			Button button = m_ModelOptions[i].OptionButton;
+			if (button != null)
+			{
+				// ゲームパッド選択(Select)およびマウスホバー時に黄色発光枠を表示する汎用コンポーネントを確保
+				if (!button.TryGetComponent<UIFocusGlowOutline>(out _))
+				{
+					button.gameObject.AddComponent<UIFocusGlowOutline>();
+				}
+
+				// 確定中インジケーター(チェックマーク)が未割り当ての場合、自動生成して補完
+				if (m_ModelOptions[i].SelectedIndicator == null)
+				{
+					GameObject indicator = CreateCheckmarkIndicator(button.transform, "ModelCheckmark");
+					m_ModelOptions[i].SelectedIndicator = indicator;
+				}
+			}
+		}
+	}
+
+	private void SetupColorOptionVisuals()
+	{
+		if (m_ColorOptions == null)
 		{
 			return;
 		}
 
 		for (int i = 0; i < m_ColorOptions.Length; i++)
 		{
-			Image previewImage = m_ColorOptions[i].ColorPreviewImage;
-			if (previewImage == null)
+			Color previewColor = Color.white;
+			bool hasPreview = m_AppearanceCatalog != null && m_AppearanceCatalog.TryGetPreviewColor(m_ColorOptions[i].ColorType, out previewColor);
+
+			Button button = m_ColorOptions[i].OptionButton;
+			if (button != null)
 			{
-				continue;
+				// ボタン自体の色変化(Color Tint)は行わず、カタログの指定色をそのままImageに固定発色
+				button.transition = Selectable.Transition.None;
+
+				if (hasPreview && button.targetGraphic is Image buttonImage)
+				{
+					buttonImage.color = previewColor;
+				}
+
+				// ゲームパッド選択(Select)およびマウスホバー時に黄色発光枠を表示する汎用コンポーネントを確保
+				if (!button.TryGetComponent<UIFocusGlowOutline>(out _))
+				{
+					button.gameObject.AddComponent<UIFocusGlowOutline>();
+				}
+
+				// 確定中インジケーター(チェックマーク)が未割り当ての場合、自動生成して補完
+				if (m_ColorOptions[i].SelectedIndicator == null)
+				{
+					GameObject indicator = CreateCheckmarkIndicator(button.transform, "ColorCheckmark");
+					m_ColorOptions[i].SelectedIndicator = indicator;
+				}
 			}
 
-			if (m_AppearanceCatalog.TryGetPreviewColor(m_ColorOptions[i].ColorType, out Color previewColor) &&
-				previewColor.a > 0.001f)
+			Image previewImage = m_ColorOptions[i].ColorPreviewImage;
+			if (previewImage != null && hasPreview)
 			{
 				previewImage.color = previewColor;
 			}
 		}
+	}
+
+	/// <summary>
+	/// ボタンの子要素として選択中チェックマーク(✓)のTextMeshProオブジェクトを生成します。
+	/// </summary>
+	private GameObject CreateCheckmarkIndicator(Transform parent, string objectName)
+	{
+		GameObject indicatorObj = new GameObject(objectName, typeof(RectTransform));
+		indicatorObj.transform.SetParent(parent, false);
+
+		RectTransform rect = indicatorObj.GetComponent<RectTransform>();
+		rect.anchorMin = Vector2.zero;
+		rect.anchorMax = Vector2.one;
+		rect.offsetMin = Vector2.zero;
+		rect.offsetMax = Vector2.zero;
+		rect.localScale = Vector3.one;
+
+		TextMeshProUGUI tmp = indicatorObj.AddComponent<TextMeshProUGUI>();
+		if (m_CheckmarkFontAsset != null)
+		{
+			tmp.font = m_CheckmarkFontAsset;
+		}
+		tmp.text = "✓";
+		tmp.alignment = TextAlignmentOptions.Center;
+		tmp.enableAutoSizing = true;
+		tmp.fontSizeMin = 14f;
+		tmp.fontSizeMax = 32f;
+		tmp.color = Color.white;
+		tmp.raycastTarget = false;
+
+		// 視認性を高めるため黒色のアウトラインを追加
+		if (!indicatorObj.TryGetComponent<Outline>(out var outline))
+		{
+			outline = indicatorObj.AddComponent<Outline>();
+		}
+		outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+		outline.effectDistance = new Vector2(2f, -2f);
+
+		indicatorObj.SetActive(false);
+		return indicatorObj;
 	}
 
 	private void HandleOpenModelPickerClicked()
@@ -412,6 +514,59 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 		if (m_ColorSelectionPanel != null)
 		{
 			m_ColorSelectionPanel.SetActive(mode == EPickerMode.Color);
+		}
+
+		if (showWindow)
+		{
+			FocusInitialOptionOnOpen(mode);
+		}
+	}
+
+	private void FocusInitialOptionOnOpen(EPickerMode mode)
+	{
+		if (EventSystem.current == null)
+		{
+			return;
+		}
+
+		GameObject targetFocus = null;
+
+		if (mode == EPickerMode.Model && m_ModelOptions != null && m_ModelOptions.Length > 0)
+		{
+			// モデル選択: 現在選択中のモデルボタン、または先頭
+			for (int i = 0; i < m_ModelOptions.Length; i++)
+			{
+				if (m_ModelOptions[i].SelectedIndicator != null && m_ModelOptions[i].SelectedIndicator.activeSelf)
+				{
+					targetFocus = m_ModelOptions[i].OptionButton != null ? m_ModelOptions[i].OptionButton.gameObject : null;
+					break;
+				}
+			}
+			if (targetFocus == null && m_ModelOptions[0].OptionButton != null)
+			{
+				targetFocus = m_ModelOptions[0].OptionButton.gameObject;
+			}
+		}
+		else if (mode == EPickerMode.Color && m_ColorOptions != null && m_ColorOptions.Length > 0)
+		{
+			// カラー選択: 現在選択中のカラーボタン、または先頭
+			for (int i = 0; i < m_ColorOptions.Length; i++)
+			{
+				if (m_ColorOptions[i].SelectedIndicator != null && m_ColorOptions[i].SelectedIndicator.activeSelf)
+				{
+					targetFocus = m_ColorOptions[i].OptionButton != null ? m_ColorOptions[i].OptionButton.gameObject : null;
+					break;
+				}
+			}
+			if (targetFocus == null && m_ColorOptions[0].OptionButton != null)
+			{
+				targetFocus = m_ColorOptions[0].OptionButton.gameObject;
+			}
+		}
+
+		if (targetFocus != null)
+		{
+			EventSystem.current.SetSelectedGameObject(targetFocus);
 		}
 	}
 

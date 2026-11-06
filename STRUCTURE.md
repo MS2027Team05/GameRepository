@@ -86,6 +86,7 @@ GameRepository/
 │   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・新旧アクションフロー調停・OwnerRpc窓口
 │   │   └── UI/                  # 汎用・共通UI制御
 │   │       ├── UIInputReceiver.cs       # UI系統入力検知・InputActionインスタンス分離制御
+│   │       ├── UIFocusGlowOutline.cs    # 汎用UIフォーカス(Pad選択/マウスホバー)発光黄色枠線制御
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・ロビー復帰制御
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
