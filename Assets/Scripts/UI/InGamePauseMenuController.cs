@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿﻿using System.Collections;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// インゲーム時のポーズメニュー(Escメニュー)の開閉・設定パネル連携・IP表示・タイトル画面への退出を制御するクラス。
+/// インゲーム時のポーズメニュー(Escメニュー)の開閉・設定パネル連携・IP表示・ホストによるロビー画面への同期復帰を制御するクラス。
 /// UIInputReceiverからのイベントを購読し、キーボードおよびゲームパッドでの操作に対応します。
 /// </summary>
 public class InGamePauseMenuController : MonoBehaviour
@@ -266,6 +266,13 @@ public class InGamePauseMenuController : MonoBehaviour
 		{
 			SetSelectedUIObject(m_ResumeButton.gameObject);
 		}
+
+		// 案A: 試合終了・ロビー復帰ボタンはホスト端末(スタッフ側)のみ表示し、体験者(クライアント)には非表示
+		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
+		if (m_LeaveGameButton != null)
+		{
+			m_LeaveGameButton.gameObject.SetActive(isServer);
+		}
 	}
 
 	/// <summary>
@@ -360,7 +367,7 @@ public class InGamePauseMenuController : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 現在のネットワーク接続を切断し、タイトル画面へ戻ります。
+	/// ホスト操作により試合を終了し、通信を切断せずに全端末をLobbyScene(タイトル画面)へ同期復帰させます。
 	/// </summary>
 	public void LeaveGame()
 	{
@@ -369,17 +376,19 @@ public class InGamePauseMenuController : MonoBehaviour
 		PlayerInputReceiver.SetAllPaused(false);
 		PlayerInputReceiver.SetCursorLocked(false);
 
-		if (NetworkManager.Singleton != null)
+		// 通信を切断せず、動的オブジェクトのDespawnと全端末のLobbyScene(タイトル演出)への同期復帰を実行
+		if (GameSessionResetCoordinator.Instance != null)
 		{
-			if (NetworkManager.Singleton.IsServer && SessionPlayerDataStore.Instance != null)
-			{
-				SessionPlayerDataStore.Instance.ClearAll();
-			}
-
-			NetworkManager.Singleton.Shutdown();
+			GameSessionResetCoordinator.Instance.EndGameAndReturnToLobby();
 		}
-
-		ReturnToTitleScene();
+		// else
+		// {
+		// 	// コーディネーター未配置時のフォールバック(LobbySceneへ直接ロード)
+		// 	if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && NetworkManager.Singleton.SceneManager != null)
+		// 	{
+		// 		NetworkManager.Singleton.SceneManager.LoadScene("LobbyScene", UnityEngine.SceneManagement.LoadSceneMode.Single);
+		// 	}
+		// }
 	}
 
 	private void HandleClientDisconnect(ulong clientId)

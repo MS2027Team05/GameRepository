@@ -1,15 +1,14 @@
-﻿
-using System;
-using UnityEngine;
+﻿using UnityEngine;
 
-public enum EPlayerGender
-{
-	Man,
-	Woman
-}
-
+/// <summary>
+/// プレイヤーキャラクターの外見(男女モデル切り替え・12色マテリアル・チームカラーマテリアル)を管理するコンポーネント。
+/// ロビー表示用PrefabおよびインゲームのPlayerPrefabの双方で共通利用します。
+/// </summary>
 public sealed class PlayerAppearance : MonoBehaviour
 {
+	[Header("外見カタログ設定")]
+	[SerializeField] private PlayerAppearanceCatalog m_AppearanceCatalog;
+
 	[Header("モデル")]
 	[SerializeField] private GameObject m_ManModel;
 	[SerializeField] private GameObject m_WomanModel;
@@ -19,40 +18,116 @@ public sealed class PlayerAppearance : MonoBehaviour
 	[Header("チームカラー設定")]
 	[SerializeField] private Renderer[] m_TeamColorRenderers;
 
-	private bool m_HasGender;
-	private bool m_HasColor;
-	private bool m_HasTeamColor;
-	private EPlayerGender m_CurrentGender;
+	private PlayerNetworkProfile m_NetworkProfile;
+	private PlayerSilhouette m_PlayerSilhouette;
+	private PlayerAimGuide m_PlayerAimGuide;
+
+	private bool m_HasAppliedCharacterType;
+	private bool m_HasAppliedColor;
+	private bool m_HasAppliedTeamColor;
+	private ECharacterType m_CurrentCharacterType;
+	private EHighlightColor m_CurrentColor;
+	private ETeamType m_CurrentTeam;
 	private Material m_CurrentMaterial;
 	private Material m_CurrentTeamMaterial;
 
-	public bool HasAppliedGender => m_HasGender;
-	public bool HasAppliedColor => m_HasColor;
-	public bool HasAppliedTeamColor => m_HasTeamColor;
-	public EPlayerGender CurrentGender => m_CurrentGender;
-	public Material CurrentMaterial => m_CurrentMaterial;
-	public Material CurrentTeamMaterial => m_CurrentTeamMaterial;
+	public PlayerAppearanceCatalog AppearanceCatalog { get => m_AppearanceCatalog; }
+	public bool HasAppliedCharacterType { get => m_HasAppliedCharacterType; }
+	public bool HasAppliedColor { get => m_HasAppliedColor; }
+	public bool HasAppliedTeamColor { get => m_HasAppliedTeamColor; }
+	public ECharacterType CurrentCharacterType { get => m_CurrentCharacterType; }
+	public EHighlightColor CurrentColor { get => m_CurrentColor; }
+	public ETeamType CurrentTeam { get => m_CurrentTeam; }
+	public Material CurrentMaterial { get => m_CurrentMaterial; }
+	public Material CurrentTeamMaterial { get => m_CurrentTeamMaterial; }
 
-	// 外部管理クラスから性別を取得する処理は、参照先が決まってから実装する。
-	public EPlayerGender GetGender()
+	private void Awake()
 	{
-		throw new NotImplementedException("性別の外部参照処理は未実装です。");
+		m_NetworkProfile = GetComponent<PlayerNetworkProfile>();
+		m_PlayerSilhouette = GetComponent<PlayerSilhouette>();
+		m_PlayerAimGuide = GetComponent<PlayerAimGuide>();
 	}
 
-	// 外部管理クラスからマテリアルを取得する処理は、参照先が決まってから実装する。
-	public Material GetColor()
+	private void OnEnable()
 	{
-		throw new NotImplementedException("マテリアルの外部参照処理は未実装です。");
+		if (m_NetworkProfile != null)
+		{
+			m_NetworkProfile.OnProfileChanged += HandleProfileChanged;
+		}
 	}
 
-	// 外部管理クラスからチームカラーマテリアルを取得する処理は、参照先が決まってから実装する。
-	public Material GetTeamColor()
+	private void Start()
 	{
-		throw new NotImplementedException("チームカラーマテリアルの外部参照処理は未実装です。");
+		// インゲームでPlayerNetworkProfileが存在する場合は初期同期値を反映
+		if (m_NetworkProfile != null)
+		{
+			ApplyFromNetworkProfile();
+		}
 	}
 
-	// 取得元を選択し、性別に応じて表示モデルを切り替える。
-	public void SetGender()
+	private void OnDisable()
+	{
+		if (m_NetworkProfile != null)
+		{
+			m_NetworkProfile.OnProfileChanged -= HandleProfileChanged;
+		}
+	}
+
+	private void HandleProfileChanged()
+	{
+		ApplyFromNetworkProfile();
+	}
+
+	/// <summary>
+	/// 同一オブジェクト上のPlayerNetworkProfileからプロファイル情報を読み取って外見を反映します。
+	/// </summary>
+	public void ApplyFromNetworkProfile()
+	{
+		if (m_NetworkProfile == null)
+		{
+			return;
+		}
+
+		ApplyAppearance(
+			m_NetworkProfile.CharacterType,
+			m_NetworkProfile.HighlightColor,
+			m_NetworkProfile.Team);
+	}
+
+	/// <summary>
+	/// 指定されたモデル種別・12色カラー・所属チームに基づいて外見を一括反映します。
+	/// </summary>
+	public void ApplyAppearance(ECharacterType characterType, EHighlightColor colorType, ETeamType team)
+	{
+		// インゲームでアウトラインやシルエットが付与されている場合は一旦元のマテリアル配列に戻す
+		if (m_PlayerSilhouette != null && Application.isPlaying)
+		{
+			m_PlayerSilhouette.RestoreBaseMaterials();
+		}
+
+		ApplyCharacterModel(characterType);
+		ApplyBodyColor(characterType, colorType);
+		ApplyTeamColor(team);
+
+		// 差し替え後の本体マテリアルをシルエットおよびエイム半透明制御へ再キャッシュさせる
+		if (Application.isPlaying)
+		{
+			if (m_PlayerSilhouette != null)
+			{
+				m_PlayerSilhouette.RefreshBaseMaterials();
+			}
+
+			if (m_PlayerAimGuide != null)
+			{
+				m_PlayerAimGuide.RefreshPlayerMaterials();
+			}
+		}
+	}
+
+	/// <summary>
+	/// キャラクター種別(男/女)に応じて表示モデルの有効化を切り替えます。
+	/// </summary>
+	public void ApplyCharacterModel(ECharacterType characterType)
 	{
 		if (m_ManModel == null || m_WomanModel == null)
 		{
@@ -60,60 +135,80 @@ public sealed class PlayerAppearance : MonoBehaviour
 			return;
 		}
 
-		EPlayerGender gender = GetSelectedGender();
+		m_ManModel.SetActive(characterType == ECharacterType.Man);
+		m_WomanModel.SetActive(characterType == ECharacterType.Woman);
 
-		m_ManModel.SetActive(gender == EPlayerGender.Man);
-		m_WomanModel.SetActive(gender == EPlayerGender.Woman);
-
-		m_CurrentGender = gender;
-		m_HasGender = true;
+		m_CurrentCharacterType = characterType;
+		m_HasAppliedCharacterType = true;
 	}
 
-	// 取得元を選択し、受け取ったマテリアルを両モデルに反映する。
-	public void SetColor()
+	/// <summary>
+	/// カタログから男女別のカラーマテリアルを取得して対象Rendererへ反映します。
+	/// </summary>
+	public void ApplyBodyColor(ECharacterType activeCharacterType, EHighlightColor colorType)
 	{
-		Material selectedMaterial = GetSelectedColor();
-
-		if (selectedMaterial == null)
+		if (m_AppearanceCatalog == null)
 		{
-			Debug.LogWarning("反映するマテリアルが設定されていません。", this);
+			Debug.LogWarning("PlayerAppearanceCatalogの参照が設定されていません。", this);
 			return;
 		}
 
-		ApplyMaterial(m_ManRenderers, selectedMaterial);
-		ApplyMaterial(m_WomanRenderers, selectedMaterial);
+		Material manMaterial = m_AppearanceCatalog.GetBodyMaterial(ECharacterType.Man, colorType);
+		Material womanMaterial = m_AppearanceCatalog.GetBodyMaterial(ECharacterType.Woman, colorType);
 
-		m_CurrentMaterial = selectedMaterial;
-		m_HasColor = true;
+		if (manMaterial != null)
+		{
+			ApplyMaterial(m_ManRenderers, manMaterial);
+		}
+
+		if (womanMaterial != null)
+		{
+			ApplyMaterial(m_WomanRenderers, womanMaterial);
+		}
+
+		m_CurrentColor = colorType;
+		m_CurrentMaterial = activeCharacterType == ECharacterType.Woman ? womanMaterial : manMaterial;
+		m_HasAppliedColor = m_CurrentMaterial != null;
 	}
 
-	// 取得元を選択し、受け取ったチームカラーマテリアルを指定されたRendererに反映する。
-	public void SetTeamColor()
+	/// <summary>
+	/// カタログからチームカラーマテリアルを取得して対象Rendererへ反映します。
+	/// </summary>
+	public void ApplyTeamColor(ETeamType team)
 	{
+		m_CurrentTeam = team;
+
+		if (team == ETeamType.None)
+		{
+			return;
+		}
+
 		if (m_TeamColorRenderers == null || m_TeamColorRenderers.Length == 0)
 		{
-			Debug.LogWarning("チームカラーを反映するRendererが設定されていません。", this);
 			return;
 		}
 
-		Material selectedMaterial = GetSelectedTeamColor();
-
-		if (selectedMaterial == null)
+		if (m_AppearanceCatalog == null)
 		{
-			Debug.LogWarning("反映するチームカラーマテリアルが設定されていません。", this);
+			Debug.LogWarning("PlayerAppearanceCatalogの参照が設定されていません。", this);
 			return;
 		}
 
-		ApplyMaterial(m_TeamColorRenderers, selectedMaterial);
+		Material teamMaterial = m_AppearanceCatalog.GetTeamMaterial(team);
+		if (teamMaterial == null)
+		{
+			return;
+		}
 
-		m_CurrentTeamMaterial = selectedMaterial;
-		m_HasTeamColor = true;
+		ApplyMaterial(m_TeamColorRenderers, teamMaterial);
+
+		m_CurrentTeamMaterial = teamMaterial;
+		m_HasAppliedTeamColor = true;
 	}
 
-	// 指定されたRendererにマテリアルを反映する。
 	private static void ApplyMaterial(Renderer[] renderers, Material material)
 	{
-		if (renderers == null)
+		if (renderers == null || material == null)
 		{
 			return;
 		}
@@ -128,92 +223,43 @@ public sealed class PlayerAppearance : MonoBehaviour
 	}
 
 #if UNITY_EDITOR
-	[Header("デバッグ設定")]
+	[Header("エディタ確認用デバッグ設定(EditMode専用)")]
 	[SerializeField] private bool m_UseDebugAppearance;
-	[SerializeField] private EPlayerGender m_DebugGender;
-	[SerializeField] private Material m_DebugMaterial;
-	[SerializeField] private Material m_DebugTeamMaterial;
+	[SerializeField] private ECharacterType m_DebugCharacterType;
+	[SerializeField] private EHighlightColor m_DebugColor;
+	[SerializeField] private ETeamType m_DebugTeam;
 
-	// 使用する性別をデバッグ設定または外部管理クラスから取得する。
-	private EPlayerGender GetSelectedGender()
-	{
-		return m_UseDebugAppearance ? SetGenderForDebug() : GetGender();
-	}
-
-	// 使用するカラーマテリアルをデバッグ設定または外部管理クラスから取得する。
-	private Material GetSelectedColor()
-	{
-		return m_UseDebugAppearance ? SetColorForDebug() : GetColor();
-	}
-
-	// 使用するチームカラーマテリアルをデバッグ設定または外部管理クラスから取得する。
-	private Material GetSelectedTeamColor()
-	{
-		return m_UseDebugAppearance ? SetTeamColorForDebug() : GetTeamColor();
-	}
-
-	// Inspectorで選択したデバッグ用の性別を返す。
-	public EPlayerGender SetGenderForDebug()
-	{
-		return m_DebugGender;
-	}
-
-	// Inspectorで指定したデバッグ用のカラーマテリアルを返す。
-	public Material SetColorForDebug()
-	{
-		return m_DebugMaterial;
-	}
-
-	// Inspectorで指定したデバッグ用のチームカラーマテリアルを返す。
-	public Material SetTeamColorForDebug()
-	{
-		return m_DebugTeamMaterial;
-	}
-
-	// Inspectorの設定が変更された際、外見更新を遅延登録する。
 	private void OnValidate()
 	{
-		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
-		UnityEditor.EditorApplication.delayCall += ApplyAppearanceDelayed;
-	}
-
-	// OnValidateの処理終了後にデバッグ用の外見を反映する。
-	private void ApplyAppearanceDelayed()
-	{
-		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
-
-		if (this == null || !m_UseDebugAppearance)
+		if (Application.isPlaying)
 		{
 			return;
 		}
 
-		SetGender();
-		SetColor();
-		SetTeamColor();
+		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
+		UnityEditor.EditorApplication.delayCall += ApplyAppearanceDelayed;
 	}
 
-	// コンポーネントが破棄される際、遅延登録を解除する。
+	private void ApplyAppearanceDelayed()
+	{
+		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
+
+		if (this == null || Application.isPlaying || !m_UseDebugAppearance)
+		{
+			return;
+		}
+
+		ApplyCharacterModel(m_DebugCharacterType);
+		if (m_AppearanceCatalog != null)
+		{
+			ApplyBodyColor(m_DebugCharacterType, m_DebugColor);
+			ApplyTeamColor(m_DebugTeam);
+		}
+	}
+
 	private void OnDestroy()
 	{
 		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
-	}
-#else
-	// Playerビルドでは外部管理クラスから性別を取得する。
-	private EPlayerGender GetSelectedGender()
-	{
-		return GetGender();
-	}
-
-	// Playerビルドでは外部管理クラスからカラーマテリアルを取得する。
-	private Material GetSelectedColor()
-	{
-		return GetColor();
-	}
-
-	// Playerビルドでは外部管理クラスからチームカラーマテリアルを取得する。
-	private Material GetSelectedTeamColor()
-	{
-		return GetTeamColor();
 	}
 #endif
 }
