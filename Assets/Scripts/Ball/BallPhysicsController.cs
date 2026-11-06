@@ -120,6 +120,11 @@ public class BallPhysicsController : NetworkBehaviour
 	[Min(0.0f)]
 	[SerializeField] private float m_MaxBounceNormalSpeed;
 
+	[Tooltip(
+		"バウンド時に接触面に沿う方向の最大速度です。0なら制限しません。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_MaxBounceTangentialSpeed;
+
 	[Header("飛行中・バウンド後の疑似重力")]
 
 	[Tooltip(
@@ -210,6 +215,11 @@ public class BallPhysicsController : NetworkBehaviour
 		"Surface Physicsのバウンド時の最大法線方向速度です。0なら制限しません。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceMaxBounceNormalSpeed;
+
+	[Tooltip(
+		"Surface Physicsのバウンド時の最大Surface方向速度です。0なら制限しません。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_SurfaceMaxBounceTangentialSpeed;
 
 	[Tooltip(
 		"Surface Physicsで接地後にSurface方向速度を減衰させる量です。")]
@@ -334,6 +344,7 @@ public class BallPhysicsController : NetworkBehaviour
 			m_SurfaceBounceTangentialRetention,
 			m_SurfaceMinBounceNormalSpeed,
 			m_SurfaceMaxBounceNormalSpeed,
+			m_SurfaceMaxBounceTangentialSpeed,
 			m_SurfaceGroundDeceleration,
 			m_SurfaceStopSpeedThreshold,
 			GetBallWorldRadius());
@@ -680,7 +691,8 @@ public class BallPhysicsController : NetworkBehaviour
 			m_BounceNormalRetention,
 			m_BounceTangentialRetention,
 			m_MinBounceNormalSpeed,
-			m_MaxBounceNormalSpeed);
+			m_MaxBounceNormalSpeed,
+			m_MaxBounceTangentialSpeed);
 	}
 
 	/// <summary>

@@ -145,6 +145,18 @@ PrefabInstance:
     m_TransformParent: {fileID: 5616259225326563694}
     m_Modifications:
     - target: {fileID: 1594666178853131052, guid: 019717c06dfe19048ae5e52d7c84ce01, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.0195
+      objectReference: {fileID: 0}
+    - target: {fileID: 1594666178853131052, guid: 019717c06dfe19048ae5e52d7c84ce01, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.0195
+      objectReference: {fileID: 0}
+    - target: {fileID: 1594666178853131052, guid: 019717c06dfe19048ae5e52d7c84ce01, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.0195
+      objectReference: {fileID: 0}
+    - target: {fileID: 1594666178853131052, guid: 019717c06dfe19048ae5e52d7c84ce01, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
       objectReference: {fileID: 0}
@@ -184,10 +196,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1594666178853131052, guid: 019717c06dfe19048ae5e52d7c84ce01, type: 3}
+      propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2163966676765526479, guid: 019717c06dfe19048ae5e52d7c84ce01, type: 3}
       propertyPath: m_Mesh
       value: 
-      objectReference: {fileID: 8839458583690285578, guid: 106d7f1ac6980904da10563f1dc8b045, type: 3}
+      objectReference: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
     - target: {fileID: 4246401326818382276, guid: 019717c06dfe19048ae5e52d7c84ce01, type: 3}
       propertyPath: m_Name
       value: BallSuface

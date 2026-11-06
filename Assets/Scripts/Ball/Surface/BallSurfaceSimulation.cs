@@ -141,6 +141,7 @@ public sealed partial class BallSurfaceSimulation
 	private float m_BounceTangentialRetention;
 	private float m_MinBounceNormalSpeed;
 	private float m_MaxBounceNormalSpeed;
+	private float m_MaxBounceTangentialSpeed;
 	private float m_GroundedDeceleration;
 	private float m_GroundedStopSpeedThreshold;
 	private float m_BallRadius;
@@ -362,6 +363,7 @@ public sealed partial class BallSurfaceSimulation
 		float bounceTangentialRetention,
 		float minBounceNormalSpeed,
 		float maxBounceNormalSpeed,
+		float maxBounceTangentialSpeed,
 		float groundedDeceleration,
 		float groundedStopSpeedThreshold,
 		float ballRadius)
@@ -393,6 +395,11 @@ public sealed partial class BallSurfaceSimulation
 			Mathf.Max(
 				0.0f,
 				maxBounceNormalSpeed);
+
+		m_MaxBounceTangentialSpeed =
+			Mathf.Max(
+				0.0f,
+				maxBounceTangentialSpeed);
 
 		m_GroundedDeceleration =
 			Mathf.Max(
@@ -878,6 +885,9 @@ public sealed partial class BallSurfaceSimulation
 		ApplySurfaceSpeedScale(
 			m_BounceTangentialRetention);
 
+		ClampSurfaceSpeed(
+			m_MaxBounceTangentialSpeed);
+
 		if (impactSpeed <
 			m_BounceSpeedThreshold)
 		{
@@ -975,6 +985,43 @@ public sealed partial class BallSurfaceSimulation
 		m_SurfaceVelocity =
 			m_SurfaceVelocity.normalized *
 				nextSpeed;
+	}
+
+	/// <summary>
+	/// Surface方向速度を指定された最大速度へ制限します。
+	/// </summary>
+	/// <remarks>
+	/// Sharp Convex Edge遷移中も同じ倍率を適用するため、
+	/// ApplySurfaceSpeedScale経由で速度を制限します。
+	/// </remarks>
+	private void ClampSurfaceSpeed(
+		float maximumSpeed)
+	{
+		float clampedMaximumSpeed =
+			Mathf.Max(
+				0.0f,
+				maximumSpeed);
+
+		if (clampedMaximumSpeed <=
+			0.0f)
+		{
+			return;
+		}
+
+		float currentSpeed =
+			m_SurfaceVelocity.magnitude;
+
+		if (currentSpeed <=
+				clampedMaximumSpeed ||
+			currentSpeed <=
+				m_MinimumCalculationValue)
+		{
+			return;
+		}
+
+		ApplySurfaceSpeedScale(
+			clampedMaximumSpeed /
+				currentSpeed);
 	}
 
 	/// <summary>
