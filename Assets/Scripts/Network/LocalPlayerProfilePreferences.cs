@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 展示環境における各端末のプレイヤー設定(キャラ・カラー・固定チーム・接続先IP)を

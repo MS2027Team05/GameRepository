@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// プレイヤーキャラクターの外見(男女モデル切り替え・12色マテリアル・チームカラーマテリアル)を管理するコンポーネント。
