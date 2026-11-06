@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 足元の地面・壁・角の物理検知および法線・高低差の計測を担当するモジュールのインターフェース。

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 移動する足場(動く床・往復ブロック等)が現在の移動速度を接地判定モジュールへ提供するためのインターフェース。
