@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -16,14 +17,35 @@ public class MatchManager : NetworkBehaviour
 		Waiting = 0,
 		Playing = 1,
 		Finished = 2,
+		Countdown = 3,
+		PreparingRestart = 4,
+		GoalCelebration = 5,
 	}
 
 	[SerializeField] private int m_MatchDurationSeconds;
 	[SerializeField] private bool m_StartAutomatically;
+	[Header("開始・リスタート")]
+	[SerializeField, Min(1)] private int m_CountdownDurationSeconds;
+	[SerializeField] private PlayerSpawner m_PlayerSpawner;
+	[SerializeField] private BallController m_Ball;
+
+	private readonly NetworkVariable<double> m_CountdownEndTime = new NetworkVariable<double>();
+	private readonly NetworkVariable<ETeamType> m_GoalScoringTeam = new NetworkVariable<ETeamType>(
+		ETeamType.None,
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Server);
+	private double m_PlayTimeRemaining;
+	private bool m_IsStartRequested;
+	private bool m_IsGoalProcessing;
+	private readonly HashSet<ulong> m_PendingGoalEffectClients = new HashSet<ulong>();
+	private uint m_GoalEffectSequence;
+	private uint m_LocalGoalEffectSequence;
+	private int m_LocalGoalEffectCount;
+	private bool m_IsLocalGoalEffectPending;
 
 	[Header("ゴール判定のデバッグ設定")]
 	[InspectorName("ゴール得点を1回に制限")]
-	[Tooltip("HostまたはServerでONにすると両ゴール合わせて1回のみ得点できます。OFFにすると入り直すたびに得点できます。")]
+	[Tooltip("ONにすると両ゴール共通で1回のプレーにつき1回の得点に制限します。リスタート完了時に制限を解除します。カウントダウン中は設定にかかわらず得点できません。")]
 	[FormerlySerializedAs("m_DisableGoalScoreLimit")]
 	[SerializeField] private bool m_LimitGoalScore;
 
@@ -72,10 +94,19 @@ public class MatchManager : NetworkBehaviour
 	/// </summary>
 	public event Action<int> BlueScoreChanged;
 
+	/// <summary>
+	/// サーバーで確定したゴールの得点先チームを各表示端末へ通知します。
+	/// </summary>
+	public event Action<ETeamType> GoalScored;
+
 	public EMatchState MatchState => m_MatchState.Value;
 	public int RemainingTimeSeconds => m_RemainingTimeSeconds.Value;
 	public int RedScore => m_RedScore.Value;
 	public int BlueScore => m_BlueScore.Value;
+	public ETeamType GoalScoringTeam => m_GoalScoringTeam.Value;
+	public int CountdownRemainingSeconds => m_MatchState.Value == EMatchState.Countdown && NetworkManager != null
+		? Mathf.Max(0, Mathf.CeilToInt((float)(m_CountdownEndTime.Value - NetworkManager.ServerTime.Time)))
+		: 0;
 
 	/// <summary>
 	/// 試合終了時点で得点が高いチームを返します。同点の場合はNoneを返します。
@@ -107,6 +138,7 @@ public class MatchManager : NetworkBehaviour
 
 		if (IsServer)
 		{
+			NetworkManager.OnClientDisconnectCallback += HandleGoalEffectClientDisconnected;
 			ResetMatch();
 
 			if (m_StartAutomatically)
@@ -120,6 +152,13 @@ public class MatchManager : NetworkBehaviour
 
 	public override void OnNetworkDespawn()
 	{
+		if (IsServer)
+		{
+			NetworkManager.OnClientDisconnectCallback -= HandleGoalEffectClientDisconnected;
+		}
+		m_IsLocalGoalEffectPending = false;
+		m_LocalGoalEffectCount = 0;
+		m_PendingGoalEffectClients.Clear();
 		UnsubscribeFromNetworkVariables();
 
 		if (Instance == this)
@@ -130,7 +169,44 @@ public class MatchManager : NetworkBehaviour
 
 	private void Update()
 	{
-		if (!IsServer || m_MatchState.Value != EMatchState.Playing)
+		if (IsSpawned && IsClient && m_IsLocalGoalEffectPending && m_LocalGoalEffectCount == 0)
+		{
+			m_IsLocalGoalEffectPending = false;
+			CompleteGoalEffectServerRpc(m_LocalGoalEffectSequence);
+		}
+
+		if (!IsSpawned || !IsServer)
+		{
+			return;
+		}
+
+		if (m_IsStartRequested && m_PlayerSpawner.IsSpawned && m_PlayerSpawner.IsReady && m_Ball.IsSpawned)
+		{
+			m_IsStartRequested = false;
+			BeginRestartPreparation();
+		}
+
+		if (m_MatchState.Value == EMatchState.GoalCelebration && m_PendingGoalEffectClients.Count == 0)
+		{
+			BeginRestartPreparation();
+		}
+
+		if (m_MatchState.Value == EMatchState.PreparingRestart && m_PlayerSpawner.ArePlayersReadyForRestart)
+		{
+			m_CountdownEndTime.Value = NetworkManager.ServerTime.Time + m_CountdownDurationSeconds;
+			m_MatchState.Value = EMatchState.Countdown;
+		}
+
+		if (m_MatchState.Value == EMatchState.Countdown && NetworkManager.ServerTime.Time >= m_CountdownEndTime.Value)
+		{
+			m_MatchEndTime = NetworkManager.ServerTime.Time + m_PlayTimeRemaining;
+			m_HasScoredGoal = false;
+			m_MatchState.Value = EMatchState.Playing;
+			m_Ball.SetMatchPaused(false);
+			m_PlayerSpawner.SetMatchActionsEnabled(true);
+		}
+
+		if (m_MatchState.Value != EMatchState.Playing)
 		{
 			return;
 		}
@@ -162,11 +238,27 @@ public class MatchManager : NetworkBehaviour
 		}
 
 		m_HasScoredGoal = false;
+		m_IsStartRequested = false;
+		m_GoalScoringTeam.Value = ETeamType.None;
+		m_IsGoalProcessing = false;
+		m_PendingGoalEffectClients.Clear();
+		m_IsLocalGoalEffectPending = false;
+		m_LocalGoalEffectCount = 0;
+		m_CountdownEndTime.Value = 0d;
+		m_PlayTimeRemaining = 0d;
 		m_RedScore.Value = 0;
 		m_BlueScore.Value = 0;
 		m_RemainingTimeSeconds.Value = Mathf.Max(0, m_MatchDurationSeconds);
 		m_MatchState.Value = EMatchState.Waiting;
 		m_MatchEndTime = 0d;
+		if (m_PlayerSpawner != null && m_PlayerSpawner.IsSpawned)
+		{
+			m_PlayerSpawner.SetMatchActionsEnabled(false);
+		}
+		if (m_Ball != null && m_Ball.IsSpawned)
+		{
+			m_Ball.SetMatchPaused(true);
+		}
 	}
 
 	/// <summary>
@@ -180,15 +272,36 @@ public class MatchManager : NetworkBehaviour
 			return;
 		}
 
-		if (m_MatchDurationSeconds <= 0)
+		if (m_MatchState.Value != EMatchState.Waiting || m_IsStartRequested)
 		{
-			Debug.LogError("[MatchManager] 制限時間には1秒以上の値を設定してください。");
+			return;
+		}
+
+		if (m_MatchDurationSeconds <= 0 || m_CountdownDurationSeconds <= 0 || m_PlayerSpawner == null || m_Ball == null)
+		{
+			Debug.LogError("[MatchManager] 制限時間とカウントダウン秒数を1以上にし、PlayerSpawnerとBallを設定してください。", this);
 			return;
 		}
 
 		m_RemainingTimeSeconds.Value = m_MatchDurationSeconds;
-		m_MatchEndTime = NetworkManager.ServerTime.Time + m_MatchDurationSeconds;
-		m_MatchState.Value = EMatchState.Playing;
+		m_PlayTimeRemaining = m_MatchDurationSeconds;
+		// シーン内NetworkObjectの生成順に依存しないよう、必要な生成完了まで待ちます。
+		m_IsStartRequested = true;
+	}
+
+	private void BeginRestartPreparation()
+	{
+		// 再配置中は得点と試合時計を停止し、完了応答が揃うまでカウントを表示しません。
+		m_MatchState.Value = EMatchState.PreparingRestart;
+		m_CountdownEndTime.Value = 0d;
+		m_PlayerSpawner.SetMatchActionsEnabled(false);
+		if (!m_Ball.ResetForRestart())
+		{
+			Debug.LogError("[MatchManager] ボールの再配置に失敗したため、開始待ちへ戻します。", this);
+			m_MatchState.Value = EMatchState.Waiting;
+			return;
+		}
+		m_PlayerSpawner.ResetPlayersForRestart();
 	}
 
 	/// <summary>
@@ -234,6 +347,7 @@ public class MatchManager : NetworkBehaviour
 		if (!isActiveAndEnabled || !IsSpawned || !IsServer ||
 			m_MatchState.Value != EMatchState.Playing ||
 			NetworkManager.ServerTime.Time >= m_MatchEndTime ||
+			m_IsGoalProcessing ||
 			(m_LimitGoalScore && m_HasScoredGoal))
 		{
 			return false;
@@ -241,14 +355,82 @@ public class MatchManager : NetworkBehaviour
 
 		// 得点変更イベントから再度呼ばれても重複加算しないよう、先に制限を設定します。
 		bool hadScoredGoal = m_HasScoredGoal;
+		m_IsGoalProcessing = true;
 		m_HasScoredGoal = true;
 		if (!AddScore(team))
 		{
 			m_HasScoredGoal = hadScoredGoal;
+			m_IsGoalProcessing = false;
 			return false;
 		}
 
+		m_PlayTimeRemaining = Math.Max(0d, m_MatchEndTime - NetworkManager.ServerTime.Time);
+		m_RemainingTimeSeconds.Value = Mathf.CeilToInt((float)m_PlayTimeRemaining);
+		BeginGoalCelebration(team);
+		m_IsGoalProcessing = false;
 		return true;
+	}
+
+	private void BeginGoalCelebration(ETeamType team)
+	{
+		m_GoalScoringTeam.Value = team;
+		m_MatchState.Value = EMatchState.GoalCelebration;
+		m_PlayerSpawner.SetMatchActionsEnabled(false);
+		m_Ball.SetMatchPaused(true);
+		m_GoalEffectSequence++;
+		m_PendingGoalEffectClients.Clear();
+		foreach (var client in NetworkManager.ConnectedClientsList)
+		{
+			if (client.ClientId != Unity.Netcode.NetworkManager.ServerClientId || IsHost)
+			{
+				m_PendingGoalEffectClients.Add(client.ClientId);
+			}
+		}
+		NotifyGoalScoredRpc(team, m_GoalEffectSequence);
+	}
+
+	[Rpc(SendTo.ClientsAndHost)]
+	private void NotifyGoalScoredRpc(ETeamType team, uint sequence, RpcParams rpcParams = default)
+	{
+		if (rpcParams.Receive.SenderClientId != Unity.Netcode.NetworkManager.ServerClientId) return;
+		m_LocalGoalEffectSequence = sequence;
+		m_LocalGoalEffectCount = 0;
+		m_IsLocalGoalEffectPending = true;
+		GoalScored?.Invoke(team);
+	}
+
+	/// <summary>
+	/// この端末で再生を開始したエフェクトを完了待ちへ登録します。
+	/// </summary>
+	public uint RegisterLocalGoalEffect()
+	{
+		if (m_IsLocalGoalEffectPending) m_LocalGoalEffectCount++;
+		return m_LocalGoalEffectSequence;
+	}
+
+	/// <summary>
+	/// 現在の得点演出に属するエフェクトの完了を受け付けます。
+	/// </summary>
+	public void CompleteLocalGoalEffect(uint sequence)
+	{
+		if (m_IsLocalGoalEffectPending && sequence == m_LocalGoalEffectSequence && m_LocalGoalEffectCount > 0)
+		{
+			m_LocalGoalEffectCount--;
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void CompleteGoalEffectServerRpc(uint sequence, RpcParams rpcParams = default)
+	{
+		if (m_MatchState.Value == EMatchState.GoalCelebration && sequence == m_GoalEffectSequence)
+		{
+			m_PendingGoalEffectClients.Remove(rpcParams.Receive.SenderClientId);
+		}
+	}
+
+	private void HandleGoalEffectClientDisconnected(ulong clientId)
+	{
+		m_PendingGoalEffectClients.Remove(clientId);
 	}
 
 	/// <summary>
@@ -263,7 +445,12 @@ public class MatchManager : NetworkBehaviour
 		}
 
 		m_RemainingTimeSeconds.Value = 0;
+		m_PendingGoalEffectClients.Clear();
+		m_IsLocalGoalEffectPending = false;
+		m_IsStartRequested = false;
 		m_MatchState.Value = EMatchState.Finished;
+		m_PlayerSpawner?.SetMatchActionsEnabled(false);
+		m_Ball?.SetMatchPaused(true);
 	}
 
 	private void SubscribeToNetworkVariables()
@@ -292,6 +479,11 @@ public class MatchManager : NetworkBehaviour
 
 	private void HandleMatchStateChanged(EMatchState previousValue, EMatchState newValue)
 	{
+		if (previousValue == EMatchState.GoalCelebration && newValue != EMatchState.GoalCelebration)
+		{
+			m_IsLocalGoalEffectPending = false;
+			m_LocalGoalEffectCount = 0;
+		}
 		MatchStateChanged?.Invoke(newValue);
 	}
 
