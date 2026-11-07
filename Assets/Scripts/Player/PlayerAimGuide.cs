@@ -1,953 +1,443 @@
+﻿
 using System;
-using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 
 /// <summary>
-/// エイムモード時のレティクル表示・軌道予測線描画を担当するモジュール。
+/// 常時表示レティクルによる移動先の判定と、
+/// 地上からの予備浮上・飛行中の着地点調整を担当する。
 /// </summary>
 public class PlayerAimGuide : MonoBehaviour, IAimGuide
 {
-	[Header("照準UI")]
+	[Header("レティクル設定")]
 	[SerializeField] private GameObject m_AimReticle;
 
-	[Header("予測線")]
-	[SerializeField] private LineRenderer m_AimLine;
+	[Header("予測線設定")]
+	[SerializeField] private LineRenderer m_AimPredictionLine;
+	[SerializeField] private Transform m_AimLineStart;
+	[SerializeField] private Vector3 m_AimLineStartOffset = new Vector3(0f, 0f, 0.2f);
 
-	[Header("着地マーカー")]
+	[Header("着地点マーカー設定")]
 	[SerializeField] private GameObject m_LandingMarker;
-
-	[Header("落下制御")]
-	private IGravityMover m_GravityMover;
-	private IGroundDetector m_GroundDetector;
-
-	[Header("Raycast設定")]
 	[SerializeField] private LayerMask m_AimTargetLayers;
-	[SerializeField] private float m_MaxAimDistance = 100.0f;
+	[SerializeField] private float m_MaxAimDistance = 100f;
+	[SerializeField] private float m_LandingMarkerOffset = 0.05f;
 
-	[Header("エイム浮上設定")]
-	[SerializeField] private float m_AimFloatHeight = 1.0f;
-	[SerializeField] private float m_AimFloatDuration = 0.5f; // 浮上にかける時間
+	[Header("地上からの予備浮上設定")]
+	[SerializeField] private float m_AimFloatHeight = 1f;
+	[SerializeField] private float m_AimFloatDuration = 0.5f;
 
-	[Header("カメラ補正")]
+	[Header("飛行中の着地点調整設定")]
+	[SerializeField] private float m_AirTargetMoveSpeed = 2f;
+	[SerializeField] private float m_MaxNormalAngle = 85f;
+	[SerializeField] private float m_SurfaceCheckHeight = 2f;
+	[SerializeField] private float m_SurfaceCheckDistance = 4f;
+
+	[Header("カメラ設定")]
 	[SerializeField] private Transform m_CinemachineCameraTransform;
-	[SerializeField] private Vector3 m_AimCameraShoulderOffset;
 
-	[Header("エイム中の半透明化")]
-	[SerializeField, Range(0.1f, 1.0f)]
-	private float m_AimOpacity = 0.35f;
+	private IGravityMover m_GravityMover;
+	private Rigidbody m_Rigidbody;
 
-	// エイム状態
-	private bool m_IsAiming;
-
-	// 現在の着地点へ移動できるかどうか
-	private bool m_CanFall = false;
-
-	// 他のクラスから移動可能か確認するためのプロパティ
-	public bool CanFall
-	{
-		get => m_CanFall;
-	}
-
-	// 浮上アニメーション
-	private Sequence m_AimFloatTween;
-
-	// 元の位置へ戻るアニメーション中かどうか
-	private bool m_IsReturning;
-
-	// エイム開始時のPlayerの位置
-	private Vector3 m_AimStartPosition;
-
-	// エイム開始時の浮上方向
-	private Vector3 m_AimFloatDirection;
-
-	// エイム開始時のカメラのローカル位置
-	private Vector3 m_AimStartCameraLocalPosition;
-
-	// 半透明化するRendererと元のマテリアル
-	private Renderer[] m_PlayerRenderers;
-	private Material[][] m_OriginalMaterials;
-	private Material[][] m_TransparentMaterials;
-
-	// 予測線の終点と着地面法線
 	private Vector3 m_AimTargetPoint;
 	private Vector3 m_AimTargetNormal = Vector3.up;
+	private Vector3 m_AimMoveDirection;
 
-	// 地上予備浮上および飛行中着地マーカー追跡状態
+	// 現在カメラが狙っている地点。
+	// 飛行中の実際の着地点とは分けて管理する。
+	private Vector3 m_AimPreviewPoint;
+	private Vector3 m_AimPreviewNormal = Vector3.up;
+	private bool m_HasAimPreviewTarget;
+
+	private Vector3 m_InitialTrackingNormal;
+
+	private Vector3 m_LandingMoveUp;
+	private Vector3 m_LandingMoveRight;
+
+	private Vector3 m_OriginalCameraLocalPosition;
+
+	private Tween m_AimFloatTween;
+
+	private bool m_CanFall;
 	private bool m_IsTakingOff;
 	private bool m_IsTrackingLanding;
-	private Vector3 m_InitialTrackingNormal = Vector3.up;
+	private bool m_IsAdditionalMoveAimAvailable = true;
 
-	// 予測線に沿った実際の移動方向
-	public Vector3 AimMoveDirection { get; private set; }
+	public bool CanFall => m_CanFall;
+	public bool IsTakingOff => m_IsTakingOff;
 
-	/// <summary>地上からの移動開始に伴う予備浮上中かどうか</summary>
-	public bool IsTakingOff
-	{
-		get => m_IsTakingOff;
-	}
+	public Vector3 TargetLandingPoint => m_AimTargetPoint;
+	public Vector3 TargetLandingNormal => m_AimTargetNormal;
 
-	/// <summary>評価された目標着地点のワールド座標</summary>
-	public Vector3 TargetLandingPoint
-	{
-		get => m_AimTargetPoint;
-	}
+	public float TargetDistance =>
+		Vector3.Distance(transform.position, m_AimTargetPoint);
 
-	/// <summary>評価された目標着地面の法線ベクトル</summary>
-	public Vector3 TargetLandingNormal
-	{
-		get => m_AimTargetNormal;
-	}
-
-	/// <summary>現在位置から目標着地点までの距離</summary>
-	public float TargetDistance
-	{
-		get => m_CanFall ? Vector3.Distance(transform.position, m_AimTargetPoint) : 0.0f;
-	}
-
-	// 移動中専用のエイムかどうか
-	private bool m_IsMidFallAimGuide;
-
-	private Rigidbody m_Rigidbody;
+	public Vector3 AimMoveDirection => m_AimMoveDirection;
 
 	private void Awake()
 	{
-		m_Rigidbody = GetComponent<Rigidbody>();
 		m_GravityMover = GetComponent<IGravityMover>();
-		m_GroundDetector = GetComponent<IGroundDetector>();
+		m_Rigidbody = GetComponent<Rigidbody>();
 
-		// カメラの通常時のローカル位置を最初に保存する
 		if (m_CinemachineCameraTransform != null)
 		{
-			m_AimStartCameraLocalPosition =
+			m_OriginalCameraLocalPosition =
 				m_CinemachineCameraTransform.localPosition;
 		}
 
-		// 予測線はワールド座標で描画する
-		if (m_AimLine != null)
+		// 着地点マーカーをプレイヤーの親子関係から切り離す。
+		// ワールド空間に配置し、プレイヤーの移動に追従させない。
+		if (m_LandingMarker != null)
 		{
-			m_AimLine.useWorldSpace = true;
-			m_AimLine.positionCount = 0;
+			m_LandingMarker.transform.SetParent(null, true);
 		}
 
-		// Playerの見た目用マテリアルを準備
-		CachePlayerMaterials();
+		// レティクルは初期状態では非表示。
+		// PlayerControllerから自分のプレイヤーだけ有効化する。
+		SetConstantReticleActive(false);
 
-		SetAimGuideActive(false);
+		// 着地点マーカーは飛行開始まで非表示。
 		HideLandingMarker();
 	}
 
-	/// <summary>
-	/// Playerの見た目用マテリアルを保存し、半透明用の複製を作成します。
-	/// </summary>
-	private void CachePlayerMaterials()
+	private void OnDestroy()
 	{
-		Renderer[] allRenderers = GetComponentsInChildren<Renderer>(true);
-		List<Renderer> targetRenderers = new List<Renderer>();
-
-		foreach (Renderer targetRenderer in allRenderers)
-		{
-			// 照準UI・予測線・着地マーカー・LineRenderer・テキスト用Rendererは対象外
-			if (targetRenderer == null ||
-				targetRenderer == m_AimLine ||
-				targetRenderer is LineRenderer ||
-				targetRenderer is TrailRenderer ||
-				targetRenderer is ParticleSystemRenderer ||
-				targetRenderer.GetComponent<TMPro.TMP_Text>() != null ||
-				targetRenderer.GetComponent<TMPro.TMP_SubMeshUI>() != null ||
-				IsChildOfObject(targetRenderer.transform, m_AimReticle) ||
-				IsChildOfObject(targetRenderer.transform, m_LandingMarker))
-			{
-				continue;
-			}
-
-			targetRenderers.Add(targetRenderer);
-		}
-
-		m_PlayerRenderers = targetRenderers.ToArray();
-		m_OriginalMaterials = new Material[m_PlayerRenderers.Length][];
-		m_TransparentMaterials = new Material[m_PlayerRenderers.Length][];
-
-		for (int i = 0; i < m_PlayerRenderers.Length; i++)
-		{
-			Material[] currentMaterials = m_PlayerRenderers[i].sharedMaterials;
-			List<Material> baseMaterials = new List<Material>();
-
-			for (int j = 0; j < currentMaterials.Length; j++)
-			{
-				Material mat = currentMaterials[j];
-				if (mat == null) continue;
-
-				// アウトライン・シルエット用シェーダーは半透明化の対象外とする
-				if (mat.shader != null &&
-					(mat.shader.name.Contains("PlayerOutline") ||
-					 mat.shader.name.Contains("OccludedSilhouette") ||
-					 mat.shader.name.Contains("ToolOccludedMask")))
-				{
-					continue;
-				}
-
-				baseMaterials.Add(mat);
-			}
-
-			// 元の本体マテリアルを保存
-			m_OriginalMaterials[i] = baseMaterials.ToArray();
-
-			// 元のマテリアルを変更しないように複製
-			m_TransparentMaterials[i] = new Material[m_OriginalMaterials[i].Length];
-
-			for (int j = 0; j < m_OriginalMaterials[i].Length; j++)
-			{
-				Material original = m_OriginalMaterials[i][j];
-
-				if (original == null)
-				{
-					continue;
-				}
-
-				Material transparent = new Material(original);
-				SetMaterialOpacity(transparent, m_AimOpacity);
-
-				m_TransparentMaterials[i][j] = transparent;
-			}
-		}
+		m_AimFloatTween?.Kill();
 	}
 
-	/// <summary>
-	/// 指定したオブジェクト自身または子に属するかを確認します。
-	/// </summary>
-	private bool IsChildOfObject(Transform target, GameObject parentObject)
-	{
-		return parentObject != null &&
-			(target == parentObject.transform ||
-			target.IsChildOf(parentObject.transform));
-	}
+	// =========================================================
+	// 常時表示レティクル
+	// =========================================================
 
 	/// <summary>
-	/// マテリアルを半透明表示に設定します。
-	/// URP/Lit系マテリアルを想定しています。
+	/// レティクルの表示・非表示を切り替える。
 	/// </summary>
-	private void SetMaterialOpacity(Material material, float opacity)
+	/// <summary>
+	/// レティクルの表示・非表示を切り替える。
+	/// </summary>
+	public void SetConstantReticleActive(bool active)
 	{
-		// URPのSurface TypeをTransparentに設定
-		if (material.HasProperty("_Surface"))
+		// 空中移動回数を使い切っている間は、
+		// 飛行中のレティクルを表示しない。
+		if (m_IsTrackingLanding && !m_IsAdditionalMoveAimAvailable)
 		{
-			material.SetFloat("_Surface", 1.0f);
+			active = false;
 		}
 
-		// Alphaブレンドに設定
-		if (material.HasProperty("_Blend"))
+		if (m_AimReticle != null)
 		{
-			material.SetFloat("_Blend", 0.0f);
-		}
-
-		if (material.HasProperty("_SrcBlend"))
-		{
-			material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-		}
-
-		if (material.HasProperty("_DstBlend"))
-		{
-			material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-		}
-
-		if (material.HasProperty("_ZWrite"))
-		{
-			material.SetFloat("_ZWrite", 0.0f);
-		}
-
-		if (material.HasProperty("_AlphaClip"))
-		{
-			material.SetFloat("_AlphaClip", 0.0f);
-		}
-
-		material.SetOverrideTag("RenderType", "Transparent");
-		material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-		material.DisableKeyword("_ALPHATEST_ON");
-		material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-		material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-
-		// 色のアルファ値を設定
-		if (material.HasProperty("_BaseColor"))
-		{
-			Color color = material.GetColor("_BaseColor");
-			color.a = opacity;
-			material.SetColor("_BaseColor", color);
-		}
-		else if (material.HasProperty("_Color"))
-		{
-			Color color = material.GetColor("_Color");
-			color.a = opacity;
-			material.SetColor("_Color", color);
+			m_AimReticle.SetActive(active);
 		}
 	}
-
 	/// <summary>
-	/// Playerのマテリアルを半透明用に切り替えます。
+	/// レティクルの方向にレイを飛ばし、移動可能地点を判定する。
+	/// 飛行中はエイム表示だけを更新し、実際の着地点は上書きしない。
 	/// </summary>
-	private void SetPlayerTransparent(bool transparent)
+	public void UpdateConstantReticle(Vector3 aimDirection)
 	{
-		if (m_PlayerRenderers == null)
+		// 予備浮上中は通常のエイム判定を行わない。
+		if (m_IsTakingOff)
 		{
+			HideAimPredictionLine();
 			return;
 		}
 
-		var silhouette = GetComponent<PlayerSilhouette>();
-
-		if (transparent)
+		// エイム方向が無効なら非表示。
+		if (aimDirection.sqrMagnitude <= 0.001f)
 		{
-			// PlayerSilhouetteが存在する場合はアウトラインを合成して半透明化
-			if (silhouette != null)
+			m_HasAimPreviewTarget = false;
+
+			if (!m_IsTrackingLanding)
 			{
-				silhouette.ApplyAimTransparentState(true, m_PlayerRenderers, m_TransparentMaterials);
+				m_CanFall = false;
 			}
-			else
+
+			HideAimPredictionLine();
+			return;
+		}
+
+		// 現在のカメラ方向から移動先を判定する。
+		if (!TryEvaluateAimTarget(
+			aimDirection,
+			out Vector3 targetPoint,
+			out Vector3 targetNormal))
+		{
+			m_HasAimPreviewTarget = false;
+
+			if (!m_IsTrackingLanding)
 			{
-				for (int i = 0; i < m_PlayerRenderers.Length; i++)
-				{
-					if (m_PlayerRenderers[i] == null)
-					{
-						continue;
-					}
-
-					m_PlayerRenderers[i].sharedMaterials = m_TransparentMaterials[i];
-				}
+				m_CanFall = false;
 			}
-		}
-		else
-		{
-			// エイム終了時: PlayerSilhouetteが存在する場合はエイム状態解除で完全復元
-			if (silhouette != null)
-			{
-				silhouette.ApplyAimTransparentState(false, null, null);
-			}
-			else
-			{
-				for (int i = 0; i < m_PlayerRenderers.Length; i++)
-				{
-					if (m_PlayerRenderers[i] == null)
-					{
-						continue;
-					}
 
-					m_PlayerRenderers[i].sharedMaterials = m_OriginalMaterials[i];
-				}
-			}
-		}
-	}
-
-	/// <summary>
-	/// エイムガイドの表示・非表示を切り替えます。
-	/// falseの場合は移動キャンセルとして扱います。
-	/// </summary>
-	public void ShowAimGuide(bool show)
-	{
-		if (show)
-		{
-			StartAimGuide();
-		}
-		else
-		{
-			// 通常のエイム解除は移動キャンセルとして扱う
-			CancelAimGuide();
-		}
-	}
-
-	/// <summary>
-	/// エイムを開始します。
-	/// </summary>
-	private void StartAimGuide()
-	{
-		// 浮上中、または戻るアニメーション中は開始しない
-		if (m_IsAiming || m_IsReturning)
-		{
+			HideAimPredictionLine();
 			return;
 		}
 
-		// Playerの浮上前の位置を保存
-		m_AimStartPosition = transform.position;
+		// 現在カメラが狙っている地点を保存する。
+		m_AimPreviewPoint = targetPoint;
+		m_AimPreviewNormal = targetNormal;
+		m_HasAimPreviewTarget = true;
 
-		// 現在立っている面の法線方向を取得
-		Vector3 groundNormal = m_GroundDetector != null
-			? m_GroundDetector.CurrentGroundNormal
-			: transform.up;
-
-		// 法線が取得できない場合はPlayerの上方向を使用
-		if (groundNormal.sqrMagnitude <= 0.0001f)
+		// 飛行中でなければ、通常の移動先としても更新する。
+		if (!m_IsTrackingLanding)
 		{
-			groundNormal = transform.up;
+			m_AimTargetPoint = targetPoint;
+			m_AimTargetNormal = targetNormal;
+
+			m_CanFall = true;
+
+			m_AimMoveDirection =
+				(m_AimTargetPoint - transform.position).normalized;
 		}
 
-		m_AimFloatDirection = groundNormal.normalized;
-
-		// Playerの浮上量を計算
-		Vector3 floatOffset =
-			m_AimFloatDirection * m_AimFloatHeight;
-
-
-		// カメラの補正先を計算する
-		Vector3 targetCameraLocalPosition = m_AimStartCameraLocalPosition;
-
-		if (m_CinemachineCameraTransform != null)
-		{
-			// カメラの親座標を基準に浮上量を変換する
-			Transform cameraParent = m_CinemachineCameraTransform.parent;
-
-			Vector3 localFloatOffset = cameraParent != null
-				? cameraParent.InverseTransformVector(floatOffset)
-				: floatOffset;
-
-			// カメラ自身の右・上・前を基準に肩越しオフセットを計算する
-			Vector3 shoulderWorldOffset =
-				m_CinemachineCameraTransform.right * m_AimCameraShoulderOffset.x
-				+ m_CinemachineCameraTransform.up * m_AimCameraShoulderOffset.y
-				+ m_CinemachineCameraTransform.forward * m_AimCameraShoulderOffset.z;
-
-			// ワールド方向のオフセットをカメラの親座標系へ変換する
-			Vector3 localShoulderOffset = cameraParent != null
-				? cameraParent.InverseTransformVector(shoulderWorldOffset)
-				: shoulderWorldOffset;
-
-			// 浮上分だけカメラを下げ、肩越し位置へ移動する
-			targetCameraLocalPosition =
-				m_AimStartCameraLocalPosition
-				- localFloatOffset
-				+ localShoulderOffset;
-		}
-
-		// エイム中の物理移動を停止
-		m_GravityMover?.StartAimHover();
-
-		// エイム開始時にPlayerを半透明化
-		SetPlayerTransparent(true);
-
-		m_IsAiming = true;
-
-		// Playerとカメラを同時に滑らかに移動させる
-		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
-		{
-			m_AimFloatTween.Kill();
-		}
-
-		m_AimFloatTween = DOTween.Sequence();
-		m_AimFloatTween.Append(
-			transform.DOMove(m_AimStartPosition + floatOffset,
-				Mathf.Max(0.01f, m_AimFloatDuration))
-			.SetEase(Ease.OutCubic));
-
-		if (m_CinemachineCameraTransform != null)
-		{
-			m_AimFloatTween.Join(
-				m_CinemachineCameraTransform
-					.DOLocalMove(targetCameraLocalPosition,
-						Mathf.Max(0.01f, m_AimFloatDuration))
-					.SetEase(Ease.OutCubic));
-		}
-
-		m_AimFloatTween.OnUpdate(() =>
-		{
-			if (m_Rigidbody != null)
-			{
-				m_Rigidbody.position = transform.position;
-			}
-		});
-
-		SetAimGuideActive(true);
-		ClearAimLine();
+		// 通常時・飛行中のどちらでも予測線を更新する。
+		UpdateAimPredictionLine();
 	}
 
 	/// <summary>
-	/// 移動中専用のエイムを開始します。
-	/// Playerを浮上させず、物理移動も停止しません。
+	/// 空中追加移動用に、現在のカメラ照準方向から着地点を評価する。
 	/// </summary>
-	public void StartMidFallAimGuide()
-	{
-		// すでにエイム中、または戻るアニメーション中なら開始しない
-		if (m_IsAiming || m_IsReturning)
-		{
-			return;
-		}
-
-		// 通常のエイムと区別する
-		m_IsMidFallAimGuide = true;
-		m_IsAiming = true;
-
-		// 移動中エイム開始時のカメラ位置を保存
-		if (m_CinemachineCameraTransform != null)
-		{
-			m_AimStartCameraLocalPosition =
-				m_CinemachineCameraTransform.localPosition;
-
-			// カメラの右・上・前方向を基準に肩越し位置を計算
-			Vector3 shoulderWorldOffset =
-				m_CinemachineCameraTransform.right * m_AimCameraShoulderOffset.x
-				+ m_CinemachineCameraTransform.up * m_AimCameraShoulderOffset.y
-				+ m_CinemachineCameraTransform.forward * m_AimCameraShoulderOffset.z;
-
-			Transform cameraParent = m_CinemachineCameraTransform.parent;
-
-			Vector3 localShoulderOffset = cameraParent != null
-				? cameraParent.InverseTransformVector(shoulderWorldOffset)
-				: shoulderWorldOffset;
-
-			Vector3 targetCameraLocalPosition =
-				m_AimStartCameraLocalPosition + localShoulderOffset;
-
-			// カメラだけを肩越し位置へ移動
-			m_CinemachineCameraTransform.DOLocalMove(
-				targetCameraLocalPosition,
-				Mathf.Max(0.01f, m_AimFloatDuration))
-				.SetEase(Ease.OutCubic);
-		}
-
-		// 移動中はPlayerの透明化もしない
-		SetAimGuideActive(true);
-		ClearAimLine();
-	}
-
-	/// <summary>
-	/// 移動キャンセル時のエイム解除です。
-	/// Playerとカメラを滑らかに元の位置へ戻します。
-	/// </summary>
-	public void CancelAimGuide()
-	{
-		if (!m_IsAiming || m_IsReturning)
-		{
-			return;
-		}
-
-		// キャンセルした瞬間に予測線と着地先マーカーを消す
-		ClearAimLine();
-
-		// 浮上アニメーションを停止
-		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
-		{
-			m_AimFloatTween.Kill();
-			m_AimFloatTween = null;
-		}
-
-		// 戻るアニメーション中にする
-		m_IsReturning = true;
-
-		// 現在位置から元の位置へ滑らかに戻す
-		float returnDuration = Mathf.Max(0.01f, m_AimFloatDuration);
-
-		m_AimFloatTween = DOTween.Sequence();
-
-		// Playerを浮上前の位置へ戻す
-		m_AimFloatTween.Append(
-			transform.DOMove(m_AimStartPosition, returnDuration)
-				.SetEase(Ease.InOutCubic));
-
-		// カメラも通常時の位置へ同時に戻す
-		if (m_CinemachineCameraTransform != null)
-		{
-			m_AimFloatTween.Join(
-				m_CinemachineCameraTransform
-					.DOLocalMove(
-						m_AimStartCameraLocalPosition,
-						returnDuration)
-					.SetEase(Ease.InOutCubic));
-		}
-
-		m_AimFloatTween.OnUpdate(() =>
-		{
-			if (m_Rigidbody != null)
-			{
-				m_Rigidbody.position = transform.position;
-			}
-		});
-
-		// 戻り終わってからエイムを解除する
-		m_AimFloatTween.OnComplete(() =>
-		{
-			m_AimFloatTween = null;
-			m_IsReturning = false;
-
-			FinishAimGuide();
-		});
-	}
-
-	/// <summary>
-	/// 移動によるエイム解除です。
-	/// Playerの現在位置を維持し、カメラだけを元の位置に戻します。
-	/// </summary>
-	public void EndAimGuideForMovement()
-	{
-		if (!m_IsAiming)
-		{
-			return;
-		}
-
-		// 左クリック時は浮上アニメーションを最後まで完了させてから移動へ移る
-		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
-		{
-			m_AimFloatTween.Complete();
-			m_AimFloatTween = null;
-		}
-
-		// Playerの位置は変更しない
-		// カメラだけをPlayerの子としての通常位置に戻す
-		RestoreCameraPosition();
-
-		FinishAimGuide();
-	}
-
-	/// <summary>
-	/// カメラのローカル位置を復元します。
-	/// </summary>
-	private void RestoreCameraPosition()
-	{
-		if (m_CinemachineCameraTransform != null)
-		{
-			m_CinemachineCameraTransform.localPosition =
-				m_AimStartCameraLocalPosition;
-		}
-	}
-
-	/// <summary>
-	/// エイム終了時の共通処理です。
-	/// </summary>
-	private void FinishAimGuide()
-	{
-		// エイム中の物理移動停止を解除
-		m_GravityMover?.StopAimHover();
-
-		// 戻るアニメーション状態を解除
-		m_IsReturning = false;
-
-		// エイム終了時にPlayerの元のマテリアルへ戻す
-		SetPlayerTransparent(false);
-
-		m_IsAiming = false;
-
-		SetAimGuideActive(false);
-		ClearAimLine();
-	}
-
-	/// <summary>
-	/// 移動中専用のエイムを終了します。
-	/// 移動を停止せず、カメラだけを通常位置へ戻します。
-	/// </summary>
-	public void EndMidFallAimGuide()
-	{
-		if (!m_IsMidFallAimGuide)
-		{
-			return;
-		}
-
-		// カメラの移動アニメーションがあれば停止
-		if (m_CinemachineCameraTransform != null)
-		{
-			m_CinemachineCameraTransform.DOKill();
-
-			// カメラだけを通常位置へ戻す
-			m_CinemachineCameraTransform.localPosition =
-				m_AimStartCameraLocalPosition;
-		}
-
-		// エイム状態を解除
-		m_IsMidFallAimGuide = false;
-		m_IsAiming = false;
-		m_IsReturning = false;
-
-		// 予測線・マーカーを消す
-		SetAimGuideActive(false);
-		ClearAimLine();
-	}
-
-	/// <summary>
-	/// 場外復帰時にエイムの演出と内部状態を即時解除します。
-	/// プレイヤー座標は復帰処理側で設定するため、このメソッドでは変更しません。
-	/// </summary>
-	public void ResetAimGuideForRespawn()
-	{
-		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
-		{
-			m_AimFloatTween.Kill();
-		}
-
-		m_AimFloatTween = null;
-
-		if (m_CinemachineCameraTransform != null)
-		{
-			m_CinemachineCameraTransform.DOKill();
-			RestoreCameraPosition();
-		}
-
-		m_GravityMover?.StopAimHover();
-		SetPlayerTransparent(false);
-
-		m_IsAiming = false;
-		m_IsReturning = false;
-		m_IsMidFallAimGuide = false;
-		m_IsTakingOff = false;
-		m_IsTrackingLanding = false;
-		AimMoveDirection = Vector3.zero;
-		m_AimTargetPoint = Vector3.zero;
-		m_AimTargetNormal = Vector3.up;
-
-		SetAimGuideActive(false);
-		ClearAimLine();
-	}
-
-	/// <summary>
-	/// カメラ中央からRaycastし、予測線と着地マーカーを更新します。
-	/// </summary>
-	public void UpdateAimDirection(Vector3 direction)
-	{
-		if (!m_IsAiming || m_IsReturning)
-		{
-			m_CanFall = false;
-			ClearAimLine();
-			return;
-		}
-
-		if (!TryEvaluateAimTarget(direction, out Vector3 targetPoint, out Vector3 targetNormal))
-		{
-			m_CanFall = false;
-			ClearAimLine();
-			return;
-		}
-
-		m_CanFall = true;
-		m_AimTargetPoint = targetPoint;
-		m_AimTargetNormal = targetNormal;
-
-		Vector3 moveDirection = m_AimTargetPoint - transform.position;
-		if (moveDirection.sqrMagnitude > 0.001f)
-		{
-			AimMoveDirection = moveDirection.normalized;
-		}
-
-		// Playerの位置から着地点まで予測線を描画
-		UpdateAimLine(transform.position, targetPoint);
-
-		// 着地点にマーカーを表示
-		UpdateLandingMarker(targetPoint, targetNormal);
-
-		// 着地点と法線をGravityMoverへ渡す
-		if (m_GravityMover != null)
-		{
-			m_GravityMover.SetFallingTarget(targetPoint, targetNormal);
-		}
-	}
-
-	/// <summary>
-	/// カメラ正面方向へRaycastし、エッジ補正・障害物干渉チェックを行った着地点と法線を算出します。
-	/// </summary>
-	private bool TryEvaluateAimTarget(Vector3 direction, out Vector3 targetPoint, out Vector3 targetNormal)
+	public bool TryUpdateAdditionalMoveTarget(
+		Vector3 aimDirection,
+		out Vector3 targetPoint,
+		out Vector3 targetNormal,
+		out Vector3 moveDirection)
 	{
 		targetPoint = Vector3.zero;
 		targetNormal = Vector3.up;
+		moveDirection = Vector3.zero;
 
-		Camera mainCamera = Camera.main;
-
-		Vector3 rayOrigin;
-		Vector3 rayDirection;
-
-		if (mainCamera != null)
-		{
-			// 実際に画面を描画しているカメラを使用
-			rayOrigin = mainCamera.transform.position;
-			rayDirection = mainCamera.transform.forward;
-		}
-		else
-		{
-			rayOrigin = m_CinemachineCameraTransform != null
-				? m_CinemachineCameraTransform.position
-				: transform.position;
-
-			rayDirection = direction;
-		}
-
-		if (rayDirection.sqrMagnitude <= 0.0001f)
+		if (!m_IsTrackingLanding || m_IsTakingOff)
 		{
 			return false;
 		}
 
-		rayDirection.Normalize();
-
-		// 1. カメラ中央からRaycast
-		bool hasHit = Physics.Raycast(
-			rayOrigin,
-			rayDirection,
-			out RaycastHit hit,
-			m_MaxAimDistance,
-			m_AimTargetLayers,
-			QueryTriggerInteraction.Ignore);
-
-		if (!hasHit)
+		if (!TryEvaluateAimTarget(
+			aimDirection,
+			out targetPoint,
+			out targetNormal))
 		{
 			return false;
 		}
 
-		targetPoint = hit.point;
-		targetNormal = hit.normal;
+		Vector3 direction = targetPoint - transform.position;
 
-		// 2. 角(エッジ)のフチを狙った際、足元が安全に乗るように面の内側へ安全インセット
-		// 接平面上で、カメラ視線の射影方向(面の奥側)に向かって安全マージン分(0.35m)シフトを試みる
-		Vector3 forwardOnPlane = Vector3.ProjectOnPlane(rayDirection, targetNormal);
-		if (forwardOnPlane.sqrMagnitude > 0.001f)
+		if (direction.sqrMagnitude <= 0.0001f)
 		{
-			forwardOnPlane.Normalize();
-			Vector3 testPoint = targetPoint + forwardOnPlane * 0.35f;
-			// シフト先にも同じ面(地面)が存在するかチェック
-			if (Physics.Raycast(testPoint + targetNormal * 0.5f, -targetNormal, out RaycastHit insetHit, 1.0f, m_AimTargetLayers, QueryTriggerInteraction.Ignore))
-			{
-				if (Vector3.Dot(insetHit.normal, targetNormal) > 0.8f)
-				{
-					// 安全な面の内側が確認できた場合、着地点を面の内側に補正
-					targetPoint = insetHit.point;
-					targetNormal = insetHit.normal;
-				}
-			}
+			return false;
 		}
 
-		// 3. プレイヤー本体から目標地点への直進ライン上に手前の角が干渉していないか検証
-		Vector3 playerPos = transform.position;
-		Vector3 toTarget = targetPoint - playerPos;
-		float targetDist = toTarget.magnitude;
-		if (targetDist > 0.2f)
-		{
-			Vector3 flyDir = toTarget / targetDist;
-			// プレイヤーの足元・カプセル厚み(0.25m半径)を考慮したSphereCastで手前角の干渉をチェック
-			if (Physics.SphereCast(playerPos, 0.25f, flyDir, out RaycastHit obstacleHit, targetDist - 0.1f, m_AimTargetLayers, QueryTriggerInteraction.Ignore))
-			{
-				// 手前の角や側面に引っかかる場合、手前の接触面を実際の着地点として適用
-				targetPoint = obstacleHit.point;
-				targetNormal = obstacleHit.normal;
-			}
-		}
+		moveDirection = direction.normalized;
 
 		return true;
 	}
 
 	/// <summary>
-	/// 照準UI・予測線・マーカーの表示を切り替えます。
+	/// レティクルの方向にある移動先を判定する。
 	/// </summary>
-	private void SetAimGuideActive(bool active)
+	private bool TryEvaluateAimTarget(
+		Vector3 aimDirection,
+		out Vector3 targetPoint,
+		out Vector3 targetNormal)
 	{
-		if (m_AimReticle != null)
+		targetPoint = Vector3.zero;
+		targetNormal = Vector3.up;
+
+		Transform cameraTransform = GetAimCameraTransform();
+
+		if (cameraTransform == null ||
+			aimDirection.sqrMagnitude <= 0.001f)
 		{
-			m_AimReticle.SetActive(active);
+			return false;
 		}
 
-		if (m_AimLine != null)
+		Ray ray = new Ray(
+			cameraTransform.position,
+			aimDirection.normalized);
+
+		if (!Physics.Raycast(
+			ray,
+			out RaycastHit hit,
+			m_MaxAimDistance,
+			m_AimTargetLayers))
 		{
-			m_AimLine.enabled = active;
+			return false;
 		}
 
-		if (m_LandingMarker != null)
-		{
-			m_LandingMarker.SetActive(active);
-		}
+		targetPoint = hit.point;
+		targetNormal = hit.normal.normalized;
+
+		return true;
 	}
 
 	/// <summary>
-	/// ワールド座標で予測線を描画します。
+	/// 移動先までの予測線を更新する。
 	/// </summary>
-	private void UpdateAimLine(
-		Vector3 startPoint,
-		Vector3 endPoint)
-	{
-		if (m_AimLine != null)
-		{
-			m_AimLine.useWorldSpace = true;
-			m_AimLine.positionCount = 2;
-			m_AimLine.SetPosition(0, startPoint);
-			m_AimLine.SetPosition(1, endPoint);
-			m_AimLine.enabled = true;
-		}
-	}
-
 	/// <summary>
-	/// 着地点にマーカーを表示し、面の法線に合わせます。
+	/// 移動先までの予測線を更新する。
 	/// </summary>
-	private void UpdateLandingMarker(
-		Vector3 position,
-		Vector3 normal)
+	private void UpdateAimPredictionLine()
 	{
-		if (m_LandingMarker == null)
+		if (m_AimPredictionLine == null)
 		{
 			return;
 		}
 
-		const float markerOffset = 0.06f;
+		// 移動可能な地点を捉えていない場合は非表示。
+		if (!m_CanFall ||
+			m_IsTakingOff ||
+			m_AimLineStart == null ||
+			(m_IsTrackingLanding && !m_IsAdditionalMoveAimAvailable))
+		{
+			HideAimPredictionLine();
+			return;
+		}
 
-		m_LandingMarker.transform.position =
-			position + normal * markerOffset;
+		// 飛行中は現在のエイム地点を使用する。
+		// 通常時は通常の移動先を使用する。
+		Vector3 targetPoint = m_IsTrackingLanding
+			? m_AimPreviewPoint
+			: m_AimTargetPoint;
 
-		m_LandingMarker.transform.rotation =
-			Quaternion.FromToRotation(Vector3.up, normal);
+		if (m_IsTrackingLanding && !m_HasAimPreviewTarget)
+		{
+			HideAimPredictionLine();
+			return;
+		}
 
-		m_LandingMarker.SetActive(true);
+		// プレイヤーからエイム先までの距離を取得。
+		float aimDistance =
+			Vector3.Distance(transform.position, targetPoint);
+
+		// 最大射程以上なら非表示。
+		if (aimDistance >= m_MaxAimDistance)
+		{
+			HideAimPredictionLine();
+			return;
+		}
+
+		// カメラの向きを基準にオフセットをワールド座標へ変換する。
+		Transform cameraTransform = GetAimCameraTransform();
+
+		if (cameraTransform == null)
+		{
+			HideAimPredictionLine();
+			return;
+		}
+
+		Vector3 startPosition =
+			m_AimLineStart.position +
+			cameraTransform.right * m_AimLineStartOffset.x +
+			cameraTransform.up * m_AimLineStartOffset.y +
+			cameraTransform.forward * m_AimLineStartOffset.z;
+
+		// エイム先を終点にする。
+		m_AimPredictionLine.positionCount = 2;
+		m_AimPredictionLine.SetPosition(0, startPosition);
+		m_AimPredictionLine.SetPosition(1, targetPoint);
+		m_AimPredictionLine.enabled = true;
 	}
 
 	/// <summary>
-	/// 着地マーカーを非表示にします。
+	/// 飛行中の現在の着地点に合わせて予測線を更新する。
+	/// カメラの照準方向による着地点の再判定は行わない。
 	/// </summary>
-	private void HideLandingMarker()
+	private void UpdateLandingPredictionLine()
 	{
-		if (m_LandingMarker != null)
+		if (m_AimPredictionLine == null)
 		{
-			m_LandingMarker.SetActive(false);
+			return;
+		}
+
+		// 飛行中の着地点追跡が無効なら非表示。
+		if (!m_IsTrackingLanding ||
+			!m_IsAdditionalMoveAimAvailable ||
+			m_AimLineStart == null)
+		{
+			HideAimPredictionLine();
+			return;
+		}
+
+		Transform cameraTransform = GetAimCameraTransform();
+
+		if (cameraTransform == null)
+		{
+			HideAimPredictionLine();
+			return;
+		}
+
+		// 予測線の開始位置を取得する。
+		Vector3 startPosition =
+			m_AimLineStart.position +
+			cameraTransform.right * m_AimLineStartOffset.x +
+			cameraTransform.up * m_AimLineStartOffset.y +
+			cameraTransform.forward * m_AimLineStartOffset.z;
+
+		// 終点には現在の着地点を使用する。
+		// カメラの向きから着地点を再計算することはしない。
+		m_AimPredictionLine.positionCount = 2;
+		m_AimPredictionLine.SetPosition(0, startPosition);
+		m_AimPredictionLine.SetPosition(1, m_AimTargetPoint);
+		m_AimPredictionLine.enabled = true;
+	}
+
+	/// <summary>
+	/// 予測線を非表示にする。
+	/// </summary>
+	private void HideAimPredictionLine()
+	{
+		if (m_AimPredictionLine != null)
+		{
+			m_AimPredictionLine.enabled = false;
 		}
 	}
 
 	/// <summary>
-	/// 予測線と着地マーカーを消去します。
+	/// エイム判定に使用するカメラを取得する。
 	/// </summary>
-	private void ClearAimLine()
+	private Transform GetAimCameraTransform()
 	{
-		if (m_AimLine != null)
+		if (m_CinemachineCameraTransform != null)
 		{
-			m_AimLine.positionCount = 0;
+			return m_CinemachineCameraTransform;
 		}
 
-		HideLandingMarker();
+		if (Camera.main != null)
+		{
+			return Camera.main.transform;
+		}
+
+		return null;
 	}
-
-	// =========================================================================
-	// 新移動リワーク用インターフェース窓口 (PG2担当: 本実装・調整対象)
-	// =========================================================================
-
 	/// <summary>
-	/// 常時表示する中央レティクルの表示状態を切り替えます。
+	/// 空中追加移動用のエイムレティクルと予測線の表示を切り替える。
 	/// </summary>
-	public void SetConstantReticleActive(bool active)
+	public void SetAdditionalMoveAimVisible(bool visible)
 	{
+		m_IsAdditionalMoveAimAvailable = visible;
+
 		if (m_AimReticle != null)
 		{
-			m_AimReticle.SetActive(active);
+			m_AimReticle.SetActive(visible);
 		}
-	}
 
-	/// <summary>
-	/// 常時中央レティクル基準で着地点・法線・距離を毎フレーム更新します。
-	/// </summary>
-	public void UpdateConstantReticle(Vector3 aimDirection)
-	{
-		if (TryEvaluateAimTarget(aimDirection, out Vector3 targetPoint, out Vector3 targetNormal))
+		if (visible)
 		{
-			m_CanFall = true;
-			m_AimTargetPoint = targetPoint;
-			m_AimTargetNormal = targetNormal;
-
-			Vector3 moveDirection = m_AimTargetPoint - transform.position;
-			if (moveDirection.sqrMagnitude > 0.001f)
-			{
-				AimMoveDirection = moveDirection.normalized;
-			}
+			UpdateAimPredictionLine();
 		}
 		else
 		{
-			m_CanFall = false;
+			HideAimPredictionLine();
 		}
 	}
 
+	// =========================================================
+	// 地上からの予備浮上
+	// =========================================================
+
 	/// <summary>
-	/// 地上からの移動開始時に StartAimGuide() の浮上動作を引き継いで予備浮上を行い、完了後にコールバックを発火します。
+	/// 地上から移動するときの予備浮上を開始する。
+	/// 浮上完了後にコールバックを呼び出す。
 	/// </summary>
 	public void StartGroundTakeoff(Action onTakeoffCompleted)
 	{
@@ -957,112 +447,181 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		}
 
 		m_IsTakingOff = true;
-		m_AimStartPosition = transform.position;
 
-		Vector3 groundNormal = m_GroundDetector != null
-			? m_GroundDetector.CurrentGroundNormal
-			: transform.up;
+		m_AimFloatTween?.Kill();
 
-		if (groundNormal.sqrMagnitude <= 0.0001f)
-		{
-			groundNormal = transform.up;
-		}
+		// プレイヤー自身の上方向を取得する。
+		Vector3 playerUp = transform.up.normalized;
 
-		m_AimFloatDirection = groundNormal.normalized;
-		Vector3 floatOffset = m_AimFloatDirection * m_AimFloatHeight;
+		Vector3 startPosition = transform.position;
+		Vector3 targetPosition =
+			startPosition + playerUp * m_AimFloatHeight;
 
-		Vector3 targetCameraLocalPosition = m_AimStartCameraLocalPosition;
-		if (m_CinemachineCameraTransform != null)
-		{
-			Transform cameraParent = m_CinemachineCameraTransform.parent;
-			Vector3 localFloatOffset = cameraParent != null
-				? cameraParent.InverseTransformVector(floatOffset)
-				: floatOffset;
-			targetCameraLocalPosition = m_AimStartCameraLocalPosition - localFloatOffset;
-		}
-
+		// 予備浮上中はGravityMoverのホバー状態にする。
 		m_GravityMover?.StartAimHover();
 
-		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
-		{
-			m_AimFloatTween.Kill();
-		}
+		Sequence sequence = DOTween.Sequence();
 
-		float duration = Mathf.Max(0.01f, m_AimFloatDuration);
-		m_AimFloatTween = DOTween.Sequence();
-		m_AimFloatTween.Append(
-			transform.DOMove(m_AimStartPosition + floatOffset, duration)
-				.SetEase(Ease.OutCubic));
+		// プレイヤーを地面の法線方向へ浮かせる。
+		sequence.Append(
+			transform.DOMove(targetPosition, m_AimFloatDuration)
+				.SetEase(Ease.OutQuad));
 
+		// カメラは浮上中に少し下げる。
 		if (m_CinemachineCameraTransform != null)
 		{
-			m_AimFloatTween.Join(
+			Vector3 loweredCameraPosition =
+				m_OriginalCameraLocalPosition +
+				Vector3.down * m_AimFloatHeight;
+
+			sequence.Join(
 				m_CinemachineCameraTransform
-					.DOLocalMove(targetCameraLocalPosition, duration)
-					.SetEase(Ease.OutCubic));
+					.DOLocalMove(loweredCameraPosition, m_AimFloatDuration)
+					.SetEase(Ease.OutQuad));
 		}
 
-		m_AimFloatTween.OnUpdate(() =>
+		sequence.OnComplete(() =>
 		{
 			if (m_Rigidbody != null)
 			{
 				m_Rigidbody.position = transform.position;
 			}
-		});
 
-		m_AimFloatTween.OnComplete(() =>
-		{
-			m_AimFloatTween = null;
-			m_IsTakingOff = false;
-			RestoreCameraPosition();
-			m_GravityMover?.StopAimHover();
-
-			// 浮上後の現在座標から改めて目標着地点への方向を再計算
-			Vector3 postFloatDir = m_AimTargetPoint - transform.position;
-			if (postFloatDir.sqrMagnitude > 0.001f)
+			// カメラの位置を元に戻す。
+			if (m_CinemachineCameraTransform != null)
 			{
-				AimMoveDirection = postFloatDir.normalized;
+				m_CinemachineCameraTransform.localPosition =
+					m_OriginalCameraLocalPosition;
 			}
 
+			m_IsTakingOff = false;
+
+			// PlayerController側で飛行開始処理を行う。
 			onTakeoffCompleted?.Invoke();
 		});
+
+		m_AimFloatTween = sequence;
 	}
 
 	/// <summary>
-	/// 進行中の地上予備浮上を中断し、物理およびカメラ位置を復元します。
+	/// 予備浮上をキャンセルする。
 	/// </summary>
 	public void CancelGroundTakeoff()
 	{
-		if (!m_IsTakingOff)
-		{
-			return;
-		}
-
-		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
-		{
-			m_AimFloatTween.Kill();
-			m_AimFloatTween = null;
-		}
+		m_AimFloatTween?.Kill();
+		m_AimFloatTween = null;
 
 		m_IsTakingOff = false;
-		RestoreCameraPosition();
+
+		if (m_CinemachineCameraTransform != null)
+		{
+			m_CinemachineCameraTransform.localPosition =
+				m_OriginalCameraLocalPosition;
+		}
+
 		m_GravityMover?.StopAimHover();
+		HideAimPredictionLine();
 	}
 
+	// =========================================================
+	// 飛行中の着地点追跡
+	// =========================================================
+
 	/// <summary>
-	/// 飛行中の着地点マーカー継続表示を開始し、初期着地面法線を記録します。
+	/// 飛行開始時の着地点と法線を記録する。
+	/// 再移動時は最初の法線と移動方向を維持する。
 	/// </summary>
-	public void BeginLandingTracking(Vector3 initialPoint, Vector3 initialNormal)
+	public void BeginLandingTracking(
+		Vector3 initialPoint,
+		Vector3 initialNormal)
 	{
+		// 初回の飛行開始時だけ、基準となる方向を記録する。
+		if (!m_IsTrackingLanding)
+		{
+			m_InitialTrackingNormal = initialNormal.normalized;
+
+			Transform cameraTransform = GetAimCameraTransform();
+
+			// カメラの上方向を着地点の面に沿わせる。
+			Vector3 up = Vector3.ProjectOnPlane(
+				cameraTransform != null
+					? cameraTransform.up
+					: transform.up,
+				m_InitialTrackingNormal);
+
+			// 上方向が使えない場合はカメラの前方向を使用する。
+			if (up.sqrMagnitude <= 0.001f)
+			{
+				up = Vector3.ProjectOnPlane(
+					cameraTransform != null
+						? cameraTransform.forward
+						: transform.forward,
+					m_InitialTrackingNormal);
+			}
+
+			if (up.sqrMagnitude > 0.001f)
+			{
+				up.Normalize();
+			}
+			else
+			{
+				up = Vector3.Cross(
+					m_InitialTrackingNormal,
+					Vector3.right).normalized;
+			}
+
+			// カメラの右方向を着地点の面に沿わせる。
+			Vector3 right = Vector3.ProjectOnPlane(
+				cameraTransform != null
+					? cameraTransform.right
+					: transform.right,
+				m_InitialTrackingNormal);
+
+			if (right.sqrMagnitude <= 0.001f)
+			{
+				right = Vector3.Cross(
+					m_InitialTrackingNormal,
+					up);
+			}
+
+			right = Vector3.ProjectOnPlane(right, up);
+
+			if (right.sqrMagnitude > 0.001f)
+			{
+				right.Normalize();
+			}
+			else
+			{
+				right = Vector3.Cross(
+					up,
+					m_InitialTrackingNormal).normalized;
+			}
+
+			// 飛行中に使い続ける方向を保存する。
+			m_LandingMoveUp = up;
+			m_LandingMoveRight = right;
+		}
+
 		m_IsTrackingLanding = true;
+
 		m_AimTargetPoint = initialPoint;
-		m_AimTargetNormal = initialNormal.sqrMagnitude > 0.0001f ? initialNormal.normalized : Vector3.up;
-		m_InitialTrackingNormal = m_AimTargetNormal;
-		UpdateLandingMarker(m_AimTargetPoint, m_AimTargetNormal);
+		m_AimTargetNormal = initialNormal.normalized;
+
+		// 飛行開始時点では、実際の着地点をエイム表示にも使用する。
+		m_AimPreviewPoint = initialPoint;
+		m_AimPreviewNormal = initialNormal.normalized;
+		m_HasAimPreviewTarget = true;
+
+		m_CanFall = true;
+
+		UpdateLandingMarker();
+		UpdateAimPredictionLine();
+		UpdateLandingPredictionLine();
 	}
 
 	/// <summary>
-	/// 飛行中の空中WASD操作による着地点シフトと法線角度制限(±80〜85度)を評価します(PG2本実装対象)。
+	/// 飛行中の移動入力に応じて着地点をずらす。
+	/// 元の着地点と同じ面の範囲内でのみ移動できる。
 	/// </summary>
 	public bool TryShiftLandingTarget(
 		Vector2 moveInput,
@@ -1073,47 +632,177 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		shiftedPoint = m_AimTargetPoint;
 		shiftedNormal = m_AimTargetNormal;
 
-		if (!m_IsTrackingLanding || moveInput.sqrMagnitude <= 0.0001f)
+		if (!m_IsTrackingLanding)
 		{
 			return false;
 		}
 
-		// TODO(PG2): moveInputとcameraTransformから接平面方向を求め、m_InitialTrackingNormalとの角度制限内で着地点を更新する
-		return false;
+		if (moveInput.sqrMagnitude <= 0.001f)
+		{
+			return false;
+		}
+
+		Vector3 currentNormal = m_AimTargetNormal.normalized;
+
+		// 飛行開始時に記録した方向だけを使用する。
+		// 飛行中のカメラ回転やプレイヤー回転の影響を受けない。
+		Vector3 up = m_LandingMoveUp;
+		Vector3 right = m_LandingMoveRight;
+
+		Vector3 moveDirection =
+			right * moveInput.x + up * moveInput.y;
+
+		if (moveDirection.sqrMagnitude <= 0.001f)
+		{
+			return false;
+		}
+
+		moveDirection.Normalize();
+
+		Vector3 candidatePoint =
+			m_AimTargetPoint +
+			moveDirection * m_AirTargetMoveSpeed * Time.deltaTime;
+
+		// 現在の面に沿って候補地点を再判定する。
+		Vector3 rayStart =
+			candidatePoint + currentNormal * m_SurfaceCheckHeight;
+
+		if (!Physics.Raycast(
+			rayStart,
+			-currentNormal,
+			out RaycastHit hit,
+			m_SurfaceCheckDistance,
+			m_AimTargetLayers))
+		{
+			// 面の外に出た場合は移動させない。
+			return false;
+		}
+
+		Vector3 candidateNormal = hit.normal.normalized;
+
+		// 最初の着地点の法線から一定角度以上変わる面には移動できない。
+		float normalAngle =
+			Vector3.Angle(m_InitialTrackingNormal, candidateNormal);
+
+		if (normalAngle > m_MaxNormalAngle)
+		{
+			return false;
+		}
+
+		m_AimTargetPoint = hit.point;
+		m_AimTargetNormal = candidateNormal;
+
+		shiftedPoint = m_AimTargetPoint;
+		shiftedNormal = m_AimTargetNormal;
+
+		UpdateLandingMarker();
+
+		// 予測線は実際の着地点ではなく、現在カメラが狙っている地点へ向ける。
+		UpdateAimPredictionLine();
+
+		return true;
 	}
 
 	/// <summary>
-	/// 飛行終了時に着地点マーカーの追跡表示を終了します。
+	/// 着地点マーカーの位置と向きを更新する。
+	/// </summary>
+	private void UpdateLandingMarker()
+	{
+		if (m_LandingMarker == null)
+		{
+			return;
+		}
+
+		m_LandingMarker.SetActive(true);
+
+		m_LandingMarker.transform.position =
+			m_AimTargetPoint +
+			m_AimTargetNormal * m_LandingMarkerOffset;
+
+		m_LandingMarker.transform.rotation =
+			Quaternion.FromToRotation(
+				Vector3.up,
+				m_AimTargetNormal);
+	}
+
+	/// <summary>
+	/// 着地点の追跡を終了する。
 	/// </summary>
 	public void EndLandingTracking()
 	{
 		m_IsTrackingLanding = false;
 		HideLandingMarker();
+		HideAimPredictionLine();
 	}
 
-	private void OnDestroy()
+	/// <summary>
+	/// 着地点マーカーを非表示にする。
+	/// </summary>
+	private void HideLandingMarker()
 	{
-		// 浮上アニメーションを停止
-		if (m_AimFloatTween != null && m_AimFloatTween.IsActive())
+		if (m_LandingMarker != null)
 		{
-			m_AimFloatTween.Kill();
+			m_LandingMarker.SetActive(false);
 		}
+	}
 
-		// 実行時に生成した半透明用マテリアルを破棄
-		if (m_TransparentMaterials == null)
-		{
-			return;
-		}
+	/// <summary>
+	/// リスポーン時にエイムガイドの状態を初期化する。
+	/// </summary>
+	public void ResetAimGuideForRespawn()
+	{
+		// 予備浮上中ならTweenを停止して元の状態に戻す。
+		CancelGroundTakeoff();
 
-		foreach (Material[] materials in m_TransparentMaterials)
-		{
-			foreach (Material material in materials)
-			{
-				if (material != null)
-				{
-					Destroy(material);
-				}
-			}
-		}
+		// 飛行中の着地点追跡を終了する。
+		EndLandingTracking();
+
+		// 移動先の判定状態を初期化する。
+		m_CanFall = false;
+		m_AimTargetPoint = Vector3.zero;
+		m_AimTargetNormal = Vector3.up;
+		m_AimMoveDirection = Vector3.zero;
+
+		m_AimPreviewPoint = Vector3.zero;
+		m_AimPreviewNormal = Vector3.up;
+		m_HasAimPreviewTarget = false;
+
+		// 着地点追跡用の法線も初期化する。
+		m_InitialTrackingNormal = Vector3.up;
+
+		// 移動方向を初期化する。
+		m_LandingMoveUp = Vector3.up;
+		m_LandingMoveRight = Vector3.right;
+
+		// リスポーン直後はレティクルを非表示にする。
+		SetConstantReticleActive(false);
+	}
+
+	// =========================================================
+	// 旧IAimGuideとの互換用
+	// =========================================================
+
+	// 【変更】旧エイム機能は使用しない。
+	// IAimGuideに残っているメソッドを満たすための互換処理。
+
+	public void ShowAimGuide(bool show)
+	{
+		SetConstantReticleActive(show);
+	}
+
+	public void CancelAimGuide()
+	{
+		CancelGroundTakeoff();
+		EndLandingTracking();
+	}
+
+	public void EndAimGuideForMovement()
+	{
+		// 旧エイムライン・透明化処理は廃止。
+	}
+
+	public void UpdateAimDirection(Vector3 aimDirection)
+	{
+		UpdateConstantReticle(aimDirection);
 	}
 }
