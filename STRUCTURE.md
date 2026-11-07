@@ -28,6 +28,8 @@ GameRepository/
 │   │   │   ├── BallSurfaceSearch.cs     # ボール周辺の面探索制御
 │   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
+│   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
+│   │   │   └── MatchManager.cs           # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
@@ -76,6 +78,7 @@ GameRepository/
 │   │   └── UI/                  # 汎用・共通UI制御
 │   │       ├── UIInputReceiver.cs       # UI系統入力検知・InputActionインスタンス分離制御
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・退出制御
+│   │       ├── MatchHudController.cs     # 試合残り時間・チーム得点のHUD表示制御
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定
