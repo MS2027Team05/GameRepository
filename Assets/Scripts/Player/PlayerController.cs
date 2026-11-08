@@ -1,5 +1,6 @@
-using System.Collections;
+﻿using System.Collections;
 using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -38,6 +39,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private ILockOnProvider m_LockOnProvider;
 	private IPlayerResource m_PlayerResource;
 	private IElectricAction m_ElectricAction;
+	private Rigidbody m_MatchRigidbody;
+	private NetworkTransform m_NetworkTransform;
+	private uint m_RestartSequence;
+	private PlayerAnimationController m_AnimationController;
+	public bool IsReadyForRestart { get; private set; }
 
 	// プレイヤーの内部状態
 	public enum EPlayerState
@@ -50,6 +56,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	}
 
 	public EPlayerState CurrentState { get; private set; } = EPlayerState.Idle;
+	public bool IsMatchActionEnabled => m_IsMatchActionEnabled;
 
 	private Coroutine m_StunCoroutine;
 
@@ -70,6 +77,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void Awake()
 	{
+		m_MatchRigidbody = GetComponent<Rigidbody>();
+		m_NetworkTransform = GetComponent<NetworkTransform>();
+		m_AnimationController = GetComponent<PlayerAnimationController>();
 		// 各インターフェースおよび演出コンポーネントの取得
 		m_GravityMover = GetComponent<IGravityMover>();
 		m_SurfaceMover = GetComponent<ISurfaceMover>();
@@ -143,14 +153,14 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 
 		// コンポーネント自体を有効化するのではなく、入力を許可する
-		m_InputReceiver?.SetInputAllowed(true);
+		SetMatchActionEnabled(MatchManager.Instance == null || MatchManager.Instance.MatchState == MatchManager.EMatchState.Playing);
 
 		BindInputEvents();
 		PlayerInputReceiver.SetCursorLocked(true);
 
 		if (m_UseReworkedActionFlow)
 		{
-			m_AimGuide?.SetConstantReticleActive(true);
+			m_AimGuide?.SetConstantReticleActive(m_IsMatchActionEnabled);
 		}
 
 		if (m_GravityMover != null)
@@ -211,7 +221,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void Update()
 	{
-		if (!IsOwner)
+		if (!IsOwner || !m_IsMatchActionEnabled)
 		{
 			return;
 		}
@@ -279,7 +289,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void FixedUpdate()
 	{
-		if (!IsOwner)
+		if (!IsOwner || !m_IsMatchActionEnabled)
 		{
 			return;
 		}
@@ -999,18 +1009,72 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	}
 
 	/// <summary>
+	/// 再配置要求を識別し、対象Ownerからの完了応答を待ちます。
+	/// </summary>
+	public void PrepareForRestart(Vector3 position, Quaternion rotation)
+	{
+		if (!IsServer || !IsSpawned) return;
+		IsReadyForRestart = false;
+		m_RestartSequence++;
+		PrepareForRestartOwnerRpc(position, rotation, m_RestartSequence);
+	}
+
+	[Rpc(SendTo.Owner)]
+	private void PrepareForRestartOwnerRpc(Vector3 position, Quaternion rotation, uint sequence)
+	{
+		SetMatchActionEnabled(false);
+		Respawn(position, rotation);
+		ConfirmRestartServerRpc(sequence);
+	}
+
+	[Rpc(SendTo.Server)]
+	private void ConfirmRestartServerRpc(uint sequence, RpcParams rpcParams = default)
+	{
+		// 過去の要求の応答や、別プレイヤーからの通知を採用しません。
+		if (rpcParams.Receive.SenderClientId == OwnerClientId && sequence == m_RestartSequence)
+		{
+			IsReadyForRestart = true;
+		}
+	}
+
+	/// <summary>
 	/// Host側の試合進行管理(GameManager等)からプレイヤーの行動許可・制限を切り替えるRPC。
 	/// </summary>
 	/// <param name="actionEnabled">行動を許可する場合はtrue</param>
 	[Rpc(SendTo.Owner)]
 	public void SetMatchActionEnabledOwnerRpc(bool actionEnabled)
 	{
+		SetMatchActionEnabled(actionEnabled);
+	}
+
+	private void SetMatchActionEnabled(bool actionEnabled)
+	{
+		if (!IsOwner) return;
 		m_IsMatchActionEnabled = actionEnabled;
+		m_InputReceiver?.SetInputAllowed(actionEnabled);
 
 		if (!actionEnabled)
 		{
 			CancelActiveSubAction();
 			m_AimGuide?.CancelGroundTakeoff();
+			m_AimGuide?.ShowAimGuide(false);
+			// 停止処理が速度を書き込めるよう、一時的に物理制御を戻してから最後に固定します。
+			if (m_MatchRigidbody != null)
+			{
+				m_MatchRigidbody.isKinematic = false;
+			}
+			m_GravityMover?.StopFalling();
+			m_SurfaceMover?.SetMoveInput(Vector2.zero, transform);
+		}
+		m_AimGuide?.SetConstantReticleActive(actionEnabled && m_UseReworkedActionFlow);
+		if (m_MatchRigidbody != null)
+		{
+			if (!m_MatchRigidbody.isKinematic)
+			{
+				m_MatchRigidbody.linearVelocity = Vector3.zero;
+				m_MatchRigidbody.angularVelocity = Vector3.zero;
+			}
+			m_MatchRigidbody.isKinematic = !actionEnabled;
 		}
 	}
 
@@ -1047,11 +1111,23 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 
 		m_GravityMover?.ResetMovement(position, rotation);
-		m_CameraEffect?.RestoreFOV();
-
+		// Rigidbodyの補間と固定解除を待たず、画面上と通信上の位置を即時に反映します。
+		transform.SetPositionAndRotation(position, rotation);
+		if (m_NetworkTransform != null && m_NetworkTransform.CanCommitToTransform)
+		{
+			m_NetworkTransform.Teleport(position, rotation, transform.localScale);
+		}
 		CurrentState = EPlayerState.Idle;
 		m_UsedMidFallAim = false;
 		m_IsMidFallAiming = false;
+		m_SurfaceMover?.ResetMovement();
+		m_GroundDetector?.DetectGround(Vector3.zero, 0f);
+		m_CameraEffect?.ResetForRespawn(position, rotation);
+		m_AnimationController?.ResetForRespawn();
+		if (!m_IsMatchActionEnabled && m_MatchRigidbody != null)
+		{
+			m_MatchRigidbody.isKinematic = true;
+		}
 	}
 
 	/// <summary>
