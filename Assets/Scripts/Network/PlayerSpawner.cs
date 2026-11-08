@@ -20,6 +20,31 @@ public class PlayerSpawner : NetworkBehaviour
 	[SerializeField] private Transform[] m_BlueSpawnPoints;
 
 	private readonly List<GameObject> m_SpawnedPlayerObjects = new List<GameObject>();
+	private readonly List<(PlayerController Controller, Vector3 Position, Quaternion Rotation)> m_RestartPlayers =
+		new List<(PlayerController, Vector3, Quaternion)>();
+
+	public bool IsReady { get; private set; }
+
+	/// <summary>
+	/// 接続中の全プレイヤーがOwner側での再配置を完了したか確認します。
+	/// </summary>
+	public bool ArePlayersReadyForRestart
+	{
+		get
+		{
+			if (!IsServer || !IsSpawned || !IsReady) return false;
+			foreach (var player in m_RestartPlayers)
+			{
+				if (player.Controller != null && player.Controller.IsSpawned &&
+					NetworkManager.ConnectedClients.ContainsKey(player.Controller.OwnerClientId) &&
+					!player.Controller.IsReadyForRestart)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+	}
 
 	public override void OnNetworkSpawn()
 	{
@@ -92,6 +117,52 @@ public class PlayerSpawner : NetworkBehaviour
 				{
 					profile.InitializeProfile(playerData);
 				}
+
+				PlayerController controller = playerInstance.GetComponent<PlayerController>();
+				if (controller == null)
+				{
+					Debug.LogError("[PlayerSpawner] PlayerPrefabにPlayerControllerを設定してください。", this);
+					return;
+				}
+				m_RestartPlayers.Add((controller, spawnPosition, spawnRotation));
+				controller.SetMatchActionEnabledOwnerRpc(false);
+			}
+			else
+			{
+				Destroy(playerInstance);
+				Debug.LogError("[PlayerSpawner] PlayerPrefabにNetworkObjectを設定してください。", this);
+				return;
+			}
+		}
+		IsReady = true;
+	}
+
+	/// <summary>
+	/// 生成時の陣営別配置を使って全プレイヤーを再配置します。
+	/// </summary>
+	public void ResetPlayersForRestart()
+	{
+		if (!IsServer || !IsSpawned) return;
+		foreach (var player in m_RestartPlayers)
+		{
+			if (player.Controller != null && player.Controller.IsSpawned)
+			{
+				player.Controller.PrepareForRestart(player.Position, player.Rotation);
+			}
+		}
+	}
+
+	/// <summary>
+	/// 各Ownerへ試合進行に応じた操作の許可状態を通知します。
+	/// </summary>
+	public void SetMatchActionsEnabled(bool enabled)
+	{
+		if (!IsServer || !IsSpawned) return;
+		foreach (var player in m_RestartPlayers)
+		{
+			if (player.Controller != null && player.Controller.IsSpawned)
+			{
+				player.Controller.SetMatchActionEnabledOwnerRpc(enabled);
 			}
 		}
 	}
@@ -131,6 +202,8 @@ public class PlayerSpawner : NetworkBehaviour
 				}
 			}
 			m_SpawnedPlayerObjects.Clear();
+			m_RestartPlayers.Clear();
+			IsReady = false;
 		}
 	}
 }
