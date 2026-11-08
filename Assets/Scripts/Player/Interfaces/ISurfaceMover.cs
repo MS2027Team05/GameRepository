@@ -19,6 +19,11 @@ public interface ISurfaceMover
 	void SetSpeedMultiplier(float multiplier);
 
 	/// <summary>
+	/// 復帰時に入力・歩行速度・運動量の履歴を初期化します。
+	/// </summary>
+	void ResetMovement();
+
+	/// <summary>
 	/// 現在の入力・接地法線・ギャップに基づいて地上・曲面歩行物理移動および姿勢回転を更新します。
 	/// </summary>
 	void UpdateSurfaceMovement();

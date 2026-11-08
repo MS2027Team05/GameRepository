@@ -96,6 +96,20 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 	}
 
 	/// <summary>
+	/// 復帰時に入力・歩行速度・運動量の履歴を初期化します。
+	/// </summary>
+	public void ResetMovement()
+	{
+		m_MoveInput = Vector2.zero;
+		m_CameraTransform = null;
+		m_LastMoveDirection = transform.forward;
+		m_LastPlaneSpeed = 0f;
+		m_LastSnapVelocity = Vector3.zero;
+		m_LastDownforce = Vector3.zero;
+		m_LastNormalDiff = 0f;
+	}
+
+	/// <summary>
 	/// 地上・曲面移動および姿勢回転をFixedUpdateタイミングで更新します。
 	/// </summary>
 	public void UpdateSurfaceMovement()

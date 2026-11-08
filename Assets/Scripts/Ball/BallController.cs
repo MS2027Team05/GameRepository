@@ -1,5 +1,6 @@
 ﻿using System;
 using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
 
 /// <summary>
@@ -16,6 +17,7 @@ using UnityEngine;
 /// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(NetworkTransform))]
 public class BallController : NetworkBehaviour
 {
 	[Header("ボールの当たり判定")]
@@ -47,6 +49,11 @@ public class BallController : NetworkBehaviour
 		new NetworkVariable<bool>();
 
 	private Rigidbody m_Rigidbody;
+	private NetworkTransform m_NetworkTransform;
+	private BallPhysicsController m_BallPhysics;
+	private Vector3 m_InitialPosition;
+	private Quaternion m_InitialRotation;
+	public bool IsMatchPaused { get; private set; }
 
 	private bool m_HasRepickupLock;
 	private ulong m_LastHolderClientId;
@@ -96,6 +103,8 @@ public class BallController : NetworkBehaviour
 	{
 		m_Rigidbody =
 			GetComponent<Rigidbody>();
+		m_NetworkTransform = GetComponent<NetworkTransform>();
+		m_BallPhysics = GetComponent<BallPhysicsController>();
 	}
 
 	/// <summary>
@@ -104,6 +113,12 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public override void OnNetworkSpawn()
 	{
+		if (IsServer)
+		{
+			m_InitialPosition = transform.position;
+			m_InitialRotation = transform.rotation;
+			SetMatchPaused(MatchManager.Instance != null && MatchManager.Instance.MatchState != MatchManager.EMatchState.Playing);
+		}
 		m_HasHolder.OnValueChanged +=
 			HandleHolderStateChanged;
 
@@ -192,7 +207,7 @@ public class BallController : NetworkBehaviour
 		ulong holderClientId,
 		ulong holderNetworkObjectId)
 	{
-		if (!IsServer)
+		if (!IsServer || !CanPlayMatch())
 		{
 			return false;
 		}
@@ -283,7 +298,7 @@ public class BallController : NetworkBehaviour
 	public bool TryShoot(
 		Vector3 shootDirection)
 	{
-		if (!IsServer)
+		if (!IsServer || !CanPlayMatch())
 		{
 			return false;
 		}
@@ -409,6 +424,51 @@ public class BallController : NetworkBehaviour
 
 		m_HasRepickupLock =
 			m_RepickupDelay > 0.0f;
+	}
+
+	private bool CanPlayMatch()
+	{
+		return !IsMatchPaused && (MatchManager.Instance == null || MatchManager.Instance.MatchState == MatchManager.EMatchState.Playing);
+	}
+
+	/// <summary>
+	/// サーバー側でボールの物理挙動と取得・シュートを停止します。
+	/// </summary>
+	public void SetMatchPaused(bool paused)
+	{
+		if (!IsServer || !IsSpawned) return;
+		IsMatchPaused = paused;
+		if (!m_Rigidbody.isKinematic)
+		{
+			m_Rigidbody.linearVelocity = Vector3.zero;
+			m_Rigidbody.angularVelocity = Vector3.zero;
+		}
+		m_Rigidbody.isKinematic = paused || HasHolder;
+	}
+
+	/// <summary>
+	/// 所持・再取得制限・物理状態を初期化し、生成時の位置へ戻して静止させます。
+	/// </summary>
+	public bool ResetForRestart()
+	{
+		if (!IsServer || !IsSpawned) return false;
+		ReleaseBall();
+		if (HasHolder || (transform.parent != null && !NetworkObject.TryRemoveParent(true)))
+		{
+			SetMatchPaused(true);
+			return false;
+		}
+
+		m_HasRepickupLock = false;
+		m_LastHolderClientId = 0;
+		m_RepickupUnlockTime = 0f;
+		m_CurrentHolderId.Value = 0;
+		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
+		m_BallPhysics?.ResetMotionState();
+		m_Rigidbody.useGravity = false;
+		m_NetworkTransform.Teleport(m_InitialPosition, m_InitialRotation, transform.localScale);
+		SetMatchPaused(true);
+		return true;
 	}
 
 	/// <summary>
