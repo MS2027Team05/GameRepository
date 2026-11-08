@@ -2,6 +2,15 @@
 
 本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
 
+試合開始・得点後の再開は`Game/MatchManager`を入口とし、サーバーが共通のカウントダウン終了時刻を同期します。
+`Network/PlayerSpawner`は生成時の陣営別配置を保持してOwnerへ再配置・行動制限を通知し、`Ball/BallController`は所持解除・初期位置への復帰・物理停止を担当します。
+`UI/MatchHudController`は同期された終了時刻からカウントダウンを表示します。カウントダウン中は試合時計を停止し、得点と秒未満を含む残り時間を維持します。
+再開時は`PreparingRestart`で待機し、各`PlayerController`がOwner側で位置を即時反映して返す完了応答を`PlayerSpawner`が確認した後に、`Countdown`へ遷移します。
+復帰時の表示初期化は`PlayerController.Respawn`から各専門モジュールへ委譲します。カメラは視点・追従・FOVを即時に復帰姿勢へ戻し、地上移動は速度履歴を消去します。アニメーションはOwnerが復帰世代を同期し、全端末でAnimatorの初期状態を再評価します。
+ゴール演出は`MatchManager.TryAddGoalScore`で得点確定後にRPCで通知し、各端末の`GoalController`が得点先チームに対応する配置済みParticleSystemを再生します。ゴールごとのNetworkObjectやエフェクトの都度生成は使用しません。
+得点後は`GoalCelebration`で全プレイヤーとボールをその場に停止します。各端末の`GoalController`が子を含めた粒子の消滅を確認し、`MatchManager`が接続中の対象端末すべての完了を受信してから再配置へ進めます。`MatchHudController`は同じ状態に連動してInspector指定の得点メッセージを表示します。
+得点メッセージの文言はHUDのInspectorでチームごとに設定し、`MatchManager.GoalScoringTeam`が同期する得点先から選択します。
+
 ```text
 GameRepository/
 ├── .agents/                     # AIエージェント設定およびカスタムスキル格納
@@ -14,7 +23,7 @@ GameRepository/
 │   │   ├── Ball/                # ボール描画用マテリアル (通常・透過X-Ray等)
 │   │   └── Player/              # プレイヤー用マテリアル格納 (性別・チームカラー別)
 │   ├── Meshes/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
-│   ├── Models/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
+│   │   └── Material/Models/     # キャラクター3Dモデル(FBX)およびアニメーション格納 (AI学習対象外)
 │   ├── Plugins/                 # 外部プラグインライブラリ格納 (DOTween等)
 │   ├── Prefabs/                 # ゲーム内プレハブ格納
 │   ├── Resources/               # 動的読み込み用アセット格納
@@ -28,6 +37,10 @@ GameRepository/
 │   │   │   ├── BallSurfaceSearch.cs     # ボール周辺の面探索制御
 │   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
+│   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
+│   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
+│   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
+│   │   │   └── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
@@ -81,13 +94,17 @@ GameRepository/
 │   │       ├── PlayerEdgeDiagnostics.cs # 角部・接地境界脱落時の挙動解析・診断HUD描画制御
 │   │       ├── PlayerGroundDetector.cs  # 足元/角/壁面の接地・法線検知およびデバッグGizmo描画
 │   │       ├── PlayerInputReceiver.cs   # 入力検知(R1移動・L1干渉アクション押下/離し対応)・視点操作・カーソルロック管理
+│   │       ├── PlayerRecoveryEffectController.cs # リソース急速回復・パスボーナス時のVFX再生およびネットワーク同期制御
+│   │       ├── PlayerResourceController.cs # [EntryPoint] Owner側リソース消費・通常回復・遅延急速回復・パス受取ボーナス管理
 │   │       ├── PlayerOutOfBoundsRespawner.cs # [EntryPoint] XYZ範囲外検知・初期スポーン地点への復帰要求
 │   │       ├── PlayerSurfaceMover.cs    # 地上/曲面歩行移動・運動量転送・ダウンフォース・姿勢回転制御
-│   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・新旧アクションフロー調停・OwnerRpc窓口
+│   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・アクションフロー調停・OwnerRpc窓口
 │   │   └── UI/                  # 汎用・共通UI制御
 │   │       ├── UIInputReceiver.cs       # UI系統入力検知・InputActionインスタンス分離制御
 │   │       ├── UIFocusGlowOutline.cs    # 汎用UIフォーカス(Pad選択/マウスホバー)発光黄色枠線制御
+│   │       ├── PlayerResourceGaugeUI.cs # リソース現在値・最大値からFilled Imageを更新するゲージUI
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・ロビー復帰制御
+│   │       ├── MatchHudController.cs    # 試合残り時間・チーム得点のHUD表示制御
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定

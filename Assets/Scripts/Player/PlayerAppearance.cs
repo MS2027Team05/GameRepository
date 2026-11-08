@@ -20,7 +20,6 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 	private PlayerNetworkProfile m_NetworkProfile;
 	private PlayerSilhouette m_PlayerSilhouette;
-	private PlayerAimGuide m_PlayerAimGuide;
 
 	private bool m_HasAppliedCharacterType;
 	private bool m_HasAppliedColor;
@@ -45,7 +44,6 @@ public sealed class PlayerAppearance : MonoBehaviour
 	{
 		m_NetworkProfile = GetComponent<PlayerNetworkProfile>();
 		m_PlayerSilhouette = GetComponent<PlayerSilhouette>();
-		m_PlayerAimGuide = GetComponent<PlayerAimGuide>();
 	}
 
 	private void OnEnable()
@@ -109,18 +107,10 @@ public sealed class PlayerAppearance : MonoBehaviour
 		ApplyBodyColor(characterType, colorType);
 		ApplyTeamColor(team);
 
-		// 差し替え後の本体マテリアルをシルエットおよびエイム半透明制御へ再キャッシュさせる
-		if (Application.isPlaying)
+		// 差し替え後の本体マテリアルをシルエット制御へ再キャッシュさせる
+		if (Application.isPlaying && m_PlayerSilhouette != null)
 		{
-			if (m_PlayerSilhouette != null)
-			{
-				m_PlayerSilhouette.RefreshBaseMaterials();
-			}
-
-			if (m_PlayerAimGuide != null)
-			{
-				m_PlayerAimGuide.RefreshPlayerMaterials();
-			}
+			m_PlayerSilhouette.RefreshBaseMaterials();
 		}
 	}
 
