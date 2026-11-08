@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 /// <summary>
@@ -52,6 +52,9 @@ public interface IAimGuide
 	/// </summary>
 	void EndAimGuideForMovement();
 
+
+	void SetAdditionalMoveAimVisible(bool visible);
+
 	/// <summary>
 	/// エイム中のカメラ正面方向ベクトルを渡し、予測線をリアルタイム更新します(旧エイムフロー互換用)。
 	/// </summary>
@@ -69,6 +72,21 @@ public interface IAimGuide
 	/// </summary>
 	/// <param name="aimDirection">カメラ正面の照準方向ベクトル</param>
 	void UpdateConstantReticle(Vector3 aimDirection);
+
+	/// <summary>
+	/// 空中追加移動用に、カメラ照準方向から新しい着地点を評価します。
+	/// 現在追跡中の着地点は変更しません。
+	/// </summary>
+	/// <param name="aimDirection">カメラ正面の照準方向</param>
+	/// <param name="targetPoint">評価された着地点</param>
+	/// <param name="targetNormal">評価された着地面の法線</param>
+	/// <param name="moveDirection">着地点へ向かう移動方向</param>
+	/// <returns>有効な着地点が見つかった場合はtrue</returns>
+	bool TryUpdateAdditionalMoveTarget(
+		Vector3 aimDirection,
+		out Vector3 targetPoint,
+		out Vector3 targetNormal,
+		out Vector3 moveDirection);
 
 	/// <summary>
 	/// 地上からの移動開始時に立ち面法線方向へ予備浮上を行い、完了後にコールバックを発火します。

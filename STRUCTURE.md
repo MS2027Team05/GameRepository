@@ -38,7 +38,9 @@ GameRepository/
 │   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
 │   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
 │   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
-│   │   │   └── MatchManager.cs           # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
+│   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
+│   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
+│   │   │   └── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
@@ -85,7 +87,7 @@ GameRepository/
 │   │       ├── PlayerResourceController.cs # [EntryPoint] Owner側リソース消費・通常回復・遅延急速回復・パス受取ボーナス管理
 │   │       ├── PlayerOutOfBoundsRespawner.cs # [EntryPoint] XYZ範囲外検知・初期スポーン地点への復帰要求
 │   │       ├── PlayerSurfaceMover.cs    # 地上/曲面歩行移動・運動量転送・ダウンフォース・姿勢回転制御
-│   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・新旧アクションフロー調停・OwnerRpc窓口
+│   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・アクションフロー調停・OwnerRpc窓口
 │   │   └── UI/                  # 汎用・共通UI制御
 │   │       ├── UIInputReceiver.cs       # UI系統入力検知・InputActionインスタンス分離制御
 │   │       ├── PlayerResourceGaugeUI.cs # リソース現在値・最大値からFilled Imageを更新するゲージUI

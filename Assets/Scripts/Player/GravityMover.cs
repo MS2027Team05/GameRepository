@@ -28,6 +28,9 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	// 想定設定値: true
 	[SerializeField] private bool m_EnableDebugDraw;
 
+	[Header("飛行中の方向転換設定")]
+	[SerializeField] private float m_FallingDirectionTurnSpeed = 180f;
+
 	private Rigidbody m_Rigidbody;
 	private CapsuleCollider m_CapsuleCollider;
 	private PlayerGroundDetector m_GroundDetector;
@@ -86,33 +89,52 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 	/// 指定された方向へ等速直線移動(落下)を開始します。
 	/// </summary>
 	/// <param name="direction">進行方向ベクトル</param>
-	public void StartFalling(Vector3 direction)
+	/// <returns>移動を開始できた場合はtrue</returns>
+	public bool StartFalling(Vector3 direction)
 	{
-		if (direction.sqrMagnitude < 0.0001f)
-		{
-			return;
-		}
+		Vector3 launchDirection;
 
-		if (m_Rigidbody != null)
-		{
-			m_Rigidbody.position = transform.position;
-			m_Rigidbody.isKinematic = false;
-		}
-
+		// 着地点が設定されている場合は、そちらを優先する
 		if (m_HasFallingTargetPoint)
 		{
-			Vector3 targetDirection = m_FallingTargetPoint - transform.position;
-			m_CurrentDirection = targetDirection.sqrMagnitude > 0.0001f
-				? targetDirection.normalized
-				: direction.normalized;
-			m_HasFallingTargetPoint = false;
+			Vector3 directionToTarget =
+				m_FallingTargetPoint - transform.position;
+
+			if (directionToTarget.sqrMagnitude < 0.0001f)
+			{
+				return false;
+			}
+
+			launchDirection = directionToTarget.normalized;
 		}
 		else
 		{
-			m_CurrentDirection = direction.normalized;
+			if (direction.sqrMagnitude < 0.0001f)
+			{
+				return false;
+			}
+
+			launchDirection = direction.normalized;
 		}
 
+		// Rigidbodyが取得できていない場合は移動を開始しない
+		if (m_Rigidbody == null)
+		{
+			return false;
+		}
+
+		// 予備浮上のホバー状態を解除
+		m_IsAimHovering = false;
+
+		m_Rigidbody.position = transform.position;
+		m_Rigidbody.isKinematic = false;
+		m_Rigidbody.linearVelocity = Vector3.zero;
+		m_Rigidbody.angularVelocity = Vector3.zero;
+
+		m_CurrentDirection = launchDirection;
 		m_IsFalling = true;
+
+		return true;
 	}
 
 	/// <summary>
@@ -229,9 +251,44 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 		if (m_IsFalling && m_Rigidbody != null)
 		{
 			float speed = m_BaseFallSpeed > 0f ? m_BaseFallSpeed : 20.0f;
+
+			//飛行中、現在の着地点へ向かって進行方向を調整する。
+			UpdateFallingDirection();
 			m_Rigidbody.linearVelocity = m_CurrentDirection * (speed * m_SpeedMultiplier);
 			UpdateFallingRotation();
 		}
+	}
+
+	/// <summary>
+	/// 飛行中の進行方向を現在の着地点へ向けて調整する。
+	/// </summary>
+	private void UpdateFallingDirection()
+	{
+		// 着地点が設定されていなければ方向転換しない。
+		if (!m_HasFallingTargetPoint)
+		{
+			return;
+		}
+
+		Vector3 directionToTarget =
+			m_FallingTargetPoint - transform.position;
+
+		if (directionToTarget.sqrMagnitude <= 0.001f)
+		{
+			return;
+		}
+
+		directionToTarget.Normalize();
+
+		// 現在の方向から着地点の方向へ徐々に旋回させる。
+		m_CurrentDirection = Vector3.RotateTowards(
+			m_CurrentDirection,
+			directionToTarget,
+			m_FallingDirectionTurnSpeed * Mathf.Deg2Rad * Time.fixedDeltaTime,
+			0f
+		);
+
+		m_CurrentDirection.Normalize();
 	}
 
 	private void UpdateFallingRotation()
@@ -317,14 +374,15 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 				m_Rigidbody.MoveRotation(targetRotation);
 			}
 
+			// 着地したので飛行先の情報をリセットする。
+			m_HasFallingTargetPoint = false;
+			m_HasFallingTargetNormal = false;
+
 			// 3. 3D全方位足元サーフェススナップ: 接触面直上にカプセルの底面を密着配置し、空中に浮くスタックを物理的に根絶
 			float footOffset = m_CapsuleCollider != null ? m_CapsuleCollider.height * 0.5f : 1.0f;
 			Vector3 targetPos = snapPoint + finalGroundNormal * (footOffset + 0.02f);
 			m_Rigidbody.position = targetPos;
 			m_Rigidbody.linearVelocity = Vector3.zero;
-
-			// 落下中の着地法線情報をクリア
-			m_HasFallingTargetNormal = false;
 
 			// 接地センサーに着地完了と法線を通知
 			if (m_GroundDetector != null)
