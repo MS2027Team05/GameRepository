@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using DG.Tweening;
 using UnityEngine;
 
@@ -109,9 +108,6 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	// 常時表示レティクル
 	// =========================================================
 
-	/// <summary>
-	/// レティクルの表示・非表示を切り替える。
-	/// </summary>
 	/// <summary>
 	/// レティクルの表示・非表示を切り替える。
 	/// </summary>

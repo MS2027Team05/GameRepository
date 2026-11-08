@@ -188,10 +188,13 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 		// 姿勢回転: ロール(斜めの傾き)のない垂直90度姿勢を適用
 		ApplyGroundRotation(moveDir, groundNormal);
 
-		// 現在のRigidbody速度を接平面成分と法線成分に分解
-		Vector3 currentVel = m_Rigidbody.linearVelocity;
-		Vector3 normalVel = Vector3.Project(currentVel, groundNormal);
-		Vector3 planeVel = currentVel - normalVel;
+		// 移動床(往復ブロック等)の速度を取得
+		Vector3 groundVelocity = m_GroundDetector != null ? m_GroundDetector.GroundVelocity : Vector3.zero;
+
+		// 現在のRigidbody速度から移動床速度を差し引いた相対速度を接平面成分と法線成分に分解
+		Vector3 relativeVel = m_Rigidbody.linearVelocity - groundVelocity;
+		Vector3 normalVel = Vector3.Project(relativeVel, groundNormal);
+		Vector3 planeVel = relativeVel - normalVel;
 
 		// スピード維持の運動量転送(角を跨いだ際、直前の走破スピードの数値を新面へ直接転送して失速と飛び出しを防止)
 		if (m_MoveInput.sqrMagnitude > 0.001f && moveDir.sqrMagnitude > 0.001f)
@@ -238,7 +241,7 @@ public class PlayerSurfaceMover : MonoBehaviour, ISurfaceMover
 		Vector3 downforce = -groundNormal * stickForce;
 		m_LastDownforce = downforce;
 
-		m_Rigidbody.linearVelocity = newPlaneVel + snapVelocity + downforce * Time.fixedDeltaTime;
+		m_Rigidbody.linearVelocity = newPlaneVel + groundVelocity + snapVelocity + downforce * Time.fixedDeltaTime;
 	}
 
 	/// <summary>

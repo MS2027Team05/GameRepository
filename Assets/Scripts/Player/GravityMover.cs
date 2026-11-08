@@ -382,7 +382,22 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 			float footOffset = m_CapsuleCollider != null ? m_CapsuleCollider.height * 0.5f : 1.0f;
 			Vector3 targetPos = snapPoint + finalGroundNormal * (footOffset + 0.02f);
 			m_Rigidbody.position = targetPos;
-			m_Rigidbody.linearVelocity = Vector3.zero;
+
+			// 移動床(往復ブロック等)への着地時は初速を移動床の速度に同期させて反発飛び出しを防ぐ
+			Vector3 initialLandingVel = Vector3.zero;
+			if (collision.collider != null)
+			{
+				if (collision.collider.TryGetComponent<IMovingSurface>(out var movingSurface) ||
+					(collision.collider.attachedRigidbody != null && collision.collider.attachedRigidbody.TryGetComponent<IMovingSurface>(out movingSurface)))
+				{
+					initialLandingVel = movingSurface.GetVelocityAtPoint(contact.point);
+				}
+				else if (collision.collider.attachedRigidbody != null)
+				{
+					initialLandingVel = collision.collider.attachedRigidbody.GetPointVelocity(contact.point);
+				}
+			}
+			m_Rigidbody.linearVelocity = initialLandingVel;
 
 			// 接地センサーに着地完了と法線を通知
 			if (m_GroundDetector != null)
