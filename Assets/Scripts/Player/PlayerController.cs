@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -11,26 +12,23 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 {
 	[Header("自端末専用オブジェクト")]
 	[FormerlySerializedAs("playerCameraObject")]
+	[Tooltip("Owner本人が使用するカメラ用GameObjectです。")]
 	[SerializeField] private GameObject m_PlayerCameraObject;
 	[FormerlySerializedAs("inputReceiver")]
+	[Tooltip("プレイヤーの入力を受け取るコンポーネントです。未設定時は同じオブジェクトから取得します。")]
 	[SerializeField] private PlayerInputReceiver m_InputReceiver;
 	[FormerlySerializedAs("CinemachineCameraTransform")]
+	[Tooltip("視点補正に利用するCinemachineカメラ用のTransformです。")]
 	[SerializeField] private Transform m_CinemachineCameraTransform;
 
-	// ========================================================================
-	// 【重要: 移行完了後に削除すること】
-	// 新アクションフロー(常時レティクル・R1即時移動・L1単押し/長押し・R1キャンセル)の有効化フラグ。
-	// 各PGの実装および新フローへの移行作業が完了し次第、本フラグと旧フロー分岐コードを削除してください。
-	// ========================================================================
 	[Header("新アクションフロー設定")]
+	[Tooltip("L1の短押しと長押しを区別する時間です(秒)。0以下ではコード側の代替値を使用します。")]
 	[SerializeField] private float m_ShortTapMaxDuration;
 
 	[Header("移動時の電撃エフェクト")]
 	[SerializeField] private GameObject m_MovingEffect;
 	[SerializeField] private Transform m_StartPoint;
 	[SerializeField] private Transform m_EndPoint;
-
-
 
 	// 各担当者が実装するインターフェース・コンポーネント参照
 	private IGravityMover m_GravityMover;
@@ -42,6 +40,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private ILockOnProvider m_LockOnProvider;
 	private IPlayerResource m_PlayerResource;
 	private IElectricAction m_ElectricAction;
+	private Rigidbody m_MatchRigidbody;
+	private NetworkTransform m_NetworkTransform;
+	private uint m_RestartSequence;
+	private PlayerAnimationController m_AnimationController;
+	public bool IsReadyForRestart { get; private set; }
 
 	// プレイヤーの内部状態
 	public enum EPlayerState
@@ -53,6 +56,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	}
 
 	public EPlayerState CurrentState { get; private set; } = EPlayerState.Idle;
+	public bool IsMatchActionEnabled => m_IsMatchActionEnabled;
 
 	private Coroutine m_StunCoroutine;
 
@@ -70,6 +74,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void Awake()
 	{
+		m_MatchRigidbody = GetComponent<Rigidbody>();
+		m_NetworkTransform = GetComponent<NetworkTransform>();
+		m_AnimationController = GetComponent<PlayerAnimationController>();
 		// 各インターフェースおよび演出コンポーネントの取得
 		m_GravityMover = GetComponent<IGravityMover>();
 		m_SurfaceMover = GetComponent<ISurfaceMover>();
@@ -138,13 +145,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_PlayerCameraObject.SetActive(true);
 		}
 
-		m_InputReceiver?.SetInputAllowed(true);
+		// コンポーネント自体を有効化するのではなく、入力を許可する
+		SetMatchActionEnabled(MatchManager.Instance == null || MatchManager.Instance.MatchState == MatchManager.EMatchState.Playing);
 
 		BindInputEvents();
 		PlayerInputReceiver.SetCursorLocked(true);
-
-		// 【変更】新システムでは自分のレティクルを常時有効にする
-		m_AimGuide?.SetConstantReticleActive(m_IsMatchActionEnabled);
 
 		if (m_GravityMover != null)
 		{
@@ -194,17 +199,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void Update()
 	{
-		if (!IsOwner)
+		if (!IsOwner || !m_IsMatchActionEnabled)
 		{
 			return;
 		}
 
 		// 飛行中は移動中エフェクトの始点と終点を現在の座標に更新
-		if (CurrentState == EPlayerState.Falling && m_MovingEffect != null)
+		if (CurrentState == EPlayerState.Falling && m_AimGuide != null)
 		{
-			m_StartPoint.position = transform.position;
-			Vector3 groundTargetPoint = m_AimGuide.TargetLandingPoint;
-			m_EndPoint.position = groundTargetPoint;
+			UpdateMovingEffectPositions(m_AimGuide.TargetLandingPoint);
 		}
 
 		// 着地した場合、EPlayerStateをIdleに戻してエフェクト非表示
@@ -220,7 +223,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		// 通常状態のとき、移動中エフェクトを非表示にする
 		if (CurrentState == EPlayerState.Idle)
 		{
-			m_MovingEffect.SetActive(false);
+			DeactivateMovingEffect();
 		}
 
 		// 新アクションフローのみを更新する
@@ -250,7 +253,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void FixedUpdate()
 	{
-		if (!IsOwner)
+		if (!IsOwner || !m_IsMatchActionEnabled)
 		{
 			return;
 		}
@@ -449,14 +452,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 			// 移動開始に成功したのでリソースを消費
 			m_PlayerResource?.TryConsume(airMoveCost);
-			m_PlayerResource?.NotifyActionPerformed();
 
-			// 自分と着地点との間に電撃エフェクトを発生させる
-			m_MovingEffect.SetActive(true);
-			m_StartPoint.position = transform.position;
-			m_EndPoint.position = airTargetPoint;
-
-			m_CameraEffect?.PlayFallEffect();
+			CompleteFallStart(airTargetPoint, airTargetNormal);
 
 			return;
 		}
@@ -482,14 +479,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
-		// 地上移動: リソースを消費し、立ち面法線方向へ少し浮上してから飛行を開始
-		if (m_PlayerResource != null && !m_PlayerResource.TryConsume(moveCost))
-		{
-			return;
-		}
-
-		m_PlayerResource?.NotifyActionPerformed();
-
+		// 地上移動: 予備浮上後の飛行開始直前にリソースを消費する。
 		Vector3 groundTargetPoint = m_AimGuide.TargetLandingPoint;
 		Vector3 groundTargetNormal = m_AimGuide.TargetLandingNormal;
 
@@ -508,16 +498,29 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 				? toTarget.normalized
 				: m_AimGuide.AimMoveDirection;
 
-			m_GravityMover?.SetFallingTarget(
+			if (m_GravityMover == null || launchDirection.sqrMagnitude <= 0.0001f)
+			{
+				return;
+			}
+
+			// 予備浮上中のスタンや消費で残量不足になった場合は飛行しない。
+			if (m_PlayerResource != null && !m_PlayerResource.CanAfford(moveCost))
+			{
+				return;
+			}
+
+			m_GravityMover.SetFallingTarget(
 				groundTargetPoint,
 				groundTargetNormal);
 
 			// 通常飛行を開始
-			if (m_GravityMover == null ||
-				!m_GravityMover.StartFalling(launchDirection))
+			if (!m_GravityMover.StartFalling(launchDirection))
 			{
 				return;
 			}
+
+			// 実際に飛行が開始されたタイミングでリソースを消費
+			m_PlayerResource?.TryConsume(moveCost);
 
 			// 通常飛行が実際に始まったので、空中追加移動の使用回数をリセット
 			m_UsedAimMove = false;
@@ -525,19 +528,53 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			// 次の飛行が始まったので、空中移動用エイムを表示する。
 			m_AimGuide.SetAdditionalMoveAimVisible(true);
 
-			// 自分と着地点との間に電撃エフェクトを発生させる
-			m_MovingEffect.SetActive(true);
-			m_StartPoint.position = transform.position;
-			m_EndPoint.position = groundTargetPoint;
-
-			CurrentState = EPlayerState.Falling;
-
-			m_AimGuide.BeginLandingTracking(
-				groundTargetPoint,
-				groundTargetNormal);
-
-			m_CameraEffect?.PlayFallEffect();
+			CompleteFallStart(groundTargetPoint, groundTargetNormal);
 		});
+	}
+
+	private void CompleteFallStart(Vector3 targetPoint, Vector3 targetNormal)
+	{
+		CurrentState = EPlayerState.Falling;
+		ActivateMovingEffect(targetPoint);
+		m_AimGuide?.BeginLandingTracking(targetPoint, targetNormal);
+		m_CameraEffect?.PlayFallEffect();
+	}
+
+	private void ActivateMovingEffect(Vector3 targetPoint)
+	{
+		if (m_MovingEffect != null)
+		{
+			m_MovingEffect.SetActive(true);
+		}
+		UpdateMovingEffectPositions(targetPoint);
+	}
+
+	private void UpdateMovingEffectPositions(Vector3 targetPoint)
+	{
+		if (m_StartPoint != null)
+		{
+			m_StartPoint.position = transform.position;
+		}
+		if (m_EndPoint != null)
+		{
+			m_EndPoint.position = targetPoint;
+		}
+	}
+
+	private void DeactivateMovingEffect()
+	{
+		if (m_MovingEffect != null)
+		{
+			m_MovingEffect.SetActive(false);
+		}
+	}
+
+	private void CancelAllActiveActionsAndEffects()
+	{
+		CancelActiveSubAction();
+		m_AimGuide?.CancelGroundTakeoff();
+		m_AimGuide?.EndLandingTracking();
+		DeactivateMovingEffect();
 	}
 
 	/// <summary>
@@ -569,13 +606,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
-		// 非所持時: 電撃チャージ開始(リソース残量を事前確認)
-		if (m_ElectricAction != null && m_PlayerResource != null)
+		// 非所持時: 電撃コンポーネントがない間はチャージ状態へ移行しない。
+		if (m_ElectricAction == null || m_PlayerResource == null)
 		{
-			if (!m_PlayerResource.CanAfford(m_ElectricAction.RequiredCost))
-			{
-				return;
-			}
+			return;
+		}
+
+		if (!m_PlayerResource.CanAfford(m_ElectricAction.RequiredCost))
+		{
+			return;
 		}
 
 		m_IsSubActionHeld = true;
@@ -611,11 +650,18 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		if (wasChargingElectric)
 		{
-			if (m_ElectricAction != null && m_ElectricAction.TryReleaseAndFire())
+			// 発射前にも残量を確認し、途中で不足した場合の無償発射を防止します。
+			float cost = m_ElectricAction != null
+				? m_ElectricAction.RequiredCost
+				: float.PositiveInfinity;
+
+			if (m_PlayerResource != null &&
+				m_PlayerResource.CanAfford(cost) &&
+				m_ElectricAction != null &&
+				m_ElectricAction.TryReleaseAndFire())
 			{
-				float cost = m_ElectricAction.RequiredCost;
-				m_PlayerResource?.TryConsume(cost);
-				m_PlayerResource?.NotifyActionPerformed();
+				// CanAffordと発射確定の間でリソース値を変更しないため消費できます。
+				m_PlayerResource.TryConsume(cost);
 			}
 			else
 			{
@@ -872,32 +918,71 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	}
 
 	/// <summary>
+	/// 再配置要求を識別し、対象Ownerからの完了応答を待ちます。
+	/// </summary>
+	public void PrepareForRestart(Vector3 position, Quaternion rotation)
+	{
+		if (!IsServer || !IsSpawned) return;
+		IsReadyForRestart = false;
+		m_RestartSequence++;
+		PrepareForRestartOwnerRpc(position, rotation, m_RestartSequence);
+	}
+
+	[Rpc(SendTo.Owner)]
+	private void PrepareForRestartOwnerRpc(Vector3 position, Quaternion rotation, uint sequence)
+	{
+		SetMatchActionEnabled(false);
+		Respawn(position, rotation);
+		ConfirmRestartServerRpc(sequence);
+	}
+
+	[Rpc(SendTo.Server)]
+	private void ConfirmRestartServerRpc(uint sequence, RpcParams rpcParams = default)
+	{
+		// 過去の要求の応答や、別プレイヤーからの通知を採用しません。
+		if (rpcParams.Receive.SenderClientId == OwnerClientId && sequence == m_RestartSequence)
+		{
+			IsReadyForRestart = true;
+		}
+	}
+
+	/// <summary>
 	/// Host側の試合進行管理(GameManager等)からプレイヤーの行動許可・制限を切り替えるRPC。
 	/// </summary>
 	/// <param name="actionEnabled">行動を許可する場合はtrue</param>
 	[Rpc(SendTo.Owner)]
 	public void SetMatchActionEnabledOwnerRpc(bool actionEnabled)
 	{
+		SetMatchActionEnabled(actionEnabled);
+	}
+
+	private void SetMatchActionEnabled(bool actionEnabled)
+	{
+		if (!IsOwner) return;
 		m_IsMatchActionEnabled = actionEnabled;
+		m_InputReceiver?.SetInputAllowed(actionEnabled);
 
 		if (!actionEnabled)
 		{
-			CancelActiveSubAction();
-			m_AimGuide?.CancelGroundTakeoff();
-
-			// 着地点マーカーも終了する。
-			m_AimGuide?.EndLandingTracking();
-
-			// 行動禁止中はレティクルを非表示
-			m_AimGuide?.SetConstantReticleActive(false);
-		}
-		else
-		{
-			// 行動再開時はレティクルを再表示
-			if (CurrentState != EPlayerState.Stunned)
+			CancelAllActiveActionsAndEffects();
+			m_AimGuide?.ShowAimGuide(false);
+			// 停止処理が速度を書き込めるよう、一時的に物理制御を戻してから最後に固定します。
+			if (m_MatchRigidbody != null)
 			{
-				m_AimGuide?.SetConstantReticleActive(true);
+				m_MatchRigidbody.isKinematic = false;
 			}
+			m_GravityMover?.StopFalling();
+			m_SurfaceMover?.SetMoveInput(Vector2.zero, transform);
+		}
+		m_AimGuide?.SetConstantReticleActive(actionEnabled && CurrentState != EPlayerState.Stunned);
+		if (m_MatchRigidbody != null)
+		{
+			if (!m_MatchRigidbody.isKinematic)
+			{
+				m_MatchRigidbody.linearVelocity = Vector3.zero;
+				m_MatchRigidbody.angularVelocity = Vector3.zero;
+			}
+			m_MatchRigidbody.isKinematic = !actionEnabled;
 		}
 	}
 
@@ -919,9 +1004,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_StunCoroutine = null;
 		}
 
-		CancelActiveSubAction();
-		m_AimGuide?.CancelGroundTakeoff();
-		m_AimGuide?.EndLandingTracking();
+		CancelAllActiveActionsAndEffects();
 
 		if (m_AimGuide is PlayerAimGuide playerAimGuide)
 		{
@@ -932,10 +1015,22 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		m_AimGuide?.SetConstantReticleActive(m_IsMatchActionEnabled);
 
 		m_GravityMover?.ResetMovement(position, rotation);
-		m_CameraEffect?.RestoreFOV();
-
+		// Rigidbodyの補間と固定解除を待たず、画面上と通信上の位置を即時に反映します。
+		transform.SetPositionAndRotation(position, rotation);
+		if (m_NetworkTransform != null && m_NetworkTransform.CanCommitToTransform)
+		{
+			m_NetworkTransform.Teleport(position, rotation, transform.localScale);
+		}
 		CurrentState = EPlayerState.Idle;
 		m_UsedAimMove = false;
+		m_SurfaceMover?.ResetMovement();
+		m_GroundDetector?.DetectGround(Vector3.zero, 0f);
+		m_CameraEffect?.ResetForRespawn(position, rotation);
+		m_AnimationController?.ResetForRespawn();
+		if (!m_IsMatchActionEnabled && m_MatchRigidbody != null)
+		{
+			m_MatchRigidbody.isKinematic = true;
+		}
 	}
 
 	/// <summary>
@@ -970,9 +1065,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private IEnumerator StunRoutine(float duration)
 	{
-		CancelActiveSubAction();
-		m_AimGuide?.CancelGroundTakeoff();
-		m_AimGuide?.EndLandingTracking();
+		CancelAllActiveActionsAndEffects();
 
 		CurrentState = EPlayerState.Stunned;
 

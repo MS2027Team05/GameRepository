@@ -76,6 +76,9 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	private IGroundDetector m_GroundDetector;
 	private IGravityMover m_GravityMover;
 	private NetworkObject m_NetworkObject;
+	private PlayerController m_PlayerController;
+	private Vector3 m_InitialCameraLocalPosition;
+	private Quaternion m_InitialCameraLocalRotation;
 	private Vector3 m_PositionVelocity;
 	private Vector3 m_CurrentUp = Vector3.up;
 	private Vector3 m_PlanarForward = Vector3.forward;
@@ -125,9 +128,12 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		m_GroundDetector = GetComponent<IGroundDetector>();
 		m_GravityMover = GetComponent<IGravityMover>();
 		m_NetworkObject = GetComponent<NetworkObject>();
+		m_PlayerController = GetComponent<PlayerController>();
 
 		if (m_CinemachineCamera != null)
 		{
+			m_InitialCameraLocalPosition = m_CinemachineCamera.transform.localPosition;
+			m_InitialCameraLocalRotation = m_CinemachineCamera.transform.localRotation;
 			m_CameraLocalPitchOffset = Mathf.DeltaAngle(0.0f, m_CinemachineCamera.transform.localEulerAngles.x);
 			if (m_CameraPivot == null)
 			{
@@ -341,11 +347,13 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 		// プレイヤーの位置へ追従: SmoothDampによる滑らかなスプリングダンピングで角の衝撃を吸収
 		float smoothTime = m_PositionSmoothTime > 0f ? m_PositionSmoothTime : 0.08f;
-		m_CameraPivot.position = Vector3.SmoothDamp(
-			m_CameraPivot.position,
-			transform.position,
-			ref m_PositionVelocity,
-			smoothTime);
+
+		m_CameraPivot.position = Vector3.SmoothDamp(m_CameraPivot.position, transform.position, ref m_PositionVelocity, smoothTime);
+
+		if (m_PlayerController != null && !m_PlayerController.IsMatchActionEnabled)
+		{
+			return;
+		}
 
 		// 視点リセット中でなければ、通常のカメラ制御を行う
 		if (!m_IsResettingView)
@@ -783,6 +791,44 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	public void RestoreFOV()
 	{
 		StartFOVChange(m_NormalFOV);
+	}
+
+	/// <summary>
+	/// 以前の視点・追従速度・着地補正・FOV演出を破棄して復帰先へ即時配置します。
+	/// </summary>
+	public void ResetForRespawn(Vector3 position, Quaternion rotation)
+	{
+		if (m_NetworkObject != null && !m_NetworkObject.IsOwner) return;
+		m_ViewResetTween?.Kill();
+		m_ViewResetTween = null;
+		if (m_FOVCoroutine != null)
+		{
+			StopCoroutine(m_FOVCoroutine);
+			m_FOVCoroutine = null;
+		}
+
+		m_PositionVelocity = Vector3.zero;
+		m_CurrentUp = rotation * Vector3.up;
+		m_PlanarForward = rotation * Vector3.forward;
+		m_LandedSurfaceNormal = m_CurrentUp;
+		m_Pitch = ClampPitchWithOffset(12.0f);
+		m_WasFalling = false;
+		m_IsLandingAlignPending = false;
+		m_IsLandingAlignStarted = false;
+		m_IsResettingView = false;
+
+		if (m_CameraPivot != null)
+		{
+			m_CameraPivot.SetPositionAndRotation(position, rotation * Quaternion.Euler(m_Pitch, 0f, 0f));
+		}
+		if (m_CinemachineCamera != null)
+		{
+			m_CinemachineCamera.transform.SetLocalPositionAndRotation(m_InitialCameraLocalPosition, m_InitialCameraLocalRotation);
+			m_CinemachineCamera.Lens.FieldOfView = m_NormalFOV;
+			// Cinemachine内の追従補間にも以前の位置を残さず、その場で再評価します。
+			m_CinemachineCamera.PreviousStateIsValid = false;
+			m_CinemachineCamera.InternalUpdateCameraState(m_CurrentUp, -1f);
+		}
 	}
 
 	/// <summary>
