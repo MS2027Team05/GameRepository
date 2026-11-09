@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using DG.Tweening;
 using UnityEngine;
 
@@ -772,33 +772,5 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 
 		// リスポーン直後はレティクルを非表示にする。
 		SetConstantReticleActive(false);
-	}
-
-	// =========================================================
-	// 旧IAimGuideとの互換用
-	// =========================================================
-
-	// 【変更】旧エイム機能は使用しない。
-	// IAimGuideに残っているメソッドを満たすための互換処理。
-
-	public void ShowAimGuide(bool show)
-	{
-		SetConstantReticleActive(show);
-	}
-
-	public void CancelAimGuide()
-	{
-		CancelGroundTakeoff();
-		EndLandingTracking();
-	}
-
-	public void EndAimGuideForMovement()
-	{
-		// 旧エイムライン・透明化処理は廃止。
-	}
-
-	public void UpdateAimDirection(Vector3 aimDirection)
-	{
-		UpdateConstantReticle(aimDirection);
 	}
 }

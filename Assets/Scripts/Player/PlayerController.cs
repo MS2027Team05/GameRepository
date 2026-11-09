@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
@@ -965,7 +965,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (!actionEnabled)
 		{
 			CancelAllActiveActionsAndEffects();
-			m_AimGuide?.ShowAimGuide(false);
+			m_AimGuide?.SetConstantReticleActive(false);
 			// 停止処理が速度を書き込めるよう、一時的に物理制御を戻してから最後に固定します。
 			if (m_MatchRigidbody != null)
 			{

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 /// <summary>
@@ -37,29 +37,10 @@ public interface IAimGuide
 	Vector3 AimMoveDirection { get; }
 
 	/// <summary>
-	/// 照準UIおよび軌道予測線の表示/非表示を切り替えます(旧エイムフロー互換用)。
+	/// 空中追加移動用の照準予測線の表示/非表示を切り替えます。
 	/// </summary>
-	/// <param name="show">表示する場合はtrue</param>
-	void ShowAimGuide(bool show);
-
-	/// <summary>
-	/// エイムをキャンセルし、プレイヤーとカメラを開始時の位置に戻します(旧エイムフロー互換用)。
-	/// </summary>
-	void CancelAimGuide();
-
-	/// <summary>
-	/// 移動によってエイムを終了し、プレイヤーの位置を維持してカメラを通常位置に戻します(旧エイムフロー互換用)。
-	/// </summary>
-	void EndAimGuideForMovement();
-
-
+	/// <param name="visible">表示する場合はtrue</param>
 	void SetAdditionalMoveAimVisible(bool visible);
-
-	/// <summary>
-	/// エイム中のカメラ正面方向ベクトルを渡し、予測線をリアルタイム更新します(旧エイムフロー互換用)。
-	/// </summary>
-	/// <param name="direction">カメラの正面方向ベクトル</param>
-	void UpdateAimDirection(Vector3 direction);
 
 	/// <summary>
 	/// 常時表示する中央レティクルの表示/非表示を切り替えます。
