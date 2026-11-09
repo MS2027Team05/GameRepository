@@ -1,3 +1,4 @@
+﻿// PlayerAimGuide.cs
 using System;
 using System.Collections.Generic;
 using DG.Tweening;
@@ -503,6 +504,20 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		// 移動中はPlayerの透明化もしない
 		SetAimGuideActive(true);
 		ClearAimLine();
+	}
+
+	/// <summary>
+	/// 地上移動の待機を開始する。
+	/// 予備浮上とエイムガイドの表示を開始するが、移動は開始しない。
+	/// </summary>
+	public void StartMoveStandbyGuide()
+	{
+		if (m_IsAiming || m_IsReturning || m_IsTakingOff)
+		{
+			return;
+		}
+
+		StartAimGuide();
 	}
 
 	/// <summary>

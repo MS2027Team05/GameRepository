@@ -1,3 +1,4 @@
+﻿//PlayerController.cs
 using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -22,11 +23,24 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	// 新アクションフロー(常時レティクル・R1即時移動・L1単押し/長押し・R1キャンセル)の有効化フラグ。
 	// 各PGの実装および新フローへの移行作業が完了し次第、本フラグと旧フロー分岐コードを削除してください。
 	// ========================================================================
-	[Header("【移行完了後に削除】新アクションフロー切り替え")]
-	[SerializeField] private bool m_UseReworkedActionFlow;
+
+
 
 	[Header("新アクションフロー設定")]
-	[SerializeField] private float m_ShortTapMaxDuration;
+	[SerializeField]
+	private bool m_UseReworkedActionFlow = true;
+
+	[Tooltip("この時間以内に離すと単押し扱い")]
+	[SerializeField]
+	private float m_ShortTapMaxDuration = 0.2f;
+
+
+	/// <summary>
+	/// 新フロー：移動待機中かどうか。
+	/// 右クリックでtrue、左クリック確定またはキャンセルでfalse。
+	/// </summary>
+	private bool m_IsMoveStandby;
+
 
 	// 各担当者が実装するインターフェース・コンポーネント参照
 	private IGravityMover m_GravityMover;
@@ -39,6 +53,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private IPlayerResource m_PlayerResource;
 	private IElectricAction m_ElectricAction;
 
+	
 	// プレイヤーの内部状態
 	public enum EPlayerState
 	{
@@ -102,10 +117,19 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		{
 			m_InputReceiver = GetComponent<PlayerInputReceiver>();
 		}
+
+		Debug.Log(
+	$"[Action Debug] LockOnProvider = {m_LockOnProvider}");
+
+		Debug.Log(
+			$"[Action Debug] ElectricAction = {m_ElectricAction}");
 	}
 
 	public override void OnNetworkSpawn()
 	{
+		Debug.Log(
+		$"[PlayerController] OnNetworkSpawn: IsOwner = {IsOwner}");
+
 		// Inspectorで未設定の場合も、Player自身から取得する
 		if (m_InputReceiver == null)
 		{
@@ -177,6 +201,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	{
 		if (m_InputReceiver == null)
 		{
+			Debug.LogError(
+				"[PlayerController] InputReceiver is NULL");
 			return;
 		}
 
@@ -186,9 +212,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		m_InputReceiver.OnShootPressed += HandleLegacyShootInput;
 		m_InputReceiver.OnViewResetPressed += HandleLegacyViewResetInput;
 
+		Debug.Log(
+	"[PlayerController] Binding Input Events");
+
 		m_InputReceiver.OnMoveActionPressed += HandleMoveActionPressed;
 		m_InputReceiver.OnSubActionStarted += HandleSubActionStarted;
 		m_InputReceiver.OnSubActionReleased += HandleSubActionReleased;
+
+		Debug.Log(
+			"[PlayerController] Input Events Bound");
 	}
 
 	private void UnbindInputEvents()
@@ -306,12 +338,27 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	{
 		if (m_AimGuide != null)
 		{
-			bool canShowReticle = m_IsMatchActionEnabled && CurrentState != EPlayerState.Stunned;
+			bool canShowReticle =
+				m_IsMatchActionEnabled &&
+				CurrentState != EPlayerState.Stunned;
+
 			m_AimGuide.SetConstantReticleActive(canShowReticle);
 
 			if (canShowReticle && !m_AimGuide.IsTakingOff)
 			{
-				m_AimGuide.UpdateConstantReticle(GetAimDirection());
+				Vector3 aimDirection = GetAimDirection();
+
+				if (m_IsMoveStandby)
+				{
+					// 右クリック移動待機中：
+					// 着地点マーカーと予測線を更新
+					m_AimGuide.UpdateAimDirection(aimDirection);
+				}
+				else
+				{
+					// 通常時：常時レティクルを更新
+					m_AimGuide.UpdateConstantReticle(aimDirection);
+				}
 			}
 		}
 
@@ -350,16 +397,16 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private void UpdateReworkedSubAction()
 	{
 		if (!m_IsSubActionHeld)
-		{
 			return;
-		}
 
-		if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned)
+		if (!m_IsMatchActionEnabled ||
+			CurrentState == EPlayerState.Stunned)
 		{
 			CancelActiveSubAction();
 			return;
 		}
 
+		// 電撃チャージ
 		if (m_IsChargingElectric)
 		{
 			m_LockOnProvider?.UpdateTargetSearch();
@@ -367,6 +414,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
+		// ボールを持っていない場合
 		if (m_BallCarrier == null || !m_BallCarrier.HasBall)
 		{
 			CancelActiveSubAction();
@@ -374,15 +422,24 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 
 		m_SubActionHoldTimer += Time.deltaTime;
-		float tapThreshold = m_ShortTapMaxDuration > 0.0f ? m_ShortTapMaxDuration : 0.2f;
 
-		if (!m_HasStartedPassCharge && m_SubActionHoldTimer >= tapThreshold)
+		float threshold = m_ShortTapMaxDuration > 0
+			? m_ShortTapMaxDuration
+			: 0.2f;
+
+		// 一定時間経過したら追尾パスモードへ
+		if (!m_HasStartedPassCharge &&
+			m_SubActionHoldTimer >= threshold)
 		{
 			m_HasStartedPassCharge = true;
-			m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.BallHolder);
+
+			m_LockOnProvider?.SetSearchMode(
+				ELockOnSearchMode.BallHolder);
+
 			m_BallCarrier.BeginPassCharge();
 		}
 
+		// 追尾対象の検索とチャージ
 		if (m_HasStartedPassCharge)
 		{
 			m_LockOnProvider?.UpdateTargetSearch();
@@ -391,8 +448,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	}
 
 	/// <summary>
-	/// 新フロー: R1(右クリック)押下時の処理。
-	/// L1チャージ中であればキャンセルのみを実行して移動暴発を防ぎ、通常時は地上予備浮上移動または空中即時再移動を実行します。
+	/// 新フロー：右クリック(R1)押下時の処理。
+	/// 通常時は移動待機、待機中はキャンセル。
+	/// 移動中は従来どおり移動キャンセル。
 	/// </summary>
 	private void HandleMoveActionPressed()
 	{
@@ -401,103 +459,90 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
-		if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned)
-		{
-			return;
-		}
-
-		// L1長押しチャージ中のR1入力はキャンセル専用として消費し、移動を発火させない
-		if (m_IsSubActionHeld || CurrentState == EPlayerState.ChargingSubAction)
+		// サブアクション中は、右クリックでキャンセル
+		if (m_IsSubActionHeld ||
+			CurrentState == EPlayerState.ChargingSubAction)
 		{
 			CancelActiveSubAction();
 			return;
 		}
 
-		if (m_AimGuide == null || m_AimGuide.IsTakingOff)
+		if (!m_IsMatchActionEnabled ||
+			CurrentState == EPlayerState.Stunned)
 		{
 			return;
 		}
 
-		// 押下フレームの最新照準で着地点評価を更新
-		Vector3 aimDirection = GetAimDirection();
-		m_AimGuide.UpdateConstantReticle(aimDirection);
-
-		if (!m_AimGuide.CanFall)
+		// すでに移動待機中ならキャンセル
+		if (m_IsMoveStandby)
 		{
+			CancelMoveStandby();
 			return;
 		}
 
-		float moveCost = m_PlayerResource != null
-			? m_PlayerResource.CalculateMoveCost(m_AimGuide.TargetDistance)
-			: 0.0f;
-
-		if (m_PlayerResource != null && !m_PlayerResource.CanAfford(moveCost))
+		// 飛行中は、移動待機ではなく従来の空中操作を行う
+		if (m_GravityMover != null &&
+			m_GravityMover.IsFalling)
 		{
-			return;
-		}
-
-		// HandleAimToggle()と同様にGravityMover.IsFallingで空中か地上かを分岐
-		if (m_GravityMover != null && m_GravityMover.IsFalling)
-		{
-			// 空中再移動: 既に1回使用済みなら不発
 			if (m_UsedMidFallAim)
 			{
 				return;
 			}
 
-			if (m_PlayerResource != null && !m_PlayerResource.TryConsume(moveCost))
-			{
-				return;
-			}
-
-			m_PlayerResource?.NotifyActionPerformed();
-
-			// 実際に空中再移動が成立したタイミングでのみ1回制限を消費
 			m_UsedMidFallAim = true;
 
-			Vector3 airTargetPoint = m_AimGuide.TargetLandingPoint;
-			Vector3 airTargetNormal = m_AimGuide.TargetLandingNormal;
-			Vector3 airMoveDirection = m_AimGuide.AimMoveDirection;
-
-			CurrentState = EPlayerState.Falling;
-			m_AimGuide.BeginLandingTracking(airTargetPoint, airTargetNormal);
-			m_GravityMover.SetFallingTarget(airTargetPoint, airTargetNormal);
-			m_CameraEffect?.PlayFallEffect();
-			m_GravityMover.StartFalling(airMoveDirection);
-			return;
-		}
-
-		// 地上移動: リソースを消費し、立ち面法線方向へ少し浮上してから飛行を開始
-		if (m_PlayerResource != null && !m_PlayerResource.TryConsume(moveCost))
-		{
-			return;
-		}
-
-		m_PlayerResource?.NotifyActionPerformed();
-
-		Vector3 groundTargetPoint = m_AimGuide.TargetLandingPoint;
-		Vector3 groundTargetNormal = m_AimGuide.TargetLandingNormal;
-		RotatePlayerTowardAim(aimDirection);
-
-		m_AimGuide.StartGroundTakeoff(() =>
-		{
-			if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned)
+			if (m_AimGuide is PlayerAimGuide groundAimGuide)
 			{
-				return;
+				groundAimGuide.StartMidFallAimGuide();
 			}
 
-			CurrentState = EPlayerState.Falling;
-			m_AimGuide.BeginLandingTracking(groundTargetPoint, groundTargetNormal);
-			m_GravityMover?.SetFallingTarget(groundTargetPoint, groundTargetNormal);
-			m_CameraEffect?.PlayFallEffect();
+			m_IsMidFallAiming = true;
+			return;
+		}
 
-			Vector3 toTarget = groundTargetPoint - transform.position;
-			Vector3 launchDirection = toTarget.sqrMagnitude > 0.001f
-				? toTarget.normalized
-				: m_AimGuide.AimMoveDirection;
+		// 着地点が有効か確認
+		if (m_AimGuide == null ||
+			!m_AimGuide.CanFall)
+		{
+			Debug.Log(
+				"[Move] 着地点がないため移動待機を開始できません。");
 
-			m_GravityMover?.StartFalling(launchDirection);
-		});
+			return;
+		}
+		// 移動待機状態にする
+		m_IsMoveStandby = true;
+
+		// 予備浮上と着地点マーカーの表示を開始
+		if (m_AimGuide is PlayerAimGuide playerAimGuide)
+		{
+			playerAimGuide.StartMoveStandbyGuide();
+		}
+
+		Debug.Log(
+			"[Move] 移動待機開始。左クリックで確定してください。");
+	}
+
+
+	/// <summary>
+	/// 移動待機をキャンセルする。
+	/// 予備浮上を解除し、プレイヤーを元の位置へ戻す。
+	/// </summary>
+	private void CancelMoveStandby()
+	{
+		if (!m_IsMoveStandby)
+		{
+			return;
+		}
+
+		m_IsMoveStandby = false;
+
+		// 予備浮上と着地点マーカーを解除
+		if (m_AimGuide is PlayerAimGuide playerAimGuide)
+		{
+			playerAimGuide.CancelAimGuide();
+		}
+
+		Debug.Log("[Move] 移動待機をキャンセルしました。");
 	}
 
 	/// <summary>
@@ -506,51 +551,149 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// </summary>
 	private void HandleSubActionStarted()
 	{
+		Debug.Log("[PlayerController] SubAction Started");
+
+		// 移動待機中に左クリックされた場合は移動確定
+		if (m_UseReworkedActionFlow && m_IsMoveStandby)
+		{
+			ConfirmMoveStandby();
+			return;
+		}
+
 		if (!m_UseReworkedActionFlow)
 		{
+			Debug.LogWarning(
+				"[PlayerController] 再設計されたアクションフローは無効です");
 			return;
 		}
 
 		if (!m_IsMatchActionEnabled ||
 			CurrentState == EPlayerState.Stunned ||
 			(m_AimGuide != null && m_AimGuide.IsTakingOff))
-		{
 			return;
-		}
 
 		if (m_IsSubActionHeld)
-		{
 			return;
-		}
 
 		bool hasBall = m_BallCarrier != null && m_BallCarrier.HasBall;
+
 		if (hasBall)
 		{
+			// ボール所持時：パス操作の判定開始
 			m_IsSubActionHeld = true;
 			m_IsChargingElectric = false;
 			m_HasStartedPassCharge = false;
 			m_SubActionHoldTimer = 0.0f;
+
 			CurrentState = EPlayerState.ChargingSubAction;
 			return;
 		}
 
-		// 非所持時: 電撃チャージ開始(リソース残量を事前確認)
+		// ボール非所持時：電撃チャージ
 		if (m_ElectricAction != null && m_PlayerResource != null)
 		{
-			if (!m_PlayerResource.CanAfford(m_ElectricAction.RequiredCost))
-			{
+			if (!m_PlayerResource.CanAfford(
+				m_ElectricAction.RequiredCost))
 				return;
-			}
 		}
 
 		m_IsSubActionHeld = true;
 		m_IsChargingElectric = true;
 		m_HasStartedPassCharge = false;
 		m_SubActionHoldTimer = 0.0f;
+
 		CurrentState = EPlayerState.ChargingSubAction;
 
-		m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.NonBallHolder);
+		// 敵・ボールの自動ロックオン
+		m_LockOnProvider?.SetSearchMode(
+			ELockOnSearchMode.NonBallHolder);
+
 		m_ElectricAction?.BeginCharge();
+	}
+
+
+	/// <summary>
+	/// 移動待機中の左クリックによる移動確定処理。
+	/// </summary>
+	private void ConfirmMoveStandby()
+	{
+		if (!m_IsMoveStandby)
+		{
+			return;
+		}
+
+		if (!m_IsMatchActionEnabled ||
+			CurrentState == EPlayerState.Stunned)
+		{
+			CancelMoveStandby();
+			return;
+		}
+
+		// 着地点が無効になっていた場合は移動しない
+		if (m_AimGuide == null ||
+			!m_AimGuide.CanFall)
+		{
+			Debug.LogWarning(
+				"[Move] 着地点が無効になったため移動をキャンセルしました。");
+
+			CancelMoveStandby();
+			return;
+		}
+
+		// 確定時点の着地点と法線を保存
+		Vector3 landingPoint = m_AimGuide is PlayerAimGuide playerAimGuide
+			? playerAimGuide.TargetLandingPoint
+			: transform.position + m_AimGuide.AimMoveDirection;
+
+		Vector3 landingNormal = m_AimGuide is PlayerAimGuide guide
+			? guide.TargetLandingNormal
+			: Vector3.up;
+
+		// 待機状態を解除
+		m_IsMoveStandby = false;
+
+		Debug.Log(
+			$"[Move] 移動確定。着地点: {landingPoint}");
+
+		// 地上からの移動
+		if (m_AimGuide is PlayerAimGuide groundAimGuide)
+		{
+			// 右クリック待機中の予備浮上を完了させる。
+			// Playerの位置は浮上した位置のまま維持する。
+			groundAimGuide.EndAimGuideForMovement();
+
+			// 移動状態へ変更
+			CurrentState = EPlayerState.Falling;
+
+			// 着地点マーカーの追跡を開始
+			m_AimGuide.BeginLandingTracking(
+				landingPoint,
+				landingNormal);
+
+			// カメラ演出
+			m_CameraEffect?.PlayFallEffect();
+
+			// 移動先を設定
+			m_GravityMover?.SetFallingTarget(
+				landingPoint,
+				landingNormal);
+
+			// ここで初めて移動を開始
+			m_GravityMover?.StartFalling(
+				groundAimGuide.AimMoveDirection);
+
+			Debug.Log("[Move] 移動確定。移動開始。");
+		}
+		else
+		{
+			// PlayerAimGuide以外を使用している場合
+			CurrentState = EPlayerState.Falling;
+
+			m_CameraEffect?.PlayFallEffect();
+
+			m_GravityMover?.StartFalling(
+				m_AimGuide.AimMoveDirection);
+		}
 	}
 
 	/// <summary>
@@ -559,10 +702,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// </summary>
 	private void HandleSubActionReleased()
 	{
+
+		Debug.Log("[PlayerController] SubAction Released");
+
 		if (!m_UseReworkedActionFlow || !m_IsSubActionHeld)
-		{
 			return;
-		}
 
 		bool wasChargingElectric = m_IsChargingElectric;
 		bool hadStartedPassCharge = m_HasStartedPassCharge;
@@ -574,31 +718,58 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		RestoreStateAfterSubAction();
 
+		// 電撃発射
 		if (wasChargingElectric)
 		{
-			if (m_ElectricAction != null && m_ElectricAction.TryReleaseAndFire())
+			Debug.Log("[Electric Debug] 発射処理開始");
+
+			if (m_ElectricAction == null)
 			{
-				float cost = m_ElectricAction.RequiredCost;
-				m_PlayerResource?.TryConsume(cost);
-				m_PlayerResource?.NotifyActionPerformed();
+				Debug.LogError(
+					"[Electric Debug] ElectricAction が未設定です");
 			}
 			else
 			{
-				m_ElectricAction?.CancelCharge();
+				Debug.Log(
+					"[Electric Debug] TryReleaseAndFire 呼び出し");
+
+				bool fired =
+					m_ElectricAction.TryReleaseAndFire();
+
+				Debug.Log(
+					$"[Electric Debug] 発射結果: {fired}");
+
+				if (fired)
+				{
+					float cost =
+						m_ElectricAction.RequiredCost;
+
+					m_PlayerResource?.TryConsume(cost);
+					m_PlayerResource?.NotifyActionPerformed();
+				}
+				else
+				{
+					Debug.LogWarning(
+						"[Electric Debug] 発射条件を満たしていません");
+
+					m_ElectricAction.CancelCharge();
+				}
 			}
 
-			m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.None);
+			m_LockOnProvider?.SetSearchMode(
+				ELockOnSearchMode.None);
+
 			return;
 		}
 
-		// ボール所持時の離し処理
+		// 短押し：通常シュート
 		if (!hadStartedPassCharge)
 		{
-			// 短押し(タップ): カメラ正面方向へ即座に通常パス・シュート
 			HandleShoot();
 			return;
 		}
 
+		// 長押し：追尾パス
 		if (m_BallCarrier != null &&
 			m_BallCarrier.IsPassChargeFull &&
 			m_LockOnProvider != null &&
@@ -613,7 +784,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_BallCarrier?.CancelPassCharge();
 		}
 
-		m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.None);
+		m_LockOnProvider?.SetSearchMode(
+			ELockOnSearchMode.None);
 	}
 
 	/// <summary>
@@ -621,10 +793,19 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// </summary>
 	private void CancelActiveSubAction()
 	{
-		if (!m_IsSubActionHeld && CurrentState != EPlayerState.ChargingSubAction)
+		// 移動待機中なら、サブアクションとは別にキャンセルする
+		if (m_IsMoveStandby)
 		{
+			CancelMoveStandby();
 			return;
 		}
+
+
+		Debug.Log("[PlayerController] SubAction Cancelled");
+
+		if (!m_IsSubActionHeld &&
+			CurrentState != EPlayerState.ChargingSubAction)
+			return;
 
 		m_IsSubActionHeld = false;
 		m_IsChargingElectric = false;
@@ -633,7 +814,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		m_ElectricAction?.CancelCharge();
 		m_BallCarrier?.CancelPassCharge();
-		m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.None);
+
+		m_LockOnProvider?.SetSearchMode(
+			ELockOnSearchMode.None);
 
 		RestoreStateAfterSubAction();
 	}

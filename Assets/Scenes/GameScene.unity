@@ -1319,6 +1319,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: "\u30B4\u30FC\u30EB_blue"
       objectReference: {fileID: 0}
+    - target: {fileID: 6981755145144581260, guid: c53e738407b79e64497117c383e60fd9, type: 3}
+      propertyPath: m_TagString
+      value: Goal
+      objectReference: {fileID: 0}
     - target: {fileID: 7759699945475106358, guid: c53e738407b79e64497117c383e60fd9, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0.00000786805
@@ -1679,7 +1683,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0.10452846, y: 0, z: 0, w: 0.9945219}
-  m_LocalPosition: {x: -191.36617, y: 2.5000157, z: 3.8211641}
+  m_LocalPosition: {x: 5.0049562, y: 60.824955, z: -0.2822647}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2007,7 +2011,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4499815124927505067, guid: 98492b9c629af31458bcaf28317f030b, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 8.821164
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4499815124927505067, guid: 98492b9c629af31458bcaf28317f030b, type: 3}
       propertyPath: m_LocalRotation.w
@@ -2027,11 +2031,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4499815124927505067, guid: 98492b9c629af31458bcaf28317f030b, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -191.36617
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4499815124927505067, guid: 98492b9c629af31458bcaf28317f030b, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.000015810341
+      value: 96
       objectReference: {fileID: 0}
     - target: {fileID: 4499815124927505067, guid: 98492b9c629af31458bcaf28317f030b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -9886,6 +9890,10 @@ PrefabInstance:
     - target: {fileID: 7768935216296163962, guid: c3edb9548f20dbb4a8aa72a24bfad82c, type: 3}
       propertyPath: m_Name
       value: "\u30B4\u30FC\u30EB_red"
+      objectReference: {fileID: 0}
+    - target: {fileID: 7768935216296163962, guid: c3edb9548f20dbb4a8aa72a24bfad82c, type: 3}
+      propertyPath: m_TagString
+      value: Goal
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

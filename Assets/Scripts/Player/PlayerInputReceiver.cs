@@ -1,3 +1,4 @@
+﻿//PlayerInputReceiver.cs
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -34,7 +35,8 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	[SerializeField] private InputActionReference m_LockOnAction;
 
-	[Header("新アクションフロー用 Input Actions(R1移動 / L1干渉アクション)")]
+	//
+	[Header("新アクションフロー用 Input Actions(右クリック=キャンセル/移動、左クリック=電撃/パス)")]
 	[SerializeField] private InputActionReference m_MoveTriggerAction;
 	[SerializeField] private InputActionReference m_SubAction;
 
@@ -62,14 +64,21 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>ロックオンボタン押下イベント(旧フロー互換用)</summary>
 	public event Action OnLockOnPressed;
 
-	/// <summary>新フロー: 移動アクション(マウス右クリック / ゲームパッドR1)押下イベント</summary>
+	/// <summary>
+	/// 新フロー: 右クリック(チャージ中はキャンセル、通常時は移動)押下イベント
+	/// </summary>
 	public event Action OnMoveActionPressed;
 
-	/// <summary>新フロー: 干渉サブアクション(マウス左クリック / ゲームパッドL1)押下開始イベント</summary>
+	/// <summary>
+	/// 新フロー: 左クリック(電撃/パス)押下開始イベント
+	/// </summary>
 	public event Action OnSubActionStarted;
 
-	/// <summary>新フロー: 干渉サブアクション(マウス左クリック / ゲームパッドL1)離しイベント</summary>
+	/// <summary>
+	/// 新フロー: 左クリック(電撃/パス)離しイベント
+	/// </summary>
 	public event Action OnSubActionReleased;
+
 
 	private static readonly HashSet<PlayerInputReceiver> m_ActiveReceivers = new HashSet<PlayerInputReceiver>();
 	private static bool m_IsGlobalPaused = false;
@@ -457,34 +466,52 @@ public class PlayerInputReceiver : MonoBehaviour
 			return;
 		}
 
-		// 新フロー移動アクション: マウス右クリック または ゲームパッドR1
+
+
+
+
+		// 新フロー移動アクション
+		// 右クリック / Qキー / ゲームパッドR1
 		if (!HasAction(m_MoveTriggerAction))
 		{
 			bool moveActionPressed =
 				(Mouse.current != null &&
 				 Mouse.current.rightButton.wasPressedThisFrame)
 				||
+				(Keyboard.current != null &&
+				 Keyboard.current.qKey.wasPressedThisFrame)
+				||
 				(Gamepad.current != null &&
 				 Gamepad.current.rightShoulder.wasPressedThisFrame);
 
 			if (moveActionPressed)
 			{
+				Debug.Log("[Input Debug] MoveAction が押された");
+
 				OnMoveActionPressed?.Invoke();
 			}
 		}
 
-		// 新フロー干渉サブアクション(押下開始・離し): マウス左クリック または ゲームパッドL1
+
+
+		// 新フロー干渉サブアクション
+		// 左クリック / Zキー / ゲームパッドL1
 		if (!HasAction(m_SubAction))
 		{
 			bool subStarted =
 				(Mouse.current != null &&
 				 Mouse.current.leftButton.wasPressedThisFrame)
 				||
+				(Keyboard.current != null &&
+				 Keyboard.current.zKey.wasPressedThisFrame)
+				||
 				(Gamepad.current != null &&
 				 Gamepad.current.leftShoulder.wasPressedThisFrame);
 
 			if (subStarted)
 			{
+				Debug.Log("[Input Debug] SubAction 開始");
+
 				OnSubActionStarted?.Invoke();
 			}
 
@@ -492,14 +519,20 @@ public class PlayerInputReceiver : MonoBehaviour
 				(Mouse.current != null &&
 				 Mouse.current.leftButton.wasReleasedThisFrame)
 				||
+				(Keyboard.current != null &&
+				 Keyboard.current.zKey.wasReleasedThisFrame)
+				||
 				(Gamepad.current != null &&
 				 Gamepad.current.leftShoulder.wasReleasedThisFrame);
 
 			if (subReleased)
 			{
+				Debug.Log("[Input Debug] SubAction 解除");
+
 				OnSubActionReleased?.Invoke();
 			}
 		}
+
 
 		// 旧フロー エイム切り替え: Shiftキー または マウス右クリック または ゲームパッドL1
 		if (!HasAction(m_AimToggleAction))
@@ -573,13 +606,13 @@ public class PlayerInputReceiver : MonoBehaviour
 			OnViewResetPressed?.Invoke();
 		}
 
-		// ロックオン: Lキー または Qキー または ゲームパッドL1(旧フロー用フォールバック)
+		// ロックオン: Lキー または ゲームパッドL1(旧フロー用フォールバック)
 		if (!HasAction(m_LockOnAction))
 		{
 			bool lockOnPressed =
 				(Keyboard.current != null &&
-				 (Keyboard.current.lKey.wasPressedThisFrame ||
-				  Keyboard.current.qKey.wasPressedThisFrame))
+				 (Keyboard.current.lKey.wasPressedThisFrame /*||
+				  Keyboard.current.qKey.wasPressedThisFrame*/))
 				||
 				(Gamepad.current != null &&
 				 Gamepad.current.leftShoulder.wasPressedThisFrame);
