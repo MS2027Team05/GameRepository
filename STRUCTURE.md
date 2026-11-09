@@ -81,7 +81,8 @@ GameRepository/
 │   │   │   ├── StageSymmetricSynchronizer.cs # [EntryPoint] ステージ地形の点対称同期設定・データ保持コンポーネント
 │   │   │   ├── StageRailRingBuilder.cs       # [EntryPoint] 外周レール(3種)・往復キューブ・外側足場一括生成コンポーネント
 │   │   │   ├── StageRailPatternSwitcher.cs   # 外周レール(3種+None)x足場(On/Off)2x3パターン切り替え・マルチ同期コンポーネント
-│   │   │   └── StageShuttleBlock.cs          # 4分割レール区間を往復移動するブロック(キューブ)コンポーネント
+│   │   │   ├── StageShuttleBlock.cs          # 4分割レール区間を往復移動するブロック(キューブ)コンポーネント
+│   │   │   └── StageObjectBilateralPlacer.cs # 基準BoxColliderサイズに基づく等間隔両端配置・エディタ即時反映コンポーネント
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
 │   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御
