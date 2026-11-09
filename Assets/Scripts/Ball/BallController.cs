@@ -519,11 +519,16 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		m_Rigidbody.linearVelocity =
-			Vector3.zero;
+		// Surface Physics中は既にKinematicのため、
+		// Dynamic状態の場合だけ速度を停止します。
+		if (!m_Rigidbody.isKinematic)
+		{
+			m_Rigidbody.linearVelocity =
+				Vector3.zero;
 
-		m_Rigidbody.angularVelocity =
-			Vector3.zero;
+			m_Rigidbody.angularVelocity =
+				Vector3.zero;
+		}
 
 		m_Rigidbody.isKinematic =
 			true;
