@@ -317,32 +317,37 @@ public sealed partial class BallSurfaceSimulation
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Concave)
 			{
-				// ConcaveではBall中心が隣面へ入り込む前に、
-				// Sphere半径を考慮して隣面との衝突位置を求めます。
-				if (TryHandleConcaveEdgeCollision(
+				// Concaveでは実EdgeまでSurfacePointを進めず、
+				// BallRadius + Height分だけ手前で隣面へ座標系を切り替えます。
+				//
+				// SurfacePointは面に合わせて変化しますが、
+				// Ball中心のWorld座標は維持されます。
+				if (TryTransitionConcaveEdge(
 					segmentStartPoint,
 					targetPoint,
 					crossingPoint,
 					crossingFraction,
 					currentNormal,
+					neighborTriangleIndex,
+					neighborEdgeIndex,
 					neighborNormal,
-					out float collisionFraction))
+					out float transitionFraction,
+					out int completedEntryEdgeIndex))
 				{
 					remainingTime *=
 						1.0f -
 							Mathf.Clamp01(
-								collisionFraction);
+								transitionFraction);
 
 					ignoredEntryEdgeIndex =
-						-1;
+						completedEntryEdgeIndex;
 
 					transitionCount++;
 					continue;
 				}
 
-				// 現在の簡易衝突モデルで安全な衝突点を
-				// 求められなかった場合は、従来どおり
-				// Edge上で停止側へ倒します。
+				// 隣面上に安全なSurfacePointを解決できなかった場合は、
+				// 状態を半端に切り替えずEdge上で停止側へ倒します。
 				m_SurfacePoint =
 					crossingPoint;
 
