@@ -490,8 +490,6 @@ public sealed partial class BallSurfaceSimulation
 		m_ConvexCrossSpeed =
 			crossSpeed;
 
-		m_DidTraverseConvexEdgeThisStep =
-			true;
 
 		UpdateConvexTransitionVelocity();
 
@@ -640,9 +638,6 @@ public sealed partial class BallSurfaceSimulation
 			return true;
 		}
 
-		m_SurfaceDistanceTravelledThisStep +=
-			convexSurfaceSpeed *
-			stepTime;
 
 		m_SurfacePoint +=
 			m_ConvexEdgeDirection *

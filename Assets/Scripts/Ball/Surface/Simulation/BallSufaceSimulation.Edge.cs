@@ -170,9 +170,6 @@ public sealed partial class BallSurfaceSimulation
 			if (IsInsideTriangle(
 				endBarycentric))
 			{
-				m_SurfaceDistanceTravelledThisStep +=
-					currentSpeed *
-					remainingTime;
 
 				m_SurfacePoint =
 					ProjectPointToPlane(
@@ -224,9 +221,6 @@ public sealed partial class BallSurfaceSimulation
 						0.0f,
 						remainingTime);
 
-				m_SurfaceDistanceTravelledThisStep +=
-					currentSpeed *
-						timeToVertex;
 
 				crossingPoint =
 					crossingVertex;
@@ -257,9 +251,6 @@ public sealed partial class BallSurfaceSimulation
 						Mathf.Clamp01(
 							crossingFraction);
 
-				m_SurfaceDistanceTravelledThisStep +=
-					currentSpeed *
-						timeToCrossing;
 
 				crossingPoint =
 					Vector3.LerpUnclamped(
@@ -361,8 +352,6 @@ public sealed partial class BallSurfaceSimulation
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Convex)
 			{
-				m_DidTraverseConvexEdgeThisStep =
-					true;
 
 				m_SurfacePoint =
 					crossingPoint;

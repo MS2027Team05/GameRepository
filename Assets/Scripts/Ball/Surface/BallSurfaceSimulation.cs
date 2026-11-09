@@ -96,39 +96,6 @@ public sealed partial class BallSurfaceSimulation
 
 	private bool m_IsInitialized;
 
-	/// <summary>
-	/// 今回のAdvance中にSharp Convex Edgeを1回以上通過したかどうかです。
-	/// </summary>
-	/// <remarks>
-	/// LastEdgeはAdvance中に後続のFlat / Smooth Edgeで上書きされるため、
-	/// デバッグ計測ではこのフラグを使ってConvex通過を取りこぼさないようにします。
-	/// </remarks>
-	private bool m_DidTraverseConvexEdgeThisStep;
-
-	/// <summary>
-	/// 今回のAdvance中にSurface方向へ進んだ距離です。
-	/// </summary>
-	private float m_SurfaceDistanceTravelledThisStep;
-
-	/// <summary>
-	/// 今回のAdvance中にSurfaceへ着地したかどうかです。
-	/// </summary>
-	private bool m_DidSurfaceImpactThisStep;
-
-	/// <summary>
-	/// Surface Physics開始後に成立したバウンド番号です。
-	/// </summary>
-	private int m_BounceSequence;
-
-	/// <summary>
-	/// 直近に成立したバウンド開始時のSurface速度です。
-	/// </summary>
-	private float m_LastBounceSurfaceSpeed;
-
-	/// <summary>
-	/// 直近に成立したバウンド開始時の法線方向速度です。
-	/// </summary>
-	private float m_LastBounceVerticalSpeed;
 
 	private int m_LastEdgeTriangleIndex;
 	private int m_LastEdgeIndex;
@@ -171,72 +138,6 @@ public sealed partial class BallSurfaceSimulation
 		get
 		{
 			return m_IsInitialized;
-		}
-	}
-
-	/// <summary>
-	/// 直近のAdvance中にSharp Convex Edgeを通過したか取得します。
-	/// </summary>
-	public bool DidTraverseConvexEdgeThisStep
-	{
-		get
-		{
-			return m_DidTraverseConvexEdgeThisStep;
-		}
-	}
-
-	/// <summary>
-	/// 直近のAdvance中にSurface方向へ進んだ距離を取得します。
-	/// </summary>
-	public float SurfaceDistanceTravelledThisStep
-	{
-		get
-		{
-			return m_SurfaceDistanceTravelledThisStep;
-		}
-	}
-
-	/// <summary>
-	/// 直近のAdvance中にSurfaceへ着地したか取得します。
-	/// </summary>
-	public bool DidSurfaceImpactThisStep
-	{
-		get
-		{
-			return m_DidSurfaceImpactThisStep;
-		}
-	}
-
-	/// <summary>
-	/// 現在のバウンド番号を取得します。
-	/// </summary>
-	public int BounceSequence
-	{
-		get
-		{
-			return m_BounceSequence;
-		}
-	}
-
-	/// <summary>
-	/// 直近に成立したバウンド開始時のSurface速度を取得します。
-	/// </summary>
-	public float LastBounceSurfaceSpeed
-	{
-		get
-		{
-			return m_LastBounceSurfaceSpeed;
-		}
-	}
-
-	/// <summary>
-	/// 直近に成立したバウンド開始時の法線方向速度を取得します。
-	/// </summary>
-	public float LastBounceVerticalSpeed
-	{
-		get
-		{
-			return m_LastBounceVerticalSpeed;
 		}
 	}
 
@@ -571,16 +472,6 @@ public sealed partial class BallSurfaceSimulation
 	{
 		ClearLastEdge();
 
-		// LastEdgeはAdvance中に上書きされる可能性があるため、
-		// Convex通過だけはStep単位のフラグとして別に保持します。
-		m_DidTraverseConvexEdgeThisStep =
-			false;
-
-		m_SurfaceDistanceTravelledThisStep =
-			0.0f;
-
-		m_DidSurfaceImpactThisStep =
-			false;
 
 		if (!m_IsInitialized ||
 			m_SurfaceSource == null ||
@@ -731,8 +622,6 @@ public sealed partial class BallSurfaceSimulation
 			m_VerticalVelocity =
 				0.0f;
 
-			m_DidSurfaceImpactThisStep =
-				true;
 
 			bool bounced =
 				HandleSurfaceImpact(
@@ -931,13 +820,6 @@ public sealed partial class BallSurfaceSimulation
 		m_VerticalVelocity =
 			bounceSpeed;
 
-		m_BounceSequence++;
-
-		m_LastBounceSurfaceSpeed =
-			m_SurfaceVelocity.magnitude;
-
-		m_LastBounceVerticalSpeed =
-			bounceSpeed;
 
 		return true;
 	}
@@ -1224,23 +1106,6 @@ public sealed partial class BallSurfaceSimulation
 		m_IsInitialized =
 			false;
 
-		m_DidTraverseConvexEdgeThisStep =
-			false;
-
-		m_SurfaceDistanceTravelledThisStep =
-			0.0f;
-
-		m_DidSurfaceImpactThisStep =
-			false;
-
-		m_BounceSequence =
-			0;
-
-		m_LastBounceSurfaceSpeed =
-			0.0f;
-
-		m_LastBounceVerticalSpeed =
-			0.0f;
 
 		ResetConvexEdgeTransition();
 

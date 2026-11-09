@@ -226,11 +226,6 @@ public class BallPhysicsController : NetworkBehaviour
 	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceGroundDeceleration;
 
-	[Header("BallSurface Physics Debug")]
-
-	[Tooltip(
-		"ONにするとバウンドごとの滞空時間・World移動距離・Surface移動距離をConsoleへ出力します。")]
-	[SerializeField] private bool m_EnableBounceDistanceDebug;
 
 	[Header("停止後のAttachSurface探索")]
 
@@ -259,6 +254,11 @@ public class BallPhysicsController : NetworkBehaviour
 	/// </summary>
 	private const float m_MinimumCalculationDistance = 0.001f;
 
+	/// <summary>
+	/// Surface Physics中の障害物検出で再利用するHitバッファ数です。
+	/// </summary>
+	private const int m_SurfaceObstacleHitBufferSize = 32;
+
 	private Rigidbody m_Rigidbody;
 	private SphereCollider m_BallCollider;
 	private BallController m_BallController;
@@ -267,6 +267,9 @@ public class BallPhysicsController : NetworkBehaviour
 	private BallSurfaceSearch m_SurfaceSearch;
 	private BallBounce m_Bounce;
 	private BallSurfaceSimulation m_SurfaceSimulation;
+
+	private RaycastHit[] m_SurfaceObstacleHits;
+	private int m_BallCollisionMask;
 
 	private EBallMotionState m_MotionState;
 
@@ -284,18 +287,6 @@ public class BallPhysicsController : NetworkBehaviour
 	private float m_NextSurfaceSearchTime;
 	private float m_NextAttractSearchTime;
 
-	private bool m_HasBounceDistanceDebugSample;
-	private bool m_BounceDebugCrossedConvexEdge;
-
-	private Vector3 m_PreviousBounceDebugWorldPosition;
-
-	private float m_BounceDebugWorldDistance;
-	private float m_BounceDebugSurfaceDistance;
-	private float m_BounceDebugAirTime;
-	private float m_BounceDebugStartSurfaceSpeed;
-	private float m_BounceDebugStartVerticalSpeed;
-
-	private int m_BounceDebugSequence;
 
 	/// <summary>
 	/// 必要なComponentを取得し、
@@ -323,6 +314,12 @@ public class BallPhysicsController : NetworkBehaviour
 
 		m_SurfaceSimulation =
 			new BallSurfaceSimulation();
+
+		m_SurfaceObstacleHits =
+			new RaycastHit[m_SurfaceObstacleHitBufferSize];
+
+		m_BallCollisionMask =
+			BuildBallCollisionMask();
 
 		ConfigureSurfaceSimulation();
 
@@ -1386,9 +1383,13 @@ public class BallPhysicsController : NetworkBehaviour
 			targetColliderCenter -
 			colliderCenterOffset;
 
-		MeasureBounceDistance(
-			targetRigidbodyPosition,
-			immediate);
+		if (!immediate &&
+			TryHandleSurfaceObstacleCollision(
+				targetColliderCenter,
+				colliderCenterOffset))
+		{
+			return;
+		}
 
 		if (immediate)
 		{
@@ -1403,186 +1404,216 @@ public class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// バウンド1回分の移動距離を計測します。
+	/// Surface Physics中のBall中心移動経路に、
+	/// Ball LayerのCollision Matrix上で衝突対象となる
+	/// 通常Colliderが存在するか確認します。
 	/// </summary>
 	/// <remarks>
-	/// 1回のバウンド開始から次の着地までについて、
-	///
-	/// ・AirTime
-	/// ・WorldDistance
-	/// ・SurfaceDistance
-	/// ・StartSurfaceSpeed
-	/// ・StartVerticalSpeed
-	/// ・CrossedConvex
-	///
-	/// を集計します。
-	///
-	/// WorldDistanceは実際にWorld上でボール中心が進んだ経路長です。
-	/// SurfaceDistanceはSimulationが展開Surface上で
-	/// 実際に消費した経路長です。
-	///
-	/// Sharp Convex Edgeを越えたバウンドだけ距離が不自然に変化するかを
-	/// バウンド単位で比較するための一時デバッグです。
+	/// BallSurfaceSourceを持つColliderはSurface Physics側で扱うため、
+	/// この通常衝突処理から除外します。
 	/// </remarks>
-	private void MeasureBounceDistance(
-		Vector3 targetRigidbodyPosition,
-		bool immediate)
+	private bool TryHandleSurfaceObstacleCollision(
+		Vector3 targetColliderCenter,
+		Vector3 colliderCenterOffset)
 	{
-		if (!m_EnableBounceDistanceDebug)
-		{
-			ResetBounceDistanceDebug();
+		Vector3 currentColliderCenter =
+			m_Rigidbody.position +
+			colliderCenterOffset;
 
-			return;
+		Vector3 displacement =
+			targetColliderCenter -
+			currentColliderCenter;
+
+		float moveDistance =
+			displacement.magnitude;
+
+		if (moveDistance <=
+			m_MinimumCalculationDistance)
+		{
+			return false;
 		}
 
-		int currentBounceSequence =
-			m_SurfaceSimulation.BounceSequence;
+		Vector3 moveDirection =
+			displacement /
+			moveDistance;
 
-		// 初回Surface接触でバウンドが成立しなかった場合は
-		// 計測対象が存在しません。
-		if (currentBounceSequence <=
+		float castRadius =
+			Mathf.Max(
+				GetBallWorldRadius() -
+					m_MinimumCalculationDistance,
+				m_MinimumCalculationDistance);
+
+		int hitCount =
+			Physics.SphereCastNonAlloc(
+				currentColliderCenter,
+				castRadius,
+				moveDirection,
+				m_SurfaceObstacleHits,
+				moveDistance,
+				m_BallCollisionMask,
+				QueryTriggerInteraction.Ignore);
+
+		if (hitCount <=
 			0)
 		{
-			ResetBounceDistanceDebug();
-
-			return;
+			return false;
 		}
 
-		if (immediate ||
-			!m_HasBounceDistanceDebugSample)
+		bool hasObstacleHit =
+			false;
+
+		RaycastHit nearestHit =
+			default;
+
+		float nearestDistance =
+			float.PositiveInfinity;
+
+		for (int hitIndex = 0;
+			hitIndex < hitCount;
+			hitIndex++)
 		{
-			BeginBounceDistanceDebug(
-				currentBounceSequence,
-				targetRigidbodyPosition);
+			RaycastHit hit =
+				m_SurfaceObstacleHits[hitIndex];
 
-			return;
-		}
+			Collider hitCollider =
+				hit.collider;
 
-		m_BounceDebugWorldDistance +=
-			Vector3.Distance(
-				m_PreviousBounceDebugWorldPosition,
-				targetRigidbodyPosition);
+			if (hitCollider == null ||
+				hitCollider.attachedRigidbody ==
+					m_Rigidbody)
+			{
+				continue;
+			}
 
-		m_BounceDebugSurfaceDistance +=
-			m_SurfaceSimulation.SurfaceDistanceTravelledThisStep;
+			// BallSurface同士の乗り換えは別機能として扱うため、
+			// 今回の通常Collider衝突からは除外します。
+			if (hitCollider.GetComponent<BallSurfaceSource>() !=
+				null)
+			{
+				continue;
+			}
 
-		m_BounceDebugAirTime +=
-			Time.fixedDeltaTime;
+			if (hit.distance >=
+				nearestDistance)
+			{
+				continue;
+			}
 
-		if (m_SurfaceSimulation.DidTraverseConvexEdgeThisStep)
-		{
-			m_BounceDebugCrossedConvexEdge =
+			hasObstacleHit =
 				true;
+
+			nearestHit =
+				hit;
+
+			nearestDistance =
+				hit.distance;
 		}
 
-		m_PreviousBounceDebugWorldPosition =
-			targetRigidbodyPosition;
-
-		if (!m_SurfaceSimulation.DidSurfaceImpactThisStep)
+		if (!hasObstacleHit)
 		{
-			return;
+			return false;
 		}
 
-		// このStep内で着地したので、
-		// 直前まで追跡していた1バウンド分を出力します。
-		Debug.Log(
-			$"[BounceDistanceDebug] " +
-			$"Bounce={m_BounceDebugSequence}, " +
-			$"AirTime={m_BounceDebugAirTime:F3}, " +
-			$"WorldDistance={m_BounceDebugWorldDistance:F3}, " +
-			$"SurfaceDistance={m_BounceDebugSurfaceDistance:F3}, " +
-			$"StartSurfaceSpeed={m_BounceDebugStartSurfaceSpeed:F3}, " +
-			$"StartVerticalSpeed={m_BounceDebugStartVerticalSpeed:F3}, " +
-			$"CrossedConvex={m_BounceDebugCrossedConvexEdge}",
-			this);
-
-		if (currentBounceSequence >
-			m_BounceDebugSequence)
+		if (!TryGetSurfaceWorldVelocity(
+			out Vector3 incomingVelocity))
 		{
-			// 着地後に再バウンドした場合は、
-			// 同じ位置から次のバウンド計測を開始します。
-			BeginBounceDistanceDebug(
-				currentBounceSequence,
-				targetRigidbodyPosition);
+			Debug.LogWarning(
+				$"{name}: Surface Physics中の障害物衝突速度を取得できなかったため停止します。",
+				this);
 
-			return;
+			StopSurfaceMotionSafely();
+			return true;
 		}
 
-		// 再バウンドしなかった場合は計測終了です。
-		ResetBounceDistanceDebug();
+		float safeMoveDistance =
+			Mathf.Max(
+				0.0f,
+				nearestHit.distance -
+					m_MinimumCalculationDistance);
+
+		Vector3 safeColliderCenter =
+			currentColliderCenter +
+			moveDirection *
+				safeMoveDistance;
+
+		m_Rigidbody.position =
+			safeColliderCenter -
+			colliderCenterOffset;
+
+		Vector3 bounceVelocity =
+			CalculateBounceVelocity(
+				incomingVelocity,
+				nearestHit.normal);
+
+		ApplyBounceVelocity(
+			bounceVelocity);
+
+		m_SurfaceGravity.Clear();
+
+		m_NextAttractSearchTime =
+			Time.time;
+
+		ChangeMotionState(
+			EBallMotionState.Flying);
+
+		return true;
 	}
 
 	/// <summary>
-	/// 新しいバウンドの距離計測を開始します。
+	/// Surface Physicsが保持している速度をWorld速度へ戻します。
 	/// </summary>
-	private void BeginBounceDistanceDebug(
-		int bounceSequence,
-		Vector3 worldPosition)
+	private bool TryGetSurfaceWorldVelocity(
+		out Vector3 worldVelocity)
 	{
-		m_HasBounceDistanceDebugSample =
-			true;
-
-		m_BounceDebugSequence =
-			bounceSequence;
-
-		m_PreviousBounceDebugWorldPosition =
-			worldPosition;
-
-		m_BounceDebugWorldDistance =
-			0.0f;
-
-		m_BounceDebugSurfaceDistance =
-			0.0f;
-
-		m_BounceDebugAirTime =
-			0.0f;
-
-		m_BounceDebugStartSurfaceSpeed =
-			m_SurfaceSimulation.LastBounceSurfaceSpeed;
-
-		m_BounceDebugStartVerticalSpeed =
-			m_SurfaceSimulation.LastBounceVerticalSpeed;
-
-		m_BounceDebugCrossedConvexEdge =
-			false;
-	}
-
-	/// <summary>
-	/// バウンド距離計測用の一時状態を初期化します。
-	/// </summary>
-	private void ResetBounceDistanceDebug()
-	{
-		m_HasBounceDistanceDebugSample =
-			false;
-
-		m_BounceDebugCrossedConvexEdge =
-			false;
-
-		m_PreviousBounceDebugWorldPosition =
+		worldVelocity =
 			Vector3.zero;
 
-		m_BounceDebugWorldDistance =
-			0.0f;
+		if (!m_SurfaceSimulation.TryGetCurrentSurfaceNormal(
+			out Vector3 surfaceNormal))
+		{
+			return false;
+		}
 
-		m_BounceDebugSurfaceDistance =
-			0.0f;
+		worldVelocity =
+			m_SurfaceSimulation.SurfaceVelocity +
+			surfaceNormal *
+				m_SurfaceSimulation.VerticalVelocity;
 
-		m_BounceDebugAirTime =
-			0.0f;
-
-		m_BounceDebugStartSurfaceSpeed =
-			0.0f;
-
-		m_BounceDebugStartVerticalSpeed =
-			0.0f;
-
-		m_BounceDebugSequence =
-			0;
+		return true;
 	}
 
 	/// <summary>
-	/// SphereColliderの実ワールド半径を取得します。
+	/// Ball自身のLayerに設定されているCollision Matrixから、
+	/// Physics Query用のLayerMaskを構築します。
 	/// </summary>
+	private int BuildBallCollisionMask()
+	{
+		int collisionMask =
+			0;
+
+		int ballLayer =
+			gameObject.layer;
+
+		for (int layerIndex = 0;
+			layerIndex < 32;
+			layerIndex++)
+		{
+			if (Physics.GetIgnoreLayerCollision(
+				ballLayer,
+				layerIndex))
+			{
+				continue;
+			}
+
+			collisionMask |=
+				1 << layerIndex;
+		}
+
+		return collisionMask;
+	}
+
+	/// <summary>
+	/// SphereColliderの実ワールド半径を取得します。	/// </summary>
 	private float GetBallWorldRadius()
 	{
 		Vector3 lossyScale =
@@ -1694,7 +1725,6 @@ public class BallPhysicsController : NetworkBehaviour
 
 		m_SurfaceGravity.Clear();
 
-		ResetBounceDistanceDebug();
 
 		ChangeMotionState(
 			EBallMotionState.Idle);
@@ -1732,7 +1762,6 @@ public class BallPhysicsController : NetworkBehaviour
 
 		m_SurfaceSimulation.Reset();
 
-		ResetBounceDistanceDebug();
 	}
 
 	/// <summary>
@@ -1768,7 +1797,6 @@ public class BallPhysicsController : NetworkBehaviour
 
 		m_SurfaceSimulation.Reset();
 
-		ResetBounceDistanceDebug();
 
 		m_NextSurfaceSearchTime =
 			0.0f;

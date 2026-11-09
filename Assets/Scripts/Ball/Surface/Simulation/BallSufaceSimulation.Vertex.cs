@@ -396,9 +396,6 @@ public sealed partial class BallSurfaceSimulation
 			rotatedVelocity.normalized *
 			surfaceSpeed;
 
-		m_SurfaceDistanceTravelledThisStep +=
-			surfaceSpeed *
-			stepTime;
 
 		remainingTime -=
 			stepTime;
