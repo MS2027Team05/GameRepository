@@ -101,7 +101,7 @@ namespace Stage
 		public Transform Split4ShuttleRoot => m_Split4ShuttleRoot;
 		public Transform OuterFootholdsRoot => m_OuterFootholdsRoot;
 
-		private const int GroundLayerIndex = 7;
+		private const int m_GroundLayerIndex = 7;
 
 #if UNITY_EDITOR
 		/// <summary>
@@ -319,7 +319,7 @@ namespace Stage
 				Vector3 shuttleEnd = pNextEnter;
 
 				GameObject shuttleGo = new GameObject($"Shuttle_{i:D2}");
-				shuttleGo.layer = GroundLayerIndex;
+				shuttleGo.layer = m_GroundLayerIndex;
 				shuttleGo.transform.SetParent(m_Split4ShuttleRoot, false);
 				shuttleGo.transform.position = (shuttleStart + shuttleEnd) * 0.5f;
 
@@ -411,7 +411,7 @@ namespace Stage
 			else
 			{
 				go = new GameObject(name);
-				go.layer = GroundLayerIndex;
+				go.layer = m_GroundLayerIndex;
 				go.transform.SetParent(parent, false);
 				go.transform.position = pos;
 				go.transform.rotation = rot;
@@ -438,7 +438,7 @@ namespace Stage
 		private GameObject CreateRailSegment(Transform parent, string name, Vector3 pos, Vector3 forward, float length, Vector2 crossSection, Material mat)
 		{
 			GameObject go = new GameObject(name);
-			go.layer = GroundLayerIndex;
+			go.layer = m_GroundLayerIndex;
 			go.transform.SetParent(parent, false);
 			go.transform.position = pos;
 			if (forward.sqrMagnitude > 0.001f)
