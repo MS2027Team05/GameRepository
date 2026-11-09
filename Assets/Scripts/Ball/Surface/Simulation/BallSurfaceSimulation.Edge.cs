@@ -317,11 +317,23 @@ public sealed partial class BallSurfaceSimulation
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Concave)
 			{
-				// Concaveでは実EdgeまでSurfacePointを進めず、
-				// BallRadius + Height分だけ手前で隣面へ座標系を切り替えます。
+				// 空中でConcaveへ入った場合だけ、
+				// Ball本体とMesh上の基準点を分離した専用状態へ入ります。
 				//
-				// SurfacePointは面に合わせて変化しますが、
-				// Ball中心のWorld座標は維持されます。
+				// Edgeを越えた瞬間にはBallのWorld速度方向を変えません。
+				if (ShouldBeginConcaveAirborneTransfer() &&
+					TryBeginConcaveAirborneTransfer(
+						crossingPoint,
+						m_CurrentTriangleIndex,
+						currentNormal,
+						neighborTriangleIndex,
+						neighborEdgeIndex,
+						neighborNormal))
+				{
+					return EAdvanceResult.Moved;
+				}
+
+				// 接地状態では既存Git版のConcave処理をそのまま使用します。
 				if (TryTransitionConcaveEdge(
 					segmentStartPoint,
 					targetPoint,
@@ -346,8 +358,6 @@ public sealed partial class BallSurfaceSimulation
 					continue;
 				}
 
-				// 隣面上に安全なSurfacePointを解決できなかった場合は、
-				// 状態を半端に切り替えずEdge上で停止側へ倒します。
 				m_SurfacePoint =
 					crossingPoint;
 

@@ -201,7 +201,8 @@ public sealed partial class BallSurfaceSimulation
 	{
 		get
 		{
-			return m_Height <=
+			return !m_IsConcaveAirborneTransfer &&
+				m_Height <=
 					m_MinimumHeight &&
 				m_VerticalVelocity <=
 					0.0f;
@@ -492,6 +493,31 @@ public sealed partial class BallSurfaceSimulation
 		while (remainingTime >
 			m_MinimumCalculationValue)
 		{
+			// 空中でConcaveへ入った場合だけ、
+			// 通常のHeight / Surface進行から完全に分離します。
+			if (m_IsConcaveAirborneTransfer)
+			{
+				float concaveStepTime =
+					Mathf.Min(
+						remainingTime,
+						m_MaximumCoupledStepTime);
+
+				EAdvanceResult concaveResult =
+					AdvanceConcaveAirborneTransfer(
+						concaveStepTime);
+
+				if (concaveResult !=
+					EAdvanceResult.Moved)
+				{
+					return concaveResult;
+				}
+
+				remainingTime -=
+					concaveStepTime;
+
+				continue;
+			}
+
 			// Heightが変化している最中、またはSharp Convex Edgeを
 			// 回り込んでいる最中だけ内部Stepを細かくします。
 			//
@@ -957,6 +983,15 @@ public sealed partial class BallSurfaceSimulation
 			return false;
 		}
 
+		if (m_IsConcaveAirborneTransfer)
+		{
+			ballCenterOffset =
+				m_ConcaveBallCenter -
+					m_SurfacePoint;
+
+			return true;
+		}
+
 		if (m_IsConvexVertexSpherePatch)
 		{
 			ballCenterOffset =
@@ -1053,6 +1088,16 @@ public sealed partial class BallSurfaceSimulation
 			return false;
 		}
 
+		if (m_IsConcaveAirborneTransfer)
+		{
+			surfaceNormal =
+				m_ConcaveReferenceNormal;
+
+			return surfaceNormal.sqrMagnitude >
+				m_MinimumCalculationValue *
+					m_MinimumCalculationValue;
+		}
+
 
 		if (m_IsConvexVertexSpherePatch)
 		{
@@ -1106,6 +1151,8 @@ public sealed partial class BallSurfaceSimulation
 		m_IsInitialized =
 			false;
 
+
+		ResetConcaveAirborneTransfer();
 
 		ResetConvexEdgeTransition();
 
