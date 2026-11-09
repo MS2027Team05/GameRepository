@@ -1,4 +1,4 @@
-# ディレクトリ構造 (STRUCTURE.md)
+﻿# ディレクトリ構造 (STRUCTURE.md)
 
 本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
 
@@ -21,16 +21,31 @@ GameRepository/
 │   ├── Scenes/                  # 各画面・遷移用シーン格納
 │   ├── Scripts/                 # プロジェクト固有のC#スクリプト
 │   │   ├── Ball/                # ボール物理・同期制御
-│   │   │   ├── Surface/                 # BallSurfaceのMesh解析・曲面上移動シミュレーション
-│   │   │   │   ├── BallSurfaceSource.cs # [EntryPoint] MeshColliderからSurfaceデータを構築
-│   │   │   │   └── SurfacePartial/      # Convex/Concave/Edge/Vertex別のSurface遷移処理
 │   │   │   ├── BallController.cs        # [EntryPoint] ボール状態管理・所持・シュート制御
-│   │   │   ├── BallPhysicsController.cs # Free Flight・Surface Physics状態統括
-│   │   │   ├── BallBounce.cs            # ボールの跳ね返り挙動制御
-│   │   │   ├── BallSurfaceGravity.cs    # ボールの接地面重力・吸着制御
-│   │   │   ├── BallSurfaceSearch.cs     # ボール周辺の面探索制御
-│   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
-│   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
+│   │   │   ├── Physics/                 # ボール物理状態・衝突・Surface連携
+│   │   │   │   ├── BallPhysicsController.cs           # [EntryPoint] Free Flight・Surface Physics状態統括
+│   │   │   │   ├── BallPhysicsController.Air.cs       # 飛行・Surface探索・吸着処理
+│   │   │   │   ├── BallPhysicsController.Collision.cs # Collision処理
+│   │   │   │   ├── BallPhysicsController.Surface.cs   # BallSurface Physics連携
+│   │   │   │   ├── BallBounce.cs                      # ボールの跳ね返り挙動制御
+│   │   │   │   └── Attraction/                        # 疑似重力・Surface探索
+│   │   │   │       ├── BallSurfaceGravity.cs          # ボールの接地面重力・吸着制御
+│   │   │   │       └── BallSurfaceSearch.cs           # ボール周辺の面探索制御
+│   │   │   ├── Surface/                 # BallSurfaceのMesh解析・曲面上移動シミュレーション
+│   │   │   │   ├── BallSurfaceSource.cs       # [EntryPoint] MeshColliderからSurfaceデータを構築
+│   │   │   │   ├── BallSurfaceMeshData.cs     # Triangle・Edge・隣接情報の解析データ
+│   │   │   │   ├── BallSurfaceSimulation.cs   # Surface Physicsの共通状態・進行処理
+│   │   │   │   └── Simulation/                # Edge種別・形状別のSurface遷移処理
+│   │   │   │       ├── BallSurfaceSimulation.Edge.cs
+│   │   │   │       ├── BallSurfaceSimulation.FlatSmooth.cs
+│   │   │   │       ├── BallSurfaceSimulation.Convex.cs
+│   │   │   │       ├── BallSurfaceSimulation.Concave.cs
+│   │   │   │       ├── BallSurfaceSimulation.ConcaveAirborne.cs
+│   │   │   │       └── BallSurfaceSimulation.Vertex.cs
+│   │   │   ├── UI/
+│   │   │   │   └── BallScreenIndicator.cs     # ボール位置表示用画面内・画面外インジケーターUI制御
+│   │   │   └── Debug/
+│   │   │       └── BallDebugRespawner.cs      # ボール位置リセット用デバッグ機能
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
