@@ -21,6 +21,11 @@ public interface IGroundDetector
 	float GroundGap { get; }
 
 	/// <summary>
+	/// 接地している足場が移動床である場合、そのワールド線形速度(m/s)を取得します。静止床または非接地時はVector3.zeroを返します。
+	/// </summary>
+	Vector3 GroundVelocity { get; }
+
+	/// <summary>
 	/// 指定した移動方向・速度に基づいて足元・角・壁面の接地状態を更新します。
 	/// </summary>
 	/// <param name="moveDir">現在の進行方向ベクトル</param>

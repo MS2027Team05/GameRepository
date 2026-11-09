@@ -37,26 +37,10 @@ public interface IAimGuide
 	Vector3 AimMoveDirection { get; }
 
 	/// <summary>
-	/// 照準UIおよび軌道予測線の表示/非表示を切り替えます(旧エイムフロー互換用)。
+	/// 空中追加移動用の照準予測線の表示/非表示を切り替えます。
 	/// </summary>
-	/// <param name="show">表示する場合はtrue</param>
-	void ShowAimGuide(bool show);
-
-	/// <summary>
-	/// エイムをキャンセルし、プレイヤーとカメラを開始時の位置に戻します(旧エイムフロー互換用)。
-	/// </summary>
-	void CancelAimGuide();
-
-	/// <summary>
-	/// 移動によってエイムを終了し、プレイヤーの位置を維持してカメラを通常位置に戻します(旧エイムフロー互換用)。
-	/// </summary>
-	void EndAimGuideForMovement();
-
-	/// <summary>
-	/// エイム中のカメラ正面方向ベクトルを渡し、予測線をリアルタイム更新します(旧エイムフロー互換用)。
-	/// </summary>
-	/// <param name="direction">カメラの正面方向ベクトル</param>
-	void UpdateAimDirection(Vector3 direction);
+	/// <param name="visible">表示する場合はtrue</param>
+	void SetAdditionalMoveAimVisible(bool visible);
 
 	/// <summary>
 	/// 常時表示する中央レティクルの表示/非表示を切り替えます。
@@ -69,6 +53,21 @@ public interface IAimGuide
 	/// </summary>
 	/// <param name="aimDirection">カメラ正面の照準方向ベクトル</param>
 	void UpdateConstantReticle(Vector3 aimDirection);
+
+	/// <summary>
+	/// 空中追加移動用に、カメラ照準方向から新しい着地点を評価します。
+	/// 現在追跡中の着地点は変更しません。
+	/// </summary>
+	/// <param name="aimDirection">カメラ正面の照準方向</param>
+	/// <param name="targetPoint">評価された着地点</param>
+	/// <param name="targetNormal">評価された着地面の法線</param>
+	/// <param name="moveDirection">着地点へ向かう移動方向</param>
+	/// <returns>有効な着地点が見つかった場合はtrue</returns>
+	bool TryUpdateAdditionalMoveTarget(
+		Vector3 aimDirection,
+		out Vector3 targetPoint,
+		out Vector3 targetNormal,
+		out Vector3 moveDirection);
 
 	/// <summary>
 	/// 地上からの移動開始時に立ち面法線方向へ予備浮上を行い、完了後にコールバックを発火します。

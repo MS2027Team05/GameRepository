@@ -394,7 +394,8 @@ public partial class BallPhysicsController : NetworkBehaviour
 			return;
 		}
 
-		if (m_BallController == null)
+		if (m_BallController == null ||
+			m_BallController.IsMatchPaused)
 		{
 			return;
 		}
