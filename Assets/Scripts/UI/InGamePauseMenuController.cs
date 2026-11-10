@@ -1,4 +1,4 @@
-﻿﻿using System.Collections;
+﻿using System.Collections;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -54,6 +54,11 @@ public class InGamePauseMenuController : MonoBehaviour
 	private bool m_IsHandlingDisconnect = false;
 	private int m_LastProcessedFrame = -1;
 	private Coroutine m_DisconnectCoroutine;
+
+	/// <summary>
+	/// ポーズメニューが開いているかどうかを取得します。
+	/// </summary>
+	public bool IsMenuOpen => m_IsMenuOpen;
 
 	private void Awake()
 	{

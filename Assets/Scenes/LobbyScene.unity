@@ -8570,6 +8570,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: StaffMenuRoot
       objectReference: {fileID: 0}
+    - target: {fileID: 77721768341420222, guid: 2acc31258a632a548a5fbcdea3fa60dd, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 616386110992616182, guid: 2acc31258a632a548a5fbcdea3fa60dd, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1830914346912609437, guid: 2acc31258a632a548a5fbcdea3fa60dd, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5

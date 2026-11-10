@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -23,6 +23,16 @@ public class PlayerOutOfBoundsRespawner : NetworkBehaviour
 	private Quaternion m_RespawnRotation;
 	private bool m_AreBoundsValid;
 	private bool m_IsRespawnRequested;
+
+	/// <summary>
+	/// 保存された初期スポーン復帰位置を取得します。
+	/// </summary>
+	public Vector3 RespawnPosition => m_RespawnPosition;
+
+	/// <summary>
+	/// 保存された初期スポーン復帰回転を取得します。
+	/// </summary>
+	public Quaternion RespawnRotation => m_RespawnRotation;
 
 	/// <summary>
 	/// ネットワーク生成時の位置と回転を復帰地点として保存します。

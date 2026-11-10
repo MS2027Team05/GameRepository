@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -28,6 +29,12 @@ public class MatchManager : NetworkBehaviour
 	[SerializeField, Min(1)] private int m_CountdownDurationSeconds;
 	[SerializeField] private PlayerSpawner m_PlayerSpawner;
 	[SerializeField] private BallController m_Ball;
+
+	[Header("試合終了・リザルト遷移")]
+	[Tooltip("試合終了後、リザルトシーンへ遷移するまでの演出待機時間(秒)です。")]
+	[SerializeField] private float m_FinishMatchTransitionDelay;
+	[Tooltip("遷移先のリザルトシーン名です。空欄の場合はResultSceneが使用されます。")]
+	[SerializeField] private string m_ResultSceneName;
 
 	private readonly NetworkVariable<double> m_CountdownEndTime = new NetworkVariable<double>();
 	private readonly NetworkVariable<ETeamType> m_GoalScoringTeam = new NetworkVariable<ETeamType>(
@@ -434,7 +441,7 @@ public class MatchManager : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 現在の得点を保持したまま試合を終了します。
+	/// 現在の得点を保持したまま試合を終了し、演出待機後にリザルトシーンへ遷移します。
 	/// </summary>
 	public void FinishMatch()
 	{
@@ -451,6 +458,34 @@ public class MatchManager : NetworkBehaviour
 		m_MatchState.Value = EMatchState.Finished;
 		m_PlayerSpawner?.SetMatchActionsEnabled(false);
 		m_Ball?.SetMatchPaused(true);
+
+		// 試合結果を永続ストアへ保存
+		if (SessionPlayerDataStore.Instance != null)
+		{
+			SessionPlayerDataStore.Instance.SetMatchResult(m_RedScore.Value, m_BlueScore.Value, WinnerTeam);
+		}
+
+		StartCoroutine(TransitionToResultSceneCoroutine());
+	}
+
+	/// <summary>
+	/// 演出待機後、全クライアントを同期してリザルトシーンへ遷移させます。
+	/// </summary>
+	private IEnumerator TransitionToResultSceneCoroutine()
+	{
+		float delay = Mathf.Max(0.1f, m_FinishMatchTransitionDelay);
+		yield return new WaitForSeconds(delay);
+
+		string targetScene = !string.IsNullOrEmpty(m_ResultSceneName) ? m_ResultSceneName : "ResultScene";
+
+		if (NetworkManager != null && NetworkManager.SceneManager != null)
+		{
+			NetworkManager.SceneManager.LoadScene(targetScene, UnityEngine.SceneManagement.LoadSceneMode.Single);
+		}
+		else
+		{
+			UnityEngine.SceneManagement.SceneManager.LoadScene(targetScene);
+		}
 	}
 
 	private void SubscribeToNetworkVariables()
@@ -484,6 +519,12 @@ public class MatchManager : NetworkBehaviour
 			m_IsLocalGoalEffectPending = false;
 			m_LocalGoalEffectCount = 0;
 		}
+
+		if (newValue == EMatchState.Finished && SessionPlayerDataStore.Instance != null)
+		{
+			SessionPlayerDataStore.Instance.SetMatchResult(m_RedScore.Value, m_BlueScore.Value, WinnerTeam);
+		}
+
 		MatchStateChanged?.Invoke(newValue);
 	}
 

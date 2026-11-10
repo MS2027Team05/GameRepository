@@ -1,4 +1,4 @@
-﻿# ディレクトリ構造 (STRUCTURE.md)
+# ディレクトリ構造 (STRUCTURE.md)
 
 本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
 
@@ -56,10 +56,11 @@ GameRepository/
 │   │   │   └── Debug/
 │   │   │       └── BallDebugRespawner.cs      # ボール位置リセット用デバッグ機能
 │   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
-│   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
+│   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理・リザルト遷移演出制御
 │   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
 │   │   │   └── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
+│   │   │   ├── SetupResultAndStaffMenu.cs # [EntryPoint] スタッフメニュー拡張・GameScene配置・ResultScene自動生成ツール
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
 │   │   ├── Network/             # 通信接続・同期制御
@@ -71,10 +72,10 @@ GameRepository/
 │   │   │   ├── LobbyPlayerDisplay.cs    # ロビー台座用の表示特化キャラクター外見・頭上3Dネーム追従制御
 │   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
 │   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(キャラ・色・固定チーム・IP)永続化・自動反映
-│   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・シーン間データ引継ぎ管理
+│   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・試合結果(スコア/勝敗)保持・シーン間データ引継ぎ管理
 │   │   │   ├── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
 │   │   │   ├── TitleOverlayController.cs # [EntryPoint] ロビー内タイトル画面演出・個別開始制御
-│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1キー緊急管理・診断メニュー制御
+│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1キー緊急管理・診断・インゲーム操作(無制限エネルギー/リスポーン/シーン遷移)制御
 │   │   │   ├── GameSessionResetCoordinator.cs # [EntryPoint] ゲーム終了時の動的オブジェクト破棄・セッション初期化・ロビー復帰制御
 │   │   │   └── TutorialManager.cs       # [EntryPoint] チーム別チュートリアル進捗監視・同期遷移制御
 │   │   ├── Shader/              # シェーダー連携・描画制御スクリプト
@@ -125,6 +126,7 @@ GameRepository/
 │   │       ├── PlayerResourceGaugeUI.cs # リソース現在値・最大値からFilled Imageを更新するゲージUI
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・ロビー復帰制御
 │   │       ├── MatchHudController.cs    # 試合残り時間・チーム得点のHUD表示制御
+│   │       ├── ResultUIController.cs    # [EntryPoint] リザルト画面制御・スコア/プレイヤー外見表示・タイトル復帰
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定

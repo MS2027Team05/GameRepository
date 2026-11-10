@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -57,6 +57,12 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	public float MaxResource => Mathf.Max(0.0f, m_MaxResource);
 	public event Action<float, float> OnResourceChanged;
 
+	/// <summary>
+	/// スタッフメニュー等から設定可能な、デバッグ用のエネルギー消費無制限フラグ。
+	/// trueの場合、移動やアクションでリソースが消費されず、残量に関係なく行動可能になります。
+	/// </summary>
+	public static bool IsInfiniteEnergyDebugEnabled { get; set; }
+
 	private void Awake()
 	{
 		m_GravityMover = GetComponent<IGravityMover>();
@@ -107,6 +113,16 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	{
 		if (!IsSpawned || !IsOwner)
 		{
+			return;
+		}
+
+		if (IsInfiniteEnergyDebugEnabled)
+		{
+			if (m_CurrentResource < MaxResource)
+			{
+				m_CurrentResource = MaxResource;
+				NotifyResourceChanged();
+			}
 			return;
 		}
 
@@ -174,6 +190,11 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 			return false;
 		}
 
+		if (IsInfiniteEnergyDebugEnabled)
+		{
+			return true;
+		}
+
 		return m_CurrentResource >= cost;
 	}
 
@@ -184,7 +205,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 			return false;
 		}
 
-		if (cost > 0.0f)
+		if (!IsInfiniteEnergyDebugEnabled && cost > 0.0f)
 		{
 			m_CurrentResource = Mathf.Max(0.0f, m_CurrentResource - cost);
 			NotifyResourceChanged();
