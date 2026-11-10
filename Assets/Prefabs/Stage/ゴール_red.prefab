@@ -230,6 +230,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: "\u30B4\u30FC\u30EB_red"
       objectReference: {fileID: 0}
+    - target: {fileID: 8355445001039249465, guid: 227b4195ca2843e4e8a2ff2e1afe9dee, type: 3}
+      propertyPath: m_TagString
+      value: Goal
+      objectReference: {fileID: 0}
     - target: {fileID: 8700761348318059139, guid: 227b4195ca2843e4e8a2ff2e1afe9dee, type: 3}
       propertyPath: m_LocalScale.x
       value: 400

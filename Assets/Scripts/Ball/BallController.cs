@@ -1,4 +1,5 @@
-﻿using System;
+﻿// BallController.cs
+using System;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
@@ -291,6 +292,96 @@ public class BallController : NetworkBehaviour
 
 		return true;
 	}
+
+	//
+
+	/// <summary>
+	/// Host上で現在の所持者からボールを奪い、
+	/// 指定プレイヤーへ直接所持者を切り替えます。
+	/// </summary>
+	public bool TryStealHolder(
+		ulong newHolderClientId,
+		ulong newHolderNetworkObjectId)
+	{
+		if (!IsServer)
+			return false;
+
+		if (!m_HasHolder.Value)
+		{
+			// 誰も持っていない場合は通常取得
+			return TrySetHolder(
+				newHolderClientId,
+				newHolderNetworkObjectId);
+		}
+
+		// 攻撃側プレイヤーを取得
+		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			newHolderNetworkObjectId,
+			out NetworkObject newHolderNetworkObject))
+		{
+			return false;
+		}
+
+		if (newHolderNetworkObject.OwnerClientId != newHolderClientId)
+			return false;
+
+		PlayerBallCarrier newHolder =
+			newHolderNetworkObject.GetComponent<PlayerBallCarrier>();
+
+		if (newHolder == null ||
+			newHolder.BallHoldPoint == null ||
+			newHolder.HasBall)
+		{
+			return false;
+		}
+
+		// 現在の所持者を取得
+		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			m_CurrentHolderNetworkObjectId.Value,
+			out NetworkObject oldHolderNetworkObject))
+		{
+			return false;
+		}
+
+		PlayerBallCarrier oldHolder =
+			oldHolderNetworkObject.GetComponent<PlayerBallCarrier>();
+
+		if (oldHolder == null)
+			return false;
+
+		// 現在の親子関係を解除
+		if (!DetachFromHolder())
+			return false;
+
+		// 新しい所持者へ装着
+		if (!AttachToHolder(
+			newHolderNetworkObject,
+			newHolder))
+		{
+			// 装着に失敗した場合は元の所持者へ戻す
+			AttachToHolder(
+				oldHolderNetworkObject,
+				oldHolder);
+
+			return false;
+		}
+
+		// 元の所持者の状態を解除
+		oldHolder.SetBallState(false);
+
+		// 所持者情報を更新
+		m_CurrentHolderId.Value =
+			newHolderClientId;
+
+		m_CurrentHolderNetworkObjectId.Value =
+			newHolderNetworkObjectId;
+
+		// 新しい所持者の状態を設定
+		newHolder.SetBallState(true);
+
+		return true;
+	}
+
 
 	/// <summary>
 	/// Host上で所持中のボールを指定方向へ射出します。

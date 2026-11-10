@@ -852,6 +852,7 @@ GameObject:
   - component: {fileID: 4402567928680259289}
   - component: {fileID: -2047718237545438515}
   - component: {fileID: -4857989254335448453}
+  - component: {fileID: -2503078115639488532}
   m_Layer: 6
   m_Name: Player
   m_TagString: Ally
@@ -1450,9 +1451,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LockOnManager
   m_TargetCamera: {fileID: 0}
-  m_AllyTag: Ally
-  m_BallTag: Ball
+  m_MaxSearchDistance: 30
+  m_ReticleSearchRadius: 0.18
+  m_BallPriority: 0.35
+  m_EnemyGoalTag: Goal
   m_AllyLockOnMarker: {fileID: 0}
+  m_EnableDebugLog: 1
 --- !u!114 &-4857989254335448453
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1477,6 +1481,23 @@ MonoBehaviour:
   m_ResourceGauge: {fileID: 4869106028275836583}
   m_EnableDebugRecoveryEffect: 1
   m_DebugRecoveryEffectController: {fileID: 8150090777408388913}
+--- !u!114 &-2503078115639488532
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd379dbf2868c7e42b6f5caa05cc8365, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ElectricAction
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_ChargeDuration: 1.5
+  m_RequiredCost: 20
+  m_StunDuration: 2
+  m_MaxHitDistance: 30
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0

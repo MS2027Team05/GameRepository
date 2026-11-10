@@ -55,6 +55,10 @@ GameRepository/
 │   │   │   │   └── BallScreenIndicator.cs     # ボール位置表示用画面内・画面外インジケーターUI制御
 │   │   │   └── Debug/
 │   │   │       └── BallDebugRespawner.cs      # ボール位置リセット用デバッグ機能
+│   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
+│   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
+│   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
+│   │   │   └── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
@@ -98,6 +102,7 @@ GameRepository/
 │   │       │   ├── IPlayerResource.cs   # プレイヤーリソース(電力)消費・回復管理インターフェース
 │   │       │   ├── IPlayerRespawnHandler.cs # 場外復帰要求の受け口インターフェース
 │   │       │   └── ISurfaceMover.cs     # 地上・曲面歩行移動インターフェース
+│   │       ├── ElectricAction.cs        # 電撃チャージ・発射・ボール奪取・敵スタン命中処理制御
 │   │       ├── GravityMover.cs          # 等速直線移動(落下)・空中ホバリング・着地衝突制御
 │   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
 │   │       ├── LockOnManager.cs         # ロックオン制御(ILockOnProvider実装・優先度付き対象検索)

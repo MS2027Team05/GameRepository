@@ -15401,6 +15401,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: "\u30B4\u30FC\u30EB_blue"
       objectReference: {fileID: 0}
+    - target: {fileID: 6981755145144581260, guid: c53e738407b79e64497117c383e60fd9, type: 3}
+      propertyPath: m_TagString
+      value: Goal
+      objectReference: {fileID: 0}
     - target: {fileID: 7225286354612049127, guid: c53e738407b79e64497117c383e60fd9, type: 3}
       propertyPath: m_MatchManager
       value: 
@@ -15828,7 +15832,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1659972142
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -21056,6 +21060,10 @@ PrefabInstance:
     - target: {fileID: 7768935216296163962, guid: c3edb9548f20dbb4a8aa72a24bfad82c, type: 3}
       propertyPath: m_Name
       value: "\u30B4\u30FC\u30EB_red"
+      objectReference: {fileID: 0}
+    - target: {fileID: 7768935216296163962, guid: c3edb9548f20dbb4a8aa72a24bfad82c, type: 3}
+      propertyPath: m_TagString
+      value: Goal
       objectReference: {fileID: 0}
     - target: {fileID: 8775817289297129738, guid: c3edb9548f20dbb4a8aa72a24bfad82c, type: 3}
       propertyPath: m_MatchManager

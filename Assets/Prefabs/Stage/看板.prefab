@@ -12,7 +12,6 @@ GameObject:
   - component: {fileID: 8598456344486112676}
   - component: {fileID: 5816167149292263790}
   - component: {fileID: 7114502919474556650}
-  - component: {fileID: 4426762599070179378}
   m_Layer: 7
   m_Name: "\u770B\u677F"
   m_TagString: Untagged
@@ -114,28 +113,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.06726704, y: 0.010579368, z: 0.032828055}
   m_Center: {x: 0, y: 0, z: 0.0005360906}
---- !u!64 &4426762599070179378
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5456059566816180411}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 0
-  serializedVersion: 5
-  m_Convex: 0
-  m_CookingOptions: 30
-  m_Mesh: {fileID: -5495902117074765545, guid: 9686ef427d3be6d48bdfe440aae2595a, type: 3}
 --- !u!1001 &6591914927826880692
 PrefabInstance:
   m_ObjectHideFlags: 0
