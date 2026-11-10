@@ -53,8 +53,13 @@ public abstract class ALightningBolt : MonoBehaviour
 
     private void Update()
     {
+        UpdateSource();
         UpdateActiveBolts();
         UpdateSpawn();
+    }
+
+    protected virtual void UpdateSource()
+    {
     }
 
     protected virtual void InitializeBolt(BoltData bolt)
@@ -68,7 +73,13 @@ public abstract class ALightningBolt : MonoBehaviour
 
     protected virtual bool ReusesDeactivatedBolts => true;
 
+    protected float Displacement => m_Displacement;
+
     protected abstract void UpdateBoltPosition(BoltData bolt);
+
+    protected virtual void UpdateBoltTransform(BoltData bolt)
+    {
+    }
 
     protected virtual Vector3 AdjustRandomOffset(Vector3 randomOffset)
     {
@@ -80,6 +91,22 @@ public abstract class ALightningBolt : MonoBehaviour
         m_SpawnCycle++;
         m_HasFinishedSpawning = false;
         m_SpawnTimer = 0f;
+    }
+
+    protected void ClearActiveBolts()
+    {
+        if (m_Bolts == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < m_Bolts.Length; i++)
+        {
+            if (m_Bolts[i].m_IsActive)
+            {
+                DeactivateBolt(m_Bolts[i]);
+            }
+        }
     }
 
     private void CreateBoltContainer()
@@ -181,15 +208,15 @@ public abstract class ALightningBolt : MonoBehaviour
                 continue;
             }
 
-            if (bolt.m_RefreshTimer < m_RefreshInterval)
+            if (bolt.m_RefreshTimer >= m_RefreshInterval)
             {
-                continue;
+                bolt.m_RefreshTimer = 0f;
+
+                UpdateBoltPosition(bolt);
+                GenerateLightning(bolt);
             }
 
-            bolt.m_RefreshTimer = 0f;
-
-            UpdateBoltPosition(bolt);
-            GenerateLightning(bolt);
+            UpdateBoltTransform(bolt);
         }
     }
 
@@ -254,6 +281,7 @@ public abstract class ALightningBolt : MonoBehaviour
         InitializeBolt(bolt);
         UpdateBoltPosition(bolt);
         GenerateLightning(bolt);
+        UpdateBoltTransform(bolt);
         SetBoltVisible(bolt, true);
 
         m_ActiveBoltCount++;
@@ -292,7 +320,7 @@ public abstract class ALightningBolt : MonoBehaviour
         bolt.m_GlowLineRenderer.endWidth = m_GlowWidth * m_EndWidthRatio;
     }
 
-    private void GenerateLightning(BoltData bolt)
+    protected virtual void GenerateLightning(BoltData bolt)
     {
         bolt.m_Positions[0] = bolt.m_StartPosition;
         bolt.m_Positions[^1] = bolt.m_EndPosition;
