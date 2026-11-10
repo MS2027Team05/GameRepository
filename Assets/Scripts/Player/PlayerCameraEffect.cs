@@ -2,6 +2,8 @@
 using Unity.Netcode;
 using UnityEngine;
 using DG.Tweening;
+using System.Collections.Generic;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// プレイヤーのカメラ演出および視点回転操作を担当するモジュール。
@@ -48,6 +50,19 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	[Header("カメラピボット位置スムース時間(衝撃緩和SmoothDamp)")]
 	[SerializeField] private float m_PositionSmoothTime;
 
+	[Header("カメラ障害物回避設定")]
+	[SerializeField] private LayerMask m_CameraObstacleLayers;
+	[SerializeField] private float m_CameraCollisionRadius = 0.2f;
+	[SerializeField] private float m_CameraCollisionOffset = 0.1f;
+	[SerializeField] private float m_CameraReturnSpeed = 8f;
+
+	[Header("プレイヤー半透明化設定")]
+	[SerializeField] private Transform m_PlayerObject;
+	[SerializeField, Range(0.0f, 1.0f)] private float m_PlayerTransparencyAlpha = 0.65f;
+
+	[Header("半透明化を除外するオブジェクト")]
+	[SerializeField] private Transform[] m_TransparencyIgnoreObjects;
+
 	[Header("FOV変更")]
 	[SerializeField]
 	private AnimationCurve m_FOVCurve;
@@ -87,6 +102,26 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	// 視点リセット用Tween
 	private Sequence m_ViewResetTween;
 
+	// カメラの通常時のローカル位置
+	private Vector3 m_DesiredCameraLocalPosition;
+
+	/// <summary>
+	/// Rendererごとの元のマテリアルと半透明マテリアルを管理します。
+	/// </summary>
+	private class PlayerRendererMaterialData
+	{
+		public Renderer m_Renderer;
+		public Material[] m_OriginalMaterials;
+		public Material[] m_TransparentMaterials;
+	}
+
+	// PlayerのRendererとマテリアルを保存する。
+	private readonly List<PlayerRendererMaterialData> m_PlayerMaterialData =
+		new List<PlayerRendererMaterialData>();
+
+	// Playerが半透明になっているかどうか。
+	private bool m_IsPlayerTransparent;
+
 	private void Awake()
 	{
 		m_InputReceiver = GetComponent<PlayerInputReceiver>();
@@ -115,6 +150,9 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			return;
 		}
 
+		// Playerの元のマテリアルを保存する。
+		InitializePlayerMaterials();
+
 		if (m_GravityMover != null)
 		{
 			m_GravityMover.OnLanded += HandleLanded;
@@ -139,7 +177,164 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			m_PlanarForward.Normalize();
 
 			m_Pitch = ClampPitchWithOffset(12.0f);
+
+			// カメラの通常位置を保存する。
+			if (m_CinemachineCamera != null)
+			{
+				m_DesiredCameraLocalPosition =
+					m_CinemachineCamera.transform.localPosition;
+			}
+
 			m_IsInitialized = true;
+		}
+	}
+
+	/// <summary>
+	/// Playerと子オブジェクトのRendererから元のマテリアルを取得して保存します。
+	/// 除外対象に指定されたオブジェクトとその子孫は対象外にします。
+	/// </summary>
+	private void InitializePlayerMaterials()
+	{
+		m_PlayerMaterialData.Clear();
+
+		if (m_PlayerObject == null)
+		{
+			Debug.LogWarning("Player Objectが設定されていません。", this);
+			return;
+		}
+
+		// Player自身とすべての子オブジェクトからRendererを取得する。
+		Renderer[] renderers =
+			m_PlayerObject.GetComponentsInChildren<Renderer>(true);
+
+		foreach (Renderer renderer in renderers)
+		{
+			if (renderer == null)
+			{
+				continue;
+			}
+
+			// 除外対象かどうか確認する。
+			bool isIgnored = false;
+
+			foreach (Transform ignoreObject in m_TransparencyIgnoreObjects)
+			{
+				if (ignoreObject == null)
+				{
+					continue;
+				}
+
+				if (renderer.transform == ignoreObject ||
+					renderer.transform.IsChildOf(ignoreObject))
+				{
+					isIgnored = true;
+					break;
+				}
+			}
+
+			if (isIgnored)
+			{
+				continue;
+			}
+
+			// 現在適用されているマテリアルを保存する。
+			Material[] originalMaterials = renderer.sharedMaterials;
+			Material[] transparentMaterials =
+				new Material[originalMaterials.Length];
+
+			for (int i = 0; i < originalMaterials.Length; i++)
+			{
+				Material original = originalMaterials[i];
+
+				if (original == null)
+				{
+					continue;
+				}
+
+				// 現在のマテリアルを複製する。
+				Material transparent = new Material(original);
+
+				// URP/Litの透明設定に変更する。
+				if (transparent.HasProperty("_Surface"))
+				{
+					transparent.SetFloat("_Surface", 1.0f);
+					transparent.SetFloat("_Blend", 0.0f);
+					transparent.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+					transparent.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+					transparent.SetFloat("_ZWrite", 0.0f);
+
+					transparent.DisableKeyword("_ALPHATEST_ON");
+					transparent.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+					transparent.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+
+					transparent.renderQueue = (int)RenderQueue.Transparent;
+				}
+
+				// 元の色を維持したままアルファ値だけ変更する。
+				if (transparent.HasProperty("_BaseColor"))
+				{
+					Color color = transparent.GetColor("_BaseColor");
+					color.a = m_PlayerTransparencyAlpha;
+					transparent.SetColor("_BaseColor", color);
+				}
+				else if (transparent.HasProperty("_Color"))
+				{
+					Color color = transparent.GetColor("_Color");
+					color.a = m_PlayerTransparencyAlpha;
+					transparent.SetColor("_Color", color);
+				}
+				else
+				{
+					Debug.LogWarning(
+						$"{original.name} は色のアルファ値を変更できない可能性があります。",
+						original);
+				}
+
+				transparentMaterials[i] = transparent;
+			}
+
+			// Rendererごとに元のマテリアルと半透明マテリアルを保存する。
+			PlayerRendererMaterialData data =
+				new PlayerRendererMaterialData();
+
+			data.m_Renderer = renderer;
+			data.m_OriginalMaterials = originalMaterials;
+			data.m_TransparentMaterials = transparentMaterials;
+
+			m_PlayerMaterialData.Add(data);
+		}
+	}
+
+	/// <summary>
+	/// Playerのマテリアルを通常状態・半透明状態へ切り替えます。
+	/// </summary>
+	/// <param name="isTransparent">半透明にする場合はtrue</param>
+	private void SetPlayerTransparency(bool isTransparent)
+	{
+		if (m_IsPlayerTransparent == isTransparent)
+		{
+			return;
+		}
+
+		m_IsPlayerTransparent = isTransparent;
+
+		foreach (PlayerRendererMaterialData data in m_PlayerMaterialData)
+		{
+			if (data.m_Renderer == null)
+			{
+				continue;
+			}
+
+			if (isTransparent)
+			{
+				// 半透明マテリアルへ切り替える。
+				data.m_Renderer.sharedMaterials = data.m_TransparentMaterials;
+			}
+			else
+			{
+				// 元のマテリアルへ戻す。
+				data.m_Renderer.sharedMaterials = data.m_OriginalMaterials;
+			}
 		}
 	}
 
@@ -152,7 +347,9 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 		// プレイヤーの位置へ追従: SmoothDampによる滑らかなスプリングダンピングで角の衝撃を吸収
 		float smoothTime = m_PositionSmoothTime > 0f ? m_PositionSmoothTime : 0.08f;
+
 		m_CameraPivot.position = Vector3.SmoothDamp(m_CameraPivot.position, transform.position, ref m_PositionVelocity, smoothTime);
+
 		if (m_PlayerController != null && !m_PlayerController.IsMatchActionEnabled)
 		{
 			return;
@@ -206,6 +403,81 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		// Pitch角を合成してカメラを回転
 		m_CameraPivot.rotation =
 			baseRotation * Quaternion.Euler(m_Pitch, 0.0f, 0.0f);
+
+		// カメラとプレイヤーの間に障害物がある場合はカメラを近づける。
+		UpdateCameraCollision();
+	}
+
+	/// <summary>
+	/// プレイヤーとカメラの間にある障害物を判定し、カメラの位置を補正する。
+	/// </summary>
+	private void UpdateCameraCollision()
+	{
+		if (m_CameraPivot == null || m_CinemachineCamera == null)
+		{
+			return;
+		}
+
+		Transform cameraTransform = m_CinemachineCamera.transform;
+
+		// 通常時のカメラ位置をワールド座標へ変換する。
+		Vector3 desiredWorldPosition =
+			m_CameraPivot.TransformPoint(m_DesiredCameraLocalPosition);
+
+		// ピボットからカメラまでの方向と距離を取得する。
+		Vector3 direction =
+			desiredWorldPosition - m_CameraPivot.position;
+
+		float distance = direction.magnitude;
+
+		if (distance <= 0.001f)
+		{
+			return;
+		}
+
+		direction.Normalize();
+
+		// プレイヤーとカメラの間にSphereCastを飛ばす。
+		if (Physics.SphereCast(
+			m_CameraPivot.position,
+			m_CameraCollisionRadius,
+			direction,
+			out RaycastHit hit,
+			distance,
+			m_CameraObstacleLayers,
+			QueryTriggerInteraction.Ignore))
+		{
+			// 障害物がある場合はPlayerを半透明にする。
+			SetPlayerTransparency(true);
+
+			// 障害物の手前までカメラを移動させる。
+			float safeDistance =
+				Mathf.Max(0f, hit.distance - m_CameraCollisionOffset);
+
+			Vector3 targetWorldPosition =
+				m_CameraPivot.position + direction * safeDistance;
+
+			// カメラのローカル位置へ変換する。
+			Vector3 targetLocalPosition =
+				m_CameraPivot.InverseTransformPoint(targetWorldPosition);
+
+			// 障害物がある場合は素早くカメラを近づける。
+			cameraTransform.localPosition = targetLocalPosition;
+		}
+		else
+		{
+			// 障害物がなくなったらPlayerを通常表示に戻す。
+			SetPlayerTransparency(false);
+
+			// 障害物がなくなったら通常位置へ滑らかに戻す。
+			float returnRate =
+				1.0f - Mathf.Exp(-m_CameraReturnSpeed * Time.deltaTime);
+
+			cameraTransform.localPosition = Vector3.Lerp(
+				cameraTransform.localPosition,
+				m_DesiredCameraLocalPosition,
+				returnRate);
+		}
 	}
 
 	/// <summary>
@@ -471,6 +743,22 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 	private void OnDestroy()
 	{
+		// Playerのマテリアルを元に戻す。
+		SetPlayerTransparency(false);
+
+		// 実行時に生成した半透明マテリアルを破棄する。
+		foreach (PlayerRendererMaterialData data in m_PlayerMaterialData)
+		{
+			foreach (Material material in data.m_TransparentMaterials)
+			{
+				if (material != null)
+				{
+					Destroy(material);
+				}
+			}
+		}
+
+		m_PlayerMaterialData.Clear();
 		if (m_GravityMover != null)
 		{
 			m_GravityMover.OnLanded -= HandleLanded;

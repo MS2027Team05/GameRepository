@@ -1213,6 +1213,16 @@ MonoBehaviour:
   m_NormalAlignSpeed: 5
   m_MaxNormalDegreesPerSecond: 120
   m_PositionSmoothTime: 0.08
+  m_CameraObstacleLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  m_CameraCollisionRadius: 0.2
+  m_CameraCollisionOffset: 0.1
+  m_CameraReturnSpeed: 8
+  m_PlayerObject: {fileID: 4499815124927505067}
+  m_PlayerTransparencyAlpha: 0.65
+  m_TransparencyIgnoreObjects:
+  - {fileID: 487500158197711538}
   m_FOVCurve:
     serializedVersion: 2
     m_Curve:
