@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// ボール所持・単押しパス・長押し追尾パス・強制ドロップを担当するモジュールのインターフェース。

@@ -1,4 +1,4 @@
-# ディレクトリ構造 (STRUCTURE.md)
+﻿# ディレクトリ構造 (STRUCTURE.md)
 
 本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
 
@@ -31,12 +31,30 @@ GameRepository/
 │   ├── Scripts/                 # プロジェクト固有のC#スクリプト
 │   │   ├── Ball/                # ボール物理・同期制御
 │   │   │   ├── BallController.cs        # [EntryPoint] ボール状態管理・所持・シュート制御
-│   │   │   ├── BallPhysicsController.cs # ボール物理補正・バウンド制御
-│   │   │   ├── BallBounce.cs            # ボールの跳ね返り挙動制御
-│   │   │   ├── BallSurfaceGravity.cs    # ボールの接地面重力・吸着制御
-│   │   │   ├── BallSurfaceSearch.cs     # ボール周辺の面探索制御
-│   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
-│   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
+│   │   │   ├── Physics/                 # ボール物理状態・衝突・Surface連携
+│   │   │   │   ├── BallPhysicsController.cs           # [EntryPoint] Free Flight・Surface Physics状態統括
+│   │   │   │   ├── BallPhysicsController.Air.cs       # 飛行・Surface探索・吸着処理
+│   │   │   │   ├── BallPhysicsController.Collision.cs # Collision処理
+│   │   │   │   ├── BallPhysicsController.Surface.cs   # BallSurface Physics連携
+│   │   │   │   ├── BallBounce.cs                      # ボールの跳ね返り挙動制御
+│   │   │   │   └── Attraction/                        # 疑似重力・Surface探索
+│   │   │   │       ├── BallSurfaceGravity.cs          # ボールの接地面重力・吸着制御
+│   │   │   │       └── BallSurfaceSearch.cs           # ボール周辺の面探索制御
+│   │   │   ├── Surface/                 # BallSurfaceのMesh解析・曲面上移動シミュレーション
+│   │   │   │   ├── BallSurfaceSource.cs       # [EntryPoint] MeshColliderからSurfaceデータを構築
+│   │   │   │   ├── BallSurfaceMeshData.cs     # Triangle・Edge・隣接情報の解析データ
+│   │   │   │   ├── BallSurfaceSimulation.cs   # Surface Physicsの共通状態・進行処理
+│   │   │   │   └── Simulation/                # Edge種別・形状別のSurface遷移処理
+│   │   │   │       ├── BallSurfaceSimulation.Edge.cs
+│   │   │   │       ├── BallSurfaceSimulation.FlatSmooth.cs
+│   │   │   │       ├── BallSurfaceSimulation.Convex.cs
+│   │   │   │       ├── BallSurfaceSimulation.Concave.cs
+│   │   │   │       ├── BallSurfaceSimulation.ConcaveAirborne.cs
+│   │   │   │       └── BallSurfaceSimulation.Vertex.cs
+│   │   │   ├── UI/
+│   │   │   │   └── BallScreenIndicator.cs     # ボール位置表示用画面内・画面外インジケーターUI制御
+│   │   │   └── Debug/
+│   │   │       └── BallDebugRespawner.cs      # ボール位置リセット用デバッグ機能
 │   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
 │   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
 │   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
@@ -67,7 +85,8 @@ GameRepository/
 │   │   │   ├── StageSymmetricSynchronizer.cs # [EntryPoint] ステージ地形の点対称同期設定・データ保持コンポーネント
 │   │   │   ├── StageRailRingBuilder.cs       # [EntryPoint] 外周レール(3種)・往復キューブ・外側足場一括生成コンポーネント
 │   │   │   ├── StageRailPatternSwitcher.cs   # 外周レール(3種+None)x足場(On/Off)2x3パターン切り替え・マルチ同期コンポーネント
-│   │   │   └── StageShuttleBlock.cs          # 4分割レール区間を往復移動するブロック(キューブ)コンポーネント
+│   │   │   ├── StageShuttleBlock.cs          # 4分割レール区間を往復移動するブロック(キューブ)コンポーネント
+│   │   │   └── StageObjectBilateralPlacer.cs # 基準BoxColliderサイズに基づく等間隔両端配置・エディタ即時反映コンポーネント
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
 │   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御
@@ -83,6 +102,7 @@ GameRepository/
 │   │       │   ├── IPlayerResource.cs   # プレイヤーリソース(電力)消費・回復管理インターフェース
 │   │       │   ├── IPlayerRespawnHandler.cs # 場外復帰要求の受け口インターフェース
 │   │       │   └── ISurfaceMover.cs     # 地上・曲面歩行移動インターフェース
+│   │       ├── ElectricAction.cs        # 電撃チャージ・発射・ボール奪取・敵スタン命中処理制御
 │   │       ├── GravityMover.cs          # 等速直線移動(落下)・空中ホバリング・着地衝突制御
 │   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
 │   │       ├── LockOnManager.cs         # ロックオン制御(ILockOnProvider実装・優先度付き対象検索)
