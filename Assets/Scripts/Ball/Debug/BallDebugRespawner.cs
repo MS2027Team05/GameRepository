@@ -112,17 +112,19 @@ public class BallDebugRespawner : NetworkBehaviour
 			}
 		}
 
+		// Surface Physics中はKinematicのため、
+		// 速度を初期化する前にDynamic状態へ戻します。
+		m_Rigidbody.isKinematic =
+			false;
+
+		m_Rigidbody.useGravity =
+			false;
+
 		m_Rigidbody.linearVelocity =
 			Vector3.zero;
 
 		m_Rigidbody.angularVelocity =
 			Vector3.zero;
-
-		m_Rigidbody.useGravity =
-			false;
-
-		m_Rigidbody.isKinematic =
-			false;
 
 		m_NetworkTransform.Teleport(
 			m_InitialPosition,

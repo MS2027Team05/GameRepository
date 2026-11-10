@@ -58,6 +58,10 @@ public sealed class BallBounce
 	/// バウンド時の最大法線方向速度です。
 	/// 0の場合は上限を設定しません。
 	/// </param>
+	/// <param name="maxTangentialSpeed">
+	/// バウンド時の最大接線方向速度です。
+	/// 0の場合は上限を設定しません。
+	/// </param>
 	/// <returns>
 	/// バウンド後の速度です。
 	/// </returns>
@@ -67,7 +71,8 @@ public sealed class BallBounce
 		float normalRetention,
 		float tangentialRetention,
 		float minimumNormalSpeed,
-		float maxNormalSpeed)
+		float maxNormalSpeed,
+		float maxTangentialSpeed)
 	{
 		if (incomingVelocity.sqrMagnitude <=
 			Mathf.Epsilon)
@@ -105,6 +110,21 @@ public sealed class BallBounce
 			tangentialVelocity *
 			Mathf.Clamp01(
 				tangentialRetention);
+
+		float maximumTangentialSpeed =
+			Mathf.Max(
+				0.0f,
+				maxTangentialSpeed);
+
+		if (maximumTangentialSpeed >
+				0.0f &&
+			nextTangentialVelocity.magnitude >
+				maximumTangentialSpeed)
+		{
+			nextTangentialVelocity =
+				nextTangentialVelocity.normalized *
+				maximumTangentialSpeed;
+		}
 
 		float bounceNormalSpeed =
 			0.0f;

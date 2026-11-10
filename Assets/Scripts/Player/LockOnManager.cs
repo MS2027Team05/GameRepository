@@ -1,7 +1,5 @@
-﻿//LockOnManager.cs
-using Unity.Netcode;
+﻿using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 /// <summary>
 /// 電撃・追尾パス中に対象を自動検索するロックオン管理クラス。
@@ -44,12 +42,12 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	private ELockOnTargetType m_CurrentTargetType =
 		ELockOnTargetType.None;
 
-
 	[Header("デバッグログ")]
 	[SerializeField]
 	private bool m_EnableDebugLog = true;
 
 	private GameObject m_PreviousTarget;
+	private float m_NextDebugSearchLogTime;
 
 	/// <summary>
 	/// ロックオンのデバッグログを出力
@@ -57,14 +55,33 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	private void LogDebug(string message)
 	{
 		if (!m_EnableDebugLog)
+		{
 			return;
+		}
 
 		Debug.Log(
 			$"[LockOn] {message}",
 			this);
 	}
 
+	/// <summary>
+	/// 毎フレームの過度なログ出力を抑えつつ、定期的に詳細ログを出力可能か判定
+	/// </summary>
+	private bool CanLogSearchDetail()
+	{
+		if (!m_EnableDebugLog)
+		{
+			return false;
+		}
 
+		if (Time.time < m_NextDebugSearchLogTime)
+		{
+			return false;
+		}
+
+		m_NextDebugSearchLogTime = Time.time + 0.3f;
+		return true;
+	}
 
 	// 現在ロックオンしているGameObject
 	public GameObject CurrentTarget { get; private set; }
@@ -80,7 +97,6 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	public GameObject CurrentTargetObject =>
 		CurrentTarget;
 
-
 	/// <summary>ILockOnProvider: 有効な対象が存在するか</summary>
 	public bool HasValidTarget =>
 		CurrentTarget != null;
@@ -91,20 +107,53 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		m_NetworkObject = GetComponent<NetworkObject>();
 		m_PlayerProfile = GetComponent<PlayerNetworkProfile>();
 
-		if (m_TargetCamera == null)
-			m_TargetCamera = Camera.main;
+		EnsureTargetCamera();
 
 		if (m_AllyLockOnMarker != null)
+		{
 			m_AllyLockOnMarker.gameObject.SetActive(false);
+		}
 	}
 
-	//   private void OnEnable()
-	//{
-	//	if (m_InputReceiver != null)
-	//	{
-	//		m_InputReceiver.OnLockOnPressed += LockOn;
-	//	}
-	//}
+	/// <summary>
+	/// ターゲット検索に使用するカメラを外部から設定します。
+	/// </summary>
+	public void SetTargetCamera(Camera camera)
+	{
+		m_TargetCamera = camera;
+	}
+
+	/// <summary>
+	/// ターゲット検索に使用するカメラを確保します。
+	/// 未設定または無効な場合はCamera.mainおよび有効なカメラから自動再取得します。
+	/// </summary>
+	private bool EnsureTargetCamera()
+	{
+		if (m_TargetCamera != null && m_TargetCamera.isActiveAndEnabled)
+		{
+			return true;
+		}
+
+		m_TargetCamera = Camera.main;
+
+		if (m_TargetCamera != null && m_TargetCamera.isActiveAndEnabled)
+		{
+			return true;
+		}
+
+		Camera[] allCameras = Camera.allCameras;
+		for (int i = 0; i < allCameras.Length; i++)
+		{
+			Camera cam = allCameras[i];
+			if (cam != null && cam.isActiveAndEnabled)
+			{
+				m_TargetCamera = cam;
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 	private void OnDisable()
 	{
@@ -113,24 +162,6 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 
 	private void Update()
 	{
-		/*if (Keyboard.current != null &&
-			Keyboard.current.lKey.wasPressedThisFrame)
-		{
-			Debug.Log("[LockOn Debug] Lを押した");
-
-			if (m_CurrentSearchMode == ELockOnSearchMode.None)
-			{
-				SetSearchMode(
-					m_BallCarrier != null && m_BallCarrier.HasBall
-					? ELockOnSearchMode.BallHolder
-					: ELockOnSearchMode.NonBallHolder);
-			}
-			else
-			{
-				SetSearchMode(ELockOnSearchMode.None);
-			}
-		}*/
-
 		UpdateLockOnMarker();
 	}
 
@@ -138,7 +169,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	public void LockOn()
 	{
 		if (m_BallCarrier == null)
+		{
 			return;
+		}
 
 		SetSearchMode(
 			m_BallCarrier.HasBall
@@ -148,143 +181,8 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		UpdateTargetSearch();
 	}
 
-	/* public void LockOn()
-     {
-         // すでにロックオン中なら、もう一度押すと解除
-         if (CurrentTarget != null)
-         {
-             ReleaseTarget();
-             Debug.Log("ロックオン解除");
-             return;
-         }
-
-
-         // マルチプレイでは操作中のプレイヤーだけが実行する
-         if (m_NetworkObject != null &&
-             m_NetworkObject.IsSpawned &&
-             !m_NetworkObject.IsOwner)
-         {
-             return;
-         }
-
-         ReleaseTarget();
-
-         if (m_TargetCamera == null || m_BallCarrier == null)
-         {
-             return;
-         }
-
-         // ボール所持中なら味方、
-         // 所持していなければボールを探す
-         string searchTag =
-             m_BallCarrier.HasBall ? m_AllyTag : m_BallTag;
-
-         GameObject[] candidates;
-
-         try
-         {
-             candidates =
-                 GameObject.FindGameObjectsWithTag(searchTag);
-         }
-         catch (UnityException)
-         {
-             Debug.LogError(
-                 "タグが登録されていません: " + searchTag);
-             return;
-         }
-
-         float nearestDistance = float.MaxValue;
-
-         foreach (GameObject candidate in candidates)
-         {
-             if (candidate == null)
-             {
-                 continue;
-             }
-
-             // 自分自身はターゲットにしない
-             if (candidate == gameObject)
-             {
-                 continue;
-             }
-
-             if (!IsOnScreen(candidate))
-             {
-                 continue;
-             }
-
-             Vector3 screenPosition =
-                 m_TargetCamera.WorldToViewportPoint(
-                     candidate.transform.position);
-
-             // 画面中央に近い対象を優先
-             float distance = Vector2.Distance(
-                 new Vector2(screenPosition.x, screenPosition.y),
-                 new Vector2(0.5f, 0.5f));
-
-             if (distance < nearestDistance)
-             {
-                 nearestDistance = distance;
-                 CurrentTarget = candidate;
-             }
-         }
-
-         if (CurrentTarget != null)
-         {
-             m_CurrentTargetType = m_BallCarrier.HasBall
-                 ? ELockOnTargetType.AllyPlayer
-                 : ELockOnTargetType.Ball;
-
-             Debug.Log(
-                 "ロックオン: " + CurrentTarget.name);
-         }
-     }
-
-     private bool IsOnScreen(GameObject target)
-     {
-         if (target == null || m_TargetCamera == null)
-         {
-             return false;
-         }
-
-         // ボールの見た目や当たり判定の大きさを考慮する
-         Renderer[] renderers =
-             target.GetComponentsInChildren<Renderer>();
-
-         if (renderers.Length > 0)
-         {
-             Bounds bounds = renderers[0].bounds;
-
-             for (int i = 1; i < renderers.Length; i++)
-             {
-                 bounds.Encapsulate(renderers[i].bounds);
-             }
-
-             // ボールの中心だけでなく、表示範囲で判定する
-             Plane[] planes =
-                 GeometryUtility.CalculateFrustumPlanes(m_TargetCamera);
-
-             return GeometryUtility.TestPlanesAABB(
-                 planes, bounds);
-         }
-
-         // Rendererがない場合は従来の中心位置で判定する
-         Vector3 position =
-             m_TargetCamera.WorldToViewportPoint(target.transform.position);
-
-         return position.z > 0f &&
-                position.x >= 0f && position.x <= 1f &&
-                position.y >= 0f && position.y <= 1f;
-     }
-
-     public void ReleaseTarget()
-     {
-         CurrentTarget = null;
-         m_CurrentTargetType = ELockOnTargetType.None;
-     }
-    */
 	// =========================================================================
-	// ILockOnProvider インターフェース窓口 (PG3担当: 本実装・改修対象)
+	// ILockOnProvider インターフェース窓口
 	// =========================================================================
 
 	/// <summary>
@@ -293,7 +191,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	public void SetSearchMode(ELockOnSearchMode mode)
 	{
 		if (m_CurrentSearchMode == mode)
+		{
 			return;
+		}
 
 		m_CurrentSearchMode = mode;
 
@@ -312,22 +212,31 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	}
 
 	/// <summary>
-	/// 現在の検索モードに基づいて対象を検索・更新します(PG3本実装対象)。
-	/// </summary>
-	/// <summary>
 	/// 現在のモードに応じて対象を検索
 	/// </summary>
 	public void UpdateTargetSearch()
 	{
 		if (m_CurrentSearchMode == ELockOnSearchMode.None ||
-			m_TargetCamera == null ||
 			m_BallCarrier == null)
+		{
 			return;
+		}
+
+		if (!EnsureTargetCamera())
+		{
+			if (CanLogSearchDetail())
+			{
+				LogDebug("検索中断: 有効なカメラが取得できていません。");
+			}
+			return;
+		}
 
 		if (m_NetworkObject != null &&
 			m_NetworkObject.IsSpawned &&
 			!m_NetworkObject.IsOwner)
+		{
 			return;
+		}
 
 		bool hasBall = m_BallCarrier.HasBall;
 
@@ -412,13 +321,25 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		ref float bestScore)
 	{
 		BallController[] balls =
-			FindObjectsOfType<BallController>();
+			FindObjectsByType<BallController>(FindObjectsSortMode.None);
+
+		if (balls.Length == 0)
+		{
+			if (CanLogSearchDetail())
+			{
+				LogDebug("ボール候補探索: シーン上にBallControllerが見つかりません。");
+			}
+
+			return;
+		}
 
 		foreach (BallController ball in balls)
 		{
 			if (ball == null ||
 				!ball.gameObject.activeInHierarchy)
+			{
 				continue;
+			}
 
 			ConsiderCandidate(
 				ball.gameObject,
@@ -439,7 +360,7 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		ref float bestScore)
 	{
 		PlayerNetworkProfile[] players =
-			FindObjectsOfType<PlayerNetworkProfile>();
+			FindObjectsByType<PlayerNetworkProfile>(FindObjectsSortMode.None);
 
 		ETeamType myTeam =
 			m_PlayerProfile != null
@@ -451,18 +372,24 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 			if (profile == null ||
 				profile.gameObject == gameObject ||
 				!profile.gameObject.activeInHierarchy)
+			{
 				continue;
+			}
 
 			bool sameTeam =
 				myTeam != ETeamType.None &&
 				profile.Team == myTeam;
 
 			if (allies != sameTeam)
+			{
 				continue;
+			}
 
 			if (myTeam == ETeamType.None ||
 				profile.Team == ETeamType.None)
+			{
 				continue;
+			}
 
 			ConsiderCandidate(
 				profile.gameObject,
@@ -484,7 +411,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		ref float bestScore)
 	{
 		if (string.IsNullOrWhiteSpace(m_EnemyGoalTag))
+		{
 			return;
+		}
 
 		GameObject[] goals;
 
@@ -501,7 +430,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		foreach (GameObject goal in goals)
 		{
 			if (goal == null)
+			{
 				continue;
+			}
 
 			ConsiderCandidate(
 				goal,
@@ -524,7 +455,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	{
 		if (candidate == null ||
 			candidate == gameObject)
+		{
 			return;
+		}
 
 		Vector3 worldPosition =
 			GetTargetPosition(candidate);
@@ -534,15 +467,33 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 				transform.position,
 				worldPosition);
 
+		bool canLog = CanLogSearchDetail();
+
 		if (worldDistance > m_MaxSearchDistance)
+		{
+			if (canLog && type == ELockOnTargetType.Ball)
+			{
+				LogDebug(
+					$"ボール除外: 距離超過 (現在={worldDistance:F1}m > 最大={m_MaxSearchDistance:F1}m)");
+			}
+
 			return;
+		}
 
 		Vector3 viewport =
 			m_TargetCamera.WorldToViewportPoint(
 				worldPosition);
 
 		if (viewport.z <= 0f)
+		{
+			if (canLog && type == ELockOnTargetType.Ball)
+			{
+				LogDebug(
+					$"ボール除外: カメラ背面 (Viewport.z={viewport.z:F2})");
+			}
+
 			return;
+		}
 
 		Vector2 reticle =
 			new Vector2(0.5f, 0.5f);
@@ -553,7 +504,15 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 				reticle);
 
 		if (screenDistance > m_ReticleSearchRadius)
+		{
+			if (canLog && type == ELockOnTargetType.Ball)
+			{
+				LogDebug(
+					$"ボール除外: レティクル外 (距離={screenDistance:F3} > 半径={m_ReticleSearchRadius:F3}, Viewport=({viewport.x:F2}, {viewport.y:F2}))");
+			}
+
 			return;
+		}
 
 		float score =
 			screenDistance +
@@ -562,7 +521,15 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 
 		// ボールを優先
 		if (type == ELockOnTargetType.Ball)
+		{
 			score -= m_BallPriority;
+
+			if (canLog)
+			{
+				LogDebug(
+					$"ボール適合: 画面距離={screenDistance:F3}, ワールド距離={worldDistance:F1}m, Score={score:F3}");
+			}
+		}
 
 		if (score < bestScore)
 		{
@@ -581,13 +548,17 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 			target.GetComponentInChildren<Collider>();
 
 		if (collider != null)
+		{
 			return collider.bounds.center;
+		}
 
 		Renderer renderer =
 			target.GetComponentInChildren<Renderer>();
 
 		if (renderer != null)
+		{
 			return renderer.bounds.center;
+		}
 
 		return target.transform.position;
 	}
@@ -601,7 +572,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		m_CurrentTargetType = ELockOnTargetType.None;
 
 		if (m_AllyLockOnMarker != null)
+		{
 			m_AllyLockOnMarker.gameObject.SetActive(false);
+		}
 	}
 
 	public void ClearTarget()
@@ -621,6 +594,7 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 			m_AllyLockOnMarker.gameObject.SetActive(false);
 		}
 	}
+
 	/// <summary>
 	/// ロックオンマーカーを更新
 	/// </summary>
@@ -628,7 +602,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	{
 		if (m_AllyLockOnMarker == null ||
 			m_TargetCamera == null)
+		{
 			return;
+		}
 
 		if (CurrentTarget == null)
 		{
@@ -650,56 +626,3 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		m_AllyLockOnMarker.position = screenPosition;
 	}
 }
-
-
-/// <summary>
-/// 現在のロックオン対象およびマーカー表示をクリアします。
-/// </summary>
-/*public void ClearTarget()
-{
-	ReleaseTarget();
-	if (m_AllyLockOnMarker != null)
-	{
-		m_AllyLockOnMarker.gameObject.SetActive(false);
-	}
-}
-
-private void UpdateLockOnMarker()
-{
-	if (m_AllyLockOnMarker == null || m_TargetCamera == null)
-	{
-		return;
-	}
-
-	// ロックオンしていない場合は非表示
-	if (CurrentTarget == null)
-	{
-		m_AllyLockOnMarker.gameObject.SetActive(false);
-		return;
-	}
-
-	// ボールを所持していない場合は味方マーカーを表示しない
-	if (m_BallCarrier == null || !m_BallCarrier.HasBall)
-	{
-		m_AllyLockOnMarker.gameObject.SetActive(false);
-		return;
-	}
-
-	// ターゲットの画面座標を取得
-	Vector3 screenPosition =
-		m_TargetCamera.WorldToScreenPoint(
-			CurrentTarget.transform.position);
-
-	// カメラの後ろにいる場合は非表示
-	if (screenPosition.z <= 0f)
-	{
-		m_AllyLockOnMarker.gameObject.SetActive(false);
-		return;
-	}
-
-	// 画面内の味方の位置にマーカーを表示
-	m_AllyLockOnMarker.gameObject.SetActive(true);
-	m_AllyLockOnMarker.position = screenPosition;
-}
-}
-*/

@@ -405,7 +405,7 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 			if (!attackerCarrier.HasBall && enemyCarrier.HasBall)
 			{
 				BallController[] balls =
-					FindObjectsOfType<BallController>();
+					FindObjectsByType<BallController>(FindObjectsSortMode.None);
 
 				foreach (BallController ball in balls)
 				{
