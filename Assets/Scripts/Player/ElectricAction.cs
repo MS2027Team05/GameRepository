@@ -1,4 +1,4 @@
-﻿// ElectricAction.cs
+// ElectricAction.cs
 
 using Unity.Netcode;
 using UnityEngine;
