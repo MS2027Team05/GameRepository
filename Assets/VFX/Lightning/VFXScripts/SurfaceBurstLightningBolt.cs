@@ -44,6 +44,14 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
         return m_HasPlayRequest;
     }
 
+    protected override void UpdatePrefabEffectTransform(Transform effectTransform)
+    {
+        // プレハブのローカルY軸を接触面の法線に合わせます。
+        effectTransform.SetPositionAndRotation(
+            m_ActivationHit.point,
+            Quaternion.FromToRotation(Vector3.up, GetSurfaceNormal()));
+    }
+
     protected override void InitializeBolt(BoltData bolt)
     {
         Vector3 surfaceNormal = GetSurfaceNormal();
@@ -86,8 +94,9 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
         }
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         if (m_ContactDetector != null)
         {
             m_ContactDetector.ContactEntered -= Play;

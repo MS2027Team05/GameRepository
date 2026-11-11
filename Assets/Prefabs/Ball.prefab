@@ -359,7 +359,6 @@ MonoBehaviour:
   m_SurfaceMaxBounceNormalSpeed: 10
   m_SurfaceMaxBounceTangentialSpeed: 15
   m_SurfaceGroundDeceleration: 5
-  m_EnableBounceDistanceDebug: 1
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4
@@ -540,10 +539,84 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5287252754361425507}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1745558725400818006}
   m_SourcePrefab: {fileID: 100100000, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
 --- !u!4 &7175164930585321636 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
   m_PrefabInstance: {fileID: 7213067859241305935}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &7554962997661186590 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
+  m_PrefabInstance: {fileID: 7213067859241305935}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &5287252754361425507
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7554962997661186590}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2fafae1ce7748e7b851e2cfd671088d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SphereSurfaceLightningBolt
+  m_UsePrefabEffect: 0
+  m_EffectPrefab: {fileID: 0}
+  m_BoltCount: 20
+  m_MaxActiveBoltCount: 10
+  m_SegmentCount: 6
+  m_Displacement: 0.04
+  m_CoreMaterial: {fileID: 2100000, guid: 4a1b1b60ed625a94cb60ef678d192fb5, type: 2}
+  m_GlowMaterial: {fileID: 2100000, guid: 602ee0b63f2c1da4f8428fe746db83ce, type: 2}
+  m_CoreWidth: 0.008
+  m_GlowWidth: 0.03
+  m_EndWidthRatio: 0.5
+  m_RefreshInterval: 0.05
+  m_Lifetime: 0.1
+  m_SpawnInterval: 0.04
+  m_CenterPoint: {fileID: 0}
+  m_Radius: 0.25
+  m_SurfaceOffset: 0
+  m_ArcAngle: 90
+  m_CrawlSpeed: 100
+--- !u!114 &1745558725400818006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7554962997661186590}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 33dab10436744ccea1d082a657b40b25, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TrailLightningBolt
+  m_UsePrefabEffect: 0
+  m_EffectPrefab: {fileID: 0}
+  m_BoltCount: 20
+  m_MaxActiveBoltCount: 10
+  m_SegmentCount: 5
+  m_Displacement: 0.5
+  m_CoreMaterial: {fileID: 2100000, guid: 4a1b1b60ed625a94cb60ef678d192fb5, type: 2}
+  m_GlowMaterial: {fileID: 2100000, guid: 602ee0b63f2c1da4f8428fe746db83ce, type: 2}
+  m_CoreWidth: 0.015
+  m_GlowWidth: 0.06
+  m_EndWidthRatio: 0
+  m_RefreshInterval: 0.01
+  m_Lifetime: 0.03
+  m_SpawnInterval: 0.001
+  m_TargetPoint: {fileID: 0}
+  m_SampleDistance: 0.1
+  m_MaxTrailLength: 4
+  m_MaxSampleCount: 64
+  m_TeleportDistance: 10
+  m_BoltLength: 2

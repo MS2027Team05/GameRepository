@@ -274,6 +274,30 @@ public partial class BallPhysicsController : NetworkBehaviour
 	private EBallMotionState m_MotionState;
 
 	/// <summary>
+	/// RigidbodyまたはSurface Physicsで、停止しきい値を超えて移動中か取得します。
+	/// </summary>
+	public bool IsMoving
+	{
+		get
+		{
+			if (m_Rigidbody == null)
+			{
+				return false;
+			}
+
+			float speedSquared = m_Rigidbody.linearVelocity.sqrMagnitude;
+			if (m_MotionState == EBallMotionState.Surface && m_SurfaceSimulation != null)
+			{
+				float verticalSpeed = m_SurfaceSimulation.VerticalVelocity;
+				speedSquared = m_SurfaceSimulation.SurfaceVelocity.sqrMagnitude + verticalSpeed * verticalSpeed;
+			}
+
+			float stopSpeed = Mathf.Max(0.0f, m_StopSpeedThreshold);
+			return speedSquared > stopSpeed * stopSpeed;
+		}
+	}
+
+	/// <summary>
 	/// 通常飛行中に維持する進行方向です。
 	/// </summary>
 	private Vector3 m_FlightDirection;

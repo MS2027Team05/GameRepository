@@ -38,9 +38,22 @@ public sealed class TrailLightningBolt : ALightningBolt
     private bool m_HasPreviousPosition;
     private bool m_HasPendingTrail;
     private bool m_IsMoving;
+    private BallController m_BallController;
+
+    private void Awake()
+    {
+        // ボール配下の軌跡だけ投球状態で制限し、単独のVFXテストは従来どおり動作させます。
+        m_BallController = GetComponentInParent<BallController>();
+    }
 
     protected override void UpdateSource()
     {
+        if (m_BallController != null && !m_BallController.IsShotInFlight)
+        {
+            ResetTracking();
+            return;
+        }
+
         if (m_SampleDistance <= 0f || m_MaxTrailLength <= 0f ||
             m_MaxSampleCount < 2 || m_TeleportDistance <= 0f || m_BoltLength <= 0f)
         {
@@ -105,6 +118,18 @@ public sealed class TrailLightningBolt : ALightningBolt
             m_Path.Count > 1 && m_Path.Length > 0f;
     }
 
+    protected override bool CanPlayPrefabEffect()
+    {
+        // 経路のサンプリング間隔でプレハブが明滅しないよう、移動状態で判定します。
+        return m_IsMoving;
+    }
+
+    protected override void UpdatePrefabEffectTransform(Transform effectTransform)
+    {
+        Transform target = m_TargetPoint != null ? m_TargetPoint : transform;
+        effectTransform.SetPositionAndRotation(target.position, target.rotation);
+    }
+
     protected override void InitializeBolt(BoltData bolt)
     {
         if (!m_BoltPaths.TryGetValue(bolt, out Vector3[] positions) ||
@@ -143,14 +168,15 @@ public sealed class TrailLightningBolt : ALightningBolt
         bolt.m_CoreLineRenderer.SetPositions(bolt.m_Positions);
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
-        ClearActiveBolts();
+        base.OnDisable();
         ResetTracking();
     }
 
     private void BeginPath(Transform target, Vector3 position)
     {
+        ClearActiveBolts();
         m_Path.Reset(position);
         m_PreviousTarget = target;
         m_PreviousPosition = position;
@@ -163,6 +189,8 @@ public sealed class TrailLightningBolt : ALightningBolt
 
     private void ResetTracking()
     {
+        ClearActiveBolts();
+        m_Path?.Reset(Vector3.zero);
         m_HasPreviousPosition = false;
         m_HasPendingTrail = false;
         m_IsMoving = false;
