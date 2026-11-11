@@ -52,6 +52,7 @@ public class BallController : NetworkBehaviour
 	private Rigidbody m_Rigidbody;
 	private NetworkTransform m_NetworkTransform;
 	private BallPhysicsController m_BallPhysics;
+	private PlayerBallCarrier m_CurrentHolderCarrier;
 	private Vector3 m_InitialPosition;
 	private Quaternion m_InitialRotation;
 	public bool IsMatchPaused { get; private set; }
@@ -122,6 +123,8 @@ public class BallController : NetworkBehaviour
 		}
 		m_HasHolder.OnValueChanged +=
 			HandleHolderStateChanged;
+		m_CurrentHolderNetworkObjectId.OnValueChanged +=
+			HandleHolderNetworkObjectIdChanged;
 
 		if (m_HasHolder.Value)
 		{
@@ -137,6 +140,11 @@ public class BallController : NetworkBehaviour
 		}
 
 		UpdatePassBonusEligibility();
+	}
+
+	private void LateUpdate()
+	{
+		UpdateHeldPosition();
 	}
 
 	/// <summary>
@@ -167,6 +175,8 @@ public class BallController : NetworkBehaviour
 	{
 		m_HasHolder.OnValueChanged -=
 			HandleHolderStateChanged;
+		m_CurrentHolderNetworkObjectId.OnValueChanged -=
+			HandleHolderNetworkObjectIdChanged;
 	}
 
 	/// <summary>
@@ -554,6 +564,7 @@ public class BallController : NetworkBehaviour
 		m_LastHolderClientId = 0;
 		m_RepickupUnlockTime = 0f;
 		m_CurrentHolderId.Value = 0;
+		m_CurrentHolderCarrier = null;
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
 		m_Rigidbody.useGravity = false;
@@ -572,6 +583,29 @@ public class BallController : NetworkBehaviour
 	{
 		ApplyHolderState(
 			newValue);
+
+		if (!newValue)
+		{
+			m_CurrentHolderCarrier = null;
+		}
+	}
+
+	/// <summary>
+	/// 所持者のNetworkObjectId変更を検知し、旧所持者と新所持者の状態を更新します。
+	/// </summary>
+	private void HandleHolderNetworkObjectIdChanged(
+		ulong previousValue,
+		ulong newValue)
+	{
+		if (previousValue != 0 && previousValue != newValue)
+		{
+			UpdateCarrierBallState(previousValue, false);
+		}
+
+		if (newValue != 0 && m_HasHolder.Value)
+		{
+			UpdateCarrierBallState(newValue, true);
+		}
 	}
 
 	/// <summary>
@@ -661,6 +695,16 @@ public class BallController : NetworkBehaviour
 				holderTransform.rotation) *
 			holder.BallHoldPoint.rotation;
 
+		m_CurrentHolderCarrier = holder;
+
+		if (m_NetworkTransform != null && m_NetworkTransform.CanCommitToTransform)
+		{
+			m_NetworkTransform.Teleport(
+				transform.position,
+				transform.rotation,
+				transform.localScale);
+		}
+
 		return true;
 	}
 
@@ -687,6 +731,8 @@ public class BallController : NetworkBehaviour
 			}
 		}
 
+		m_CurrentHolderCarrier = null;
+
 		m_Rigidbody.isKinematic =
 			false;
 
@@ -709,22 +755,92 @@ public class BallController : NetworkBehaviour
 		ulong holderNetworkObjectId =
 			m_CurrentHolderNetworkObjectId.Value;
 
-		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+		if (holderNetworkObjectId == 0)
+		{
+			return;
+		}
+
+		UpdateCarrierBallState(
 			holderNetworkObjectId,
-			out NetworkObject holderNetworkObject))
-		{
-			return;
-		}
-
-		PlayerBallCarrier holder =
-			holderNetworkObject.GetComponent<PlayerBallCarrier>();
-
-		if (holder == null)
-		{
-			return;
-		}
-
-		holder.SetBallState(
 			hasBall);
+	}
+
+	/// <summary>
+	/// 指定されたNetworkObjectIdのプレイヤーへボール所持状態を通知します。
+	/// </summary>
+	private void UpdateCarrierBallState(
+		ulong carrierNetworkObjectId,
+		bool hasBall)
+	{
+		if (NetworkManager == null || NetworkManager.SpawnManager == null)
+		{
+			return;
+		}
+
+		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			carrierNetworkObjectId,
+			out NetworkObject carrierNetworkObject))
+		{
+			return;
+		}
+
+		PlayerBallCarrier carrier =
+			carrierNetworkObject.GetComponent<PlayerBallCarrier>();
+
+		if (carrier == null)
+		{
+			return;
+		}
+
+		carrier.SetBallState(hasBall);
+
+		if (hasBall)
+		{
+			m_CurrentHolderCarrier = carrier;
+		}
+		else if (m_CurrentHolderCarrier == carrier)
+		{
+			m_CurrentHolderCarrier = null;
+		}
+	}
+
+	/// <summary>
+	/// ボール所持中、プレイヤーの腰ボーン(BallHoldPoint)へ追従させます。
+	/// </summary>
+	private void UpdateHeldPosition()
+	{
+		if (!m_HasHolder.Value)
+		{
+			return;
+		}
+
+		if (m_CurrentHolderCarrier == null)
+		{
+			ulong holderNetworkObjectId = m_CurrentHolderNetworkObjectId.Value;
+			if (holderNetworkObjectId != 0 &&
+				NetworkManager != null &&
+				NetworkManager.SpawnManager != null &&
+				NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(holderNetworkObjectId, out NetworkObject holderNetworkObject))
+			{
+				m_CurrentHolderCarrier = holderNetworkObject.GetComponent<PlayerBallCarrier>();
+			}
+		}
+
+		if (m_CurrentHolderCarrier == null || m_CurrentHolderCarrier.BallHoldPoint == null)
+		{
+			return;
+		}
+
+		Transform holderTransform = m_CurrentHolderCarrier.transform;
+		Transform holdPoint = m_CurrentHolderCarrier.BallHoldPoint;
+
+		transform.localPosition =
+			holderTransform.InverseTransformPoint(
+				holdPoint.position);
+
+		transform.localRotation =
+			Quaternion.Inverse(
+				holderTransform.rotation) *
+			holdPoint.rotation;
 	}
 }
