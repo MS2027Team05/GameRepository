@@ -17,21 +17,27 @@ public enum ETeamType : byte
 /// </summary>
 public enum ECharacterType : byte
 {
-	ModelA = 0,
-	ModelB = 1,
+	Man = 0,
+	Woman = 1,
 }
 
 /// <summary>
-/// ハイライトカラー種別 (マテリアル適用用のプリセットカラー)。
+/// キャラクターカラー種別(12色マテリアル対応)。
 /// </summary>
 public enum EHighlightColor : byte
 {
-	Default = 0,
-	Cyan = 1,
-	Lime = 2,
-	Yellow = 3,
-	Purple = 4,
-	Orange = 5,
+	Black = 0,
+	Blue = 1,
+	DeepBlue = 2,
+	DeepRed = 3,
+	Green = 4,
+	LightBlue = 5,
+	LightGreen = 6,
+	Orange = 7,
+	Purple = 8,
+	Red = 9,
+	White = 10,
+	Yellow = 11,
 }
 
 /// <summary>
@@ -87,8 +93,8 @@ public struct LobbyPlayerData : INetworkSerializable, IEquatable<LobbyPlayerData
 		ulong clientId,
 		FixedString64Bytes playerName,
 		ETeamType team = ETeamType.None,
-		ECharacterType characterType = ECharacterType.ModelA,
-		EHighlightColor highlightColor = EHighlightColor.Default,
+		ECharacterType characterType = ECharacterType.Man,
+		EHighlightColor highlightColor = EHighlightColor.Black,
 		bool isReady = false)
 	{
 		m_ClientId = clientId;
@@ -148,4 +154,3 @@ public struct LobbyPlayerData : INetworkSerializable, IEquatable<LobbyPlayerData
 		return HashCode.Combine(m_ClientId, m_PlayerName, m_Team, m_CharacterType, m_HighlightColor, m_IsReady);
 	}
 }
-

@@ -1,4 +1,4 @@
-using Unity.Netcode;
+﻿using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -21,6 +21,7 @@ public class PlayerBallCarrier :
 	[SerializeField] private Transform m_BallHoldPoint;
 
 	private PlayerController m_PlayerController;
+	private PlayerResourceController m_PlayerResourceController;
 	private bool m_HasBall;
 	private bool m_IsPassCharging;
 	private float m_PassChargeRatio;
@@ -87,6 +88,7 @@ public class PlayerBallCarrier :
 	{
 		m_PlayerController =
 			GetComponent<PlayerController>();
+		m_PlayerResourceController = GetComponent<PlayerResourceController>();
 	}
 
 	/// <summary>
@@ -164,6 +166,30 @@ public class PlayerBallCarrier :
 		ballController.TrySetHolder(
 			OwnerClientId,
 			NetworkObjectId);
+	}
+
+	/// <summary>
+	/// Hostが味方からのパス受取を確認したときに、対象Ownerへボーナス付与を通知します。
+	/// </summary>
+	public void NotifyFriendlyPassReceivedServer()
+	{
+		if (!IsServer || !IsSpawned)
+		{
+			return;
+		}
+
+		ReceiveFriendlyPassBonusOwnerRpc();
+	}
+
+	[Rpc(SendTo.Owner)]
+	private void ReceiveFriendlyPassBonusOwnerRpc()
+	{
+		if (!IsOwner)
+		{
+			return;
+		}
+
+		m_PlayerResourceController?.ApplyFriendlyPassBonus();
 	}
 
 	/// <summary>

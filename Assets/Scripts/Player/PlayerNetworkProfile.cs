@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// プレイヤーのネットワーク同期プロファイル(名前・チーム・キャラ種別・ハイライトカラー)を管理するコンポーネント。
-/// 各種描画演出(ネームプレート・アウトライン・シルエット)へ変更イベントを通知します。
+/// 各種描画演出(ネームプレート・外見マテリアル・アウトライン・シルエット)へ変更イベントを通知します。
 /// </summary>
 public class PlayerNetworkProfile : NetworkBehaviour
 {
@@ -20,12 +20,12 @@ public class PlayerNetworkProfile : NetworkBehaviour
 		NetworkVariableWritePermission.Server);
 
 	private readonly NetworkVariable<ECharacterType> m_CharacterType = new NetworkVariable<ECharacterType>(
-		ECharacterType.ModelA,
+		ECharacterType.Man,
 		NetworkVariableReadPermission.Everyone,
 		NetworkVariableWritePermission.Server);
 
 	private readonly NetworkVariable<EHighlightColor> m_HighlightColor = new NetworkVariable<EHighlightColor>(
-		EHighlightColor.Default,
+		EHighlightColor.Black,
 		NetworkVariableReadPermission.Everyone,
 		NetworkVariableWritePermission.Server);
 
@@ -61,7 +61,10 @@ public class PlayerNetworkProfile : NetworkBehaviour
 	/// </summary>
 	public void InitializeProfile(LobbyPlayerData data)
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		m_PlayerName.Value = data.PlayerName;
 		m_Team.Value = data.Team;

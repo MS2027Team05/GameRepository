@@ -53,6 +53,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 	private Vector3 m_LastDetectedNormal = Vector3.up;
 	private Vector3 m_LastDetectedPoint;
 	private int m_LastDetectionStep; // 0:なし, 1:凹角壁, 2:真下SphereCast, 3:角近傍幾何学的面検知
+	private Vector3 m_GroundVelocity = Vector3.zero;
 
 	/// <summary>
 	/// 地面または壁面に接地しているかを取得します。
@@ -68,6 +69,11 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 	/// 足元理想位置と地面接触点との高低差(浮きギャップ)を取得します。
 	/// </summary>
 	public float GroundGap { get => m_GroundGap; }
+
+	/// <summary>
+	/// 接地している足場が移動床である場合、そのワールド線形速度(m/s)を取得します。静止床または非接地時はVector3.zeroを返します。
+	/// </summary>
+	public Vector3 GroundVelocity { get => m_GroundVelocity; }
 
 	/// <summary>
 	/// 診断・検証用: 直近フレームで実行されたRaycast一覧を取得します。
@@ -122,6 +128,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 		bool foundGround = false;
 		Vector3 detectedNormal = m_CurrentGroundNormal;
 		Vector3 detectedPoint = transform.position - transform.up * footDist;
+		Collider detectedCollider = null;
 
 		Vector3 currentMoveDir = moveDir.sqrMagnitude > 0.001f ? moveDir : transform.forward;
 
@@ -137,6 +144,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 			foundGround = true;
 			detectedNormal = wallHit.normal;
 			detectedPoint = wallHit.point;
+			detectedCollider = wallHit.collider;
 			m_LastDetectionStep = 1;
 		}
 
@@ -160,6 +168,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 				foundGround = true;
 				detectedNormal = downHit.normal;
 				detectedPoint = downHit.point;
+				detectedCollider = downHit.collider;
 				m_LastDetectionStep = 2;
 			}
 		}
@@ -223,6 +232,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 				foundGround = true;
 				detectedNormal = surfaceNormal;
 				detectedPoint = bestClosestPoint;
+				detectedCollider = bestCollider;
 				m_LastDetectionStep = 3;
 
 				// 診断およびデバッグ用可視化情報
@@ -258,6 +268,9 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 		{
 			m_IsGrounded = true;
 			m_LandingSnapTimer = 0f;
+			Vector3 targetVelocity = ResolveGroundVelocity(detectedCollider, detectedPoint);
+			// 移動床に乗った際の急激な速度変化による物理スパイクをダンピング補間
+			m_GroundVelocity = Vector3.MoveTowards(m_GroundVelocity, targetVelocity, 40f * Time.fixedDeltaTime);
 
 			// 足元理想位置と地面接触点との高低差(浮きギャップ)を計測
 			Vector3 footPos = transform.position - transform.up * footDist;
@@ -293,6 +306,7 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 		else
 		{
 			m_GroundGap = 0f;
+			m_GroundVelocity = Vector3.MoveTowards(m_GroundVelocity, Vector3.zero, 30f * Time.fixedDeltaTime);
 			if (m_LandingSnapTimer > 0f)
 			{
 				// 着地直後の猶予バッファ: 接地を維持しつつ、直前の法線逆方向から真の床面をリカバリー探索
@@ -311,6 +325,27 @@ public class PlayerGroundDetector : MonoBehaviour, IGroundDetector
 				m_IsGrounded = false;
 			}
 		}
+	}
+
+	private static Vector3 ResolveGroundVelocity(Collider col, Vector3 contactPoint)
+	{
+		if (col == null)
+		{
+			return Vector3.zero;
+		}
+
+		if (col.TryGetComponent<IMovingSurface>(out var movingSurface) ||
+			(col.attachedRigidbody != null && col.attachedRigidbody.TryGetComponent<IMovingSurface>(out movingSurface)))
+		{
+			return movingSurface.GetVelocityAtPoint(contactPoint);
+		}
+
+		if (col.attachedRigidbody != null && !col.attachedRigidbody.isKinematic)
+		{
+			return col.attachedRigidbody.GetPointVelocity(contactPoint);
+		}
+
+		return Vector3.zero;
 	}
 
 #if UNITY_EDITOR
