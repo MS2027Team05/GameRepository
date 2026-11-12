@@ -359,7 +359,6 @@ MonoBehaviour:
   m_SurfaceMaxBounceNormalSpeed: 10
   m_SurfaceMaxBounceTangentialSpeed: 15
   m_SurfaceGroundDeceleration: 5
-  m_EnableBounceDistanceDebug: 1
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4
@@ -540,10 +539,40 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3870749858782009240}
   m_SourcePrefab: {fileID: 100100000, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
 --- !u!4 &7175164930585321636 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
   m_PrefabInstance: {fileID: 7213067859241305935}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &7554962997661186590 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
+  m_PrefabInstance: {fileID: 7213067859241305935}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &3870749858782009240
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7554962997661186590}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: d1e02f30cae68394da9bb01b6cbdddb8, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
