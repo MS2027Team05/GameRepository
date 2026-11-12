@@ -341,13 +341,13 @@ MonoBehaviour:
   m_MaxBounceNormalSpeed: 15
   m_MaxBounceTangentialSpeed: 0
   m_AttractStartSpeed: 35
-  m_AttractSearchDistance: 15
-  m_AttractReleaseDistance: 20
+  m_AttractSearchDistance: 7
+  m_AttractReleaseDistance: 10
   m_AttractSearchInterval: 0.2
-  m_AttractMinAcceleration: 40
+  m_AttractMinAcceleration: 50
   m_AttractMaxAcceleration: 100
-  m_AttractAccelerationCurve: 1
-  m_AttractDeceleration: 5
+  m_AttractAccelerationCurve: 0.5
+  m_AttractDeceleration: 15
   m_AttractMaxSpeed: 50
   m_SurfaceMoveDeceleration: 5
   m_SurfaceStopSpeedThreshold: 1
@@ -359,10 +359,9 @@ MonoBehaviour:
   m_SurfaceMaxBounceNormalSpeed: 10
   m_SurfaceMaxBounceTangentialSpeed: 15
   m_SurfaceGroundDeceleration: 5
-  m_EnableBounceDistanceDebug: 1
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
-  m_SurfaceSeekSpeed: 4
+  m_SurfaceSeekSpeed: 10
   m_SurfaceSeekAcceleration: 10
 --- !u!114 &4631393730862146185
 MonoBehaviour:

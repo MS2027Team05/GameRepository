@@ -19,6 +19,7 @@ public sealed class BallSurfaceGravity
 	{
 		None,
 		FixedPoint,
+		TrackedBallSurface,
 		LocalSurface
 	}
 
@@ -29,6 +30,10 @@ public sealed class BallSurfaceGravity
 	private EGravityTargetType m_TargetType;
 
 	private Collider m_TargetCollider;
+
+	private BallSurfaceSource m_TargetSurfaceSource;
+
+	private int m_TrackedTriangleIndex;
 
 	private Vector3 m_TargetPoint;
 
@@ -68,6 +73,12 @@ public sealed class BallSurfaceGravity
 		m_TargetCollider =
 			targetCollider;
 
+		m_TargetSurfaceSource =
+			null;
+
+		m_TrackedTriangleIndex =
+			-1;
+
 		m_TargetPoint =
 			targetPoint;
 
@@ -81,6 +92,51 @@ public sealed class BallSurfaceGravity
 			EGravityTargetType.FixedPoint;
 	}
 
+	/// <summary>
+	/// Flying中に追跡するBallSurfaceを設定します。
+	/// </summary>
+	/// <remarks>
+	/// Target Objectは固定し、
+	/// そのObject内の追跡TriangleだけをBall位置に合わせて更新します。
+	/// </remarks>
+	public bool SetTrackedBallSurface(
+		BallSurfaceSource targetSurfaceSource,
+		int triangleIndex)
+	{
+		if (targetSurfaceSource == null ||
+			!targetSurfaceSource.IsReady ||
+			triangleIndex < 0 ||
+			triangleIndex >=
+				targetSurfaceSource.MeshData.TriangleCount)
+		{
+			Clear();
+
+			return false;
+		}
+
+		m_TargetCollider =
+			targetSurfaceSource.SurfaceCollider;
+
+		m_TargetSurfaceSource =
+			targetSurfaceSource;
+
+		m_TrackedTriangleIndex =
+			triangleIndex;
+
+		m_TargetPoint =
+			Vector3.zero;
+
+		m_SurfacePoint =
+			Vector3.zero;
+
+		m_SurfaceNormal =
+			Vector3.zero;
+
+		m_TargetType =
+			EGravityTargetType.TrackedBallSurface;
+
+		return true;
+	}
 	/// <summary>
 	/// 接触したローカルなSurfaceを
 	/// 重力対象として設定します。
@@ -115,6 +171,12 @@ public sealed class BallSurfaceGravity
 		m_TargetCollider =
 			targetCollider;
 
+		m_TargetSurfaceSource =
+			null;
+
+		m_TrackedTriangleIndex =
+			-1;
+
 		m_SurfacePoint =
 			contactPoint;
 
@@ -135,6 +197,12 @@ public sealed class BallSurfaceGravity
 	{
 		m_TargetCollider =
 			null;
+
+		m_TargetSurfaceSource =
+			null;
+
+		m_TrackedTriangleIndex =
+			-1;
 
 		m_TargetPoint =
 			Vector3.zero;
@@ -161,6 +229,14 @@ public sealed class BallSurfaceGravity
 			EGravityTargetType.None)
 		{
 			return false;
+		}
+
+		if (m_TargetType ==
+			EGravityTargetType.TrackedBallSurface)
+		{
+			return m_TargetSurfaceSource !=
+					null &&
+				m_TargetSurfaceSource.IsReady;
 		}
 
 		return m_TargetCollider != null &&
@@ -212,6 +288,13 @@ public sealed class BallSurfaceGravity
 					out gravityDirection,
 					out distance);
 
+			case EGravityTargetType.TrackedBallSurface:
+				return TryGetTrackedBallSurfaceGravity(
+					currentPosition,
+					surfaceTrackDistance,
+					out gravityDirection,
+					out distance);
+
 			case EGravityTargetType.LocalSurface:
 				return TryGetLocalSurfaceGravity(
 					currentPosition,
@@ -224,6 +307,128 @@ public sealed class BallSurfaceGravity
 		}
 	}
 
+	/// <summary>
+	/// ロック中のBallSurface内で現在位置に近い面を追跡し、
+	/// そのSurfaceへ向かう重力方向を取得します。
+	/// </summary>
+	private bool TryGetTrackedBallSurfaceGravity(
+		Vector3 currentPosition,
+		float surfaceTrackDistance,
+		out Vector3 gravityDirection,
+		out float distance)
+	{
+		gravityDirection =
+			Vector3.zero;
+
+		distance =
+			0.0f;
+
+		if (m_TargetSurfaceSource == null ||
+			!m_TargetSurfaceSource.IsReady)
+		{
+			return false;
+		}
+
+		bool hasSurface =
+			m_TargetSurfaceSource.TryTrackNearestSurface(
+				currentPosition,
+				m_TrackedTriangleIndex,
+				out int trackedTriangleIndex,
+				out Vector3 nearestSurfacePoint,
+				out Vector3 nearestSurfaceNormal);
+
+		if (!hasSurface)
+		{
+			hasSurface =
+				m_TargetSurfaceSource.TryFindNearestSurface(
+					currentPosition,
+					out trackedTriangleIndex,
+					out nearestSurfacePoint,
+					out nearestSurfaceNormal);
+		}
+
+		if (!hasSurface)
+		{
+			return false;
+		}
+
+		Vector3 toSurface =
+			nearestSurfacePoint -
+				currentPosition;
+
+		float trackedDistance =
+			toSurface.magnitude;
+
+		// ローカル追跡結果が追跡可能距離を超えた場合だけ、
+		// Object全体を1回探索して別の近い面がないか確認します。
+		// 通常StepではMesh全体を総当たりしません。
+		if (surfaceTrackDistance >
+				0.0f &&
+			trackedDistance >
+				surfaceTrackDistance &&
+			m_TargetSurfaceSource.TryFindNearestSurface(
+				currentPosition,
+				out int fallbackTriangleIndex,
+				out Vector3 fallbackSurfacePoint,
+				out Vector3 fallbackSurfaceNormal))
+		{
+			Vector3 toFallbackSurface =
+				fallbackSurfacePoint -
+					currentPosition;
+
+			if (toFallbackSurface.sqrMagnitude <
+				toSurface.sqrMagnitude)
+			{
+				trackedTriangleIndex =
+					fallbackTriangleIndex;
+
+				nearestSurfacePoint =
+					fallbackSurfacePoint;
+
+				nearestSurfaceNormal =
+					fallbackSurfaceNormal;
+
+				toSurface =
+					toFallbackSurface;
+
+				trackedDistance =
+					toSurface.magnitude;
+			}
+		}
+
+		m_TrackedTriangleIndex =
+			trackedTriangleIndex;
+
+		m_SurfacePoint =
+			nearestSurfacePoint;
+
+		m_SurfaceNormal =
+			nearestSurfaceNormal;
+
+		distance =
+			trackedDistance;
+
+		if (distance <=
+			m_MinimumDirectionMagnitude)
+		{
+			if (m_SurfaceNormal.sqrMagnitude <=
+				Mathf.Epsilon)
+			{
+				return false;
+			}
+
+			gravityDirection =
+				-m_SurfaceNormal.normalized;
+
+			return true;
+		}
+
+		gravityDirection =
+			toSurface /
+				distance;
+
+		return true;
+	}
 	/// <summary>
 	/// 固定点へ向かう重力方向と距離を計算します。
 	/// </summary>

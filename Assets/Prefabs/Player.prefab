@@ -1480,8 +1480,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerResourceController
   ShowTopMostFoldoutHeaderGroup: 1
-  m_MaxResource: 100
-  m_InitialResource: 100
+  m_MaxResource: 10000
+  m_InitialResource: 10000
   m_MoveBaseCost: 35
   m_MoveCostPerMeter: 0
   m_MaxMoveCost: 35

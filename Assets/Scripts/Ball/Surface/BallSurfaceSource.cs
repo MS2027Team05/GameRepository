@@ -36,6 +36,18 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	/// </summary>
 	private const float m_MinimumFallbackRayMargin = 0.10f;
 
+	/// <summary>
+	/// Flying中のSurface追跡で1回に辿る
+	/// Triangle数の上限です。
+	/// </summary>
+	private const int m_MaximumSurfaceTrackingTransitions = 64;
+
+	/// <summary>
+	/// 角付近でほぼ同距離のTriangleへ
+	/// 毎Step切り替わることを防ぐ距離許容値です。
+	/// </summary>
+	private const float m_SurfaceTrackingSwitchDistanceTolerance = 0.001f;
+
 	private MeshCollider m_SurfaceCollider;
 
 	private BallSurfaceMeshData m_MeshData;
@@ -181,6 +193,494 @@ public sealed class BallSurfaceSource : MonoBehaviour
 			this);
 	}
 
+	/// <summary>
+	/// 指定したTriangleから隣接Triangleを辿り、
+	/// World座標に最も近いSurface位置を追跡します。
+	/// </summary>
+	/// <remarks>
+	/// Flying中の疑似重力用です。
+	///
+	/// Mesh全体を毎Physics Step総当たりせず、
+	/// 前回Triangleとその隣接Triangleだけを順番に調べます。
+	///
+	/// ほぼ同距離の隣接Triangleには切り替えないことで、
+	/// Edge付近で重力方向が細かく反転することを防ぎます。
+	/// </remarks>
+	public bool TryTrackNearestSurface(
+		Vector3 worldPoint,
+		int startTriangleIndex,
+		out int trackedTriangleIndex,
+		out Vector3 nearestSurfacePoint,
+		out Vector3 nearestSurfaceNormal)
+	{
+		trackedTriangleIndex =
+			-1;
+
+		nearestSurfacePoint =
+			Vector3.zero;
+
+		nearestSurfaceNormal =
+			Vector3.zero;
+
+		if (!IsReady)
+		{
+			return false;
+		}
+
+		if (startTriangleIndex < 0 ||
+			startTriangleIndex >=
+				m_MeshData.TriangleCount)
+		{
+			return TryFindNearestSurface(
+				worldPoint,
+				out trackedTriangleIndex,
+				out nearestSurfacePoint,
+				out nearestSurfaceNormal);
+		}
+
+		int currentTriangleIndex =
+			startTriangleIndex;
+
+		if (!TryGetTriangleClosestWorldPoint(
+			currentTriangleIndex,
+			worldPoint,
+			out Vector3 currentSurfacePoint,
+			out Vector3 currentSurfaceNormal,
+			out float currentDistanceSquared))
+		{
+			return false;
+		}
+
+		float switchToleranceSquared =
+			m_SurfaceTrackingSwitchDistanceTolerance *
+			m_SurfaceTrackingSwitchDistanceTolerance;
+
+		for (int transitionIndex = 0;
+			transitionIndex <
+				m_MaximumSurfaceTrackingTransitions;
+			transitionIndex++)
+		{
+			int bestTriangleIndex =
+				currentTriangleIndex;
+
+			Vector3 bestSurfacePoint =
+				currentSurfacePoint;
+
+			Vector3 bestSurfaceNormal =
+				currentSurfaceNormal;
+
+			float bestDistanceSquared =
+				currentDistanceSquared;
+
+			for (int edgeIndex = 0;
+				edgeIndex < 3;
+				edgeIndex++)
+			{
+				if (!m_MeshData.TryGetNeighbor(
+					currentTriangleIndex,
+					edgeIndex,
+					out int neighborTriangleIndex,
+					out _))
+				{
+					continue;
+				}
+
+				if (!TryGetTriangleClosestWorldPoint(
+					neighborTriangleIndex,
+					worldPoint,
+					out Vector3 neighborSurfacePoint,
+					out Vector3 neighborSurfaceNormal,
+					out float neighborDistanceSquared))
+				{
+					continue;
+				}
+
+				if (neighborDistanceSquared +
+						switchToleranceSquared >=
+					bestDistanceSquared)
+				{
+					continue;
+				}
+
+				bestTriangleIndex =
+					neighborTriangleIndex;
+
+				bestSurfacePoint =
+					neighborSurfacePoint;
+
+				bestSurfaceNormal =
+					neighborSurfaceNormal;
+
+				bestDistanceSquared =
+					neighborDistanceSquared;
+			}
+
+			if (bestTriangleIndex ==
+				currentTriangleIndex)
+			{
+				break;
+			}
+
+			currentTriangleIndex =
+				bestTriangleIndex;
+
+			currentSurfacePoint =
+				bestSurfacePoint;
+
+			currentSurfaceNormal =
+				bestSurfaceNormal;
+
+			currentDistanceSquared =
+				bestDistanceSquared;
+		}
+
+		trackedTriangleIndex =
+			currentTriangleIndex;
+
+		nearestSurfacePoint =
+			currentSurfacePoint;
+
+		nearestSurfaceNormal =
+			currentSurfaceNormal;
+
+		return true;
+	}
+
+	/// <summary>
+	/// Mesh全体からWorld座標に最も近いSurface位置を取得します。
+	/// </summary>
+	/// <remarks>
+	/// 通常のFlying追跡では使用せず、
+	/// 追跡Triangleが無効になった場合のFallbackとして使用します。
+	/// </remarks>
+	public bool TryFindNearestSurface(
+		Vector3 worldPoint,
+		out int nearestTriangleIndex,
+		out Vector3 nearestSurfacePoint,
+		out Vector3 nearestSurfaceNormal)
+	{
+		nearestTriangleIndex =
+			-1;
+
+		nearestSurfacePoint =
+			Vector3.zero;
+
+		nearestSurfaceNormal =
+			Vector3.zero;
+
+		if (!IsReady)
+		{
+			return false;
+		}
+
+		float nearestDistanceSquared =
+			float.MaxValue;
+
+		for (int triangleIndex = 0;
+			triangleIndex <
+				m_MeshData.TriangleCount;
+			triangleIndex++)
+		{
+			if (!TryGetTriangleClosestWorldPoint(
+				triangleIndex,
+				worldPoint,
+				out Vector3 surfacePoint,
+				out Vector3 surfaceNormal,
+				out float distanceSquared))
+			{
+				continue;
+			}
+
+			if (distanceSquared >=
+				nearestDistanceSquared)
+			{
+				continue;
+			}
+
+			nearestDistanceSquared =
+				distanceSquared;
+
+			nearestTriangleIndex =
+				triangleIndex;
+
+			nearestSurfacePoint =
+				surfacePoint;
+
+			nearestSurfaceNormal =
+				surfaceNormal;
+		}
+
+		return nearestTriangleIndex >=
+			0;
+	}
+
+	/// <summary>
+	/// 指定Triangle上でWorld座標に最も近い点を取得します。
+	/// </summary>
+	private bool TryGetTriangleClosestWorldPoint(
+		int triangleIndex,
+		Vector3 worldPoint,
+		out Vector3 closestPoint,
+		out Vector3 triangleNormal,
+		out float distanceSquared)
+	{
+		closestPoint =
+			Vector3.zero;
+
+		triangleNormal =
+			Vector3.zero;
+
+		distanceSquared =
+			float.MaxValue;
+
+		if (m_MeshData == null ||
+			triangleIndex < 0 ||
+			triangleIndex >=
+				m_MeshData.TriangleCount)
+		{
+			return false;
+		}
+
+		m_MeshData.GetTriangleLocalVertices(
+			triangleIndex,
+			out Vector3 localVertexA,
+			out Vector3 localVertexB,
+			out Vector3 localVertexC);
+
+		Vector3 vertexA =
+			transform.TransformPoint(
+				localVertexA);
+
+		Vector3 vertexB =
+			transform.TransformPoint(
+				localVertexB);
+
+		Vector3 vertexC =
+			transform.TransformPoint(
+				localVertexC);
+
+		Vector3 normal =
+			Vector3.Cross(
+				vertexB -
+					vertexA,
+				vertexC -
+					vertexA);
+
+		if (normal.sqrMagnitude <=
+			Mathf.Epsilon)
+		{
+			return false;
+		}
+
+		triangleNormal =
+			normal.normalized;
+
+		closestPoint =
+			GetClosestPointOnTriangle(
+				worldPoint,
+				vertexA,
+				vertexB,
+				vertexC);
+
+		distanceSquared =
+			(
+				closestPoint -
+				worldPoint
+			).sqrMagnitude;
+
+		return true;
+	}
+
+	/// <summary>
+	/// 三角形上で指定点に最も近い点を取得します。
+	/// </summary>
+	private static Vector3 GetClosestPointOnTriangle(
+		Vector3 point,
+		Vector3 vertexA,
+		Vector3 vertexB,
+		Vector3 vertexC)
+	{
+		Vector3 edgeAB =
+			vertexB -
+				vertexA;
+
+		Vector3 edgeAC =
+			vertexC -
+				vertexA;
+
+		Vector3 toPointFromA =
+			point -
+				vertexA;
+
+		float dotABFromA =
+			Vector3.Dot(
+				edgeAB,
+				toPointFromA);
+
+		float dotACFromA =
+			Vector3.Dot(
+				edgeAC,
+				toPointFromA);
+
+		if (dotABFromA <=
+				0.0f &&
+			dotACFromA <=
+				0.0f)
+		{
+			return vertexA;
+		}
+
+		Vector3 toPointFromB =
+			point -
+				vertexB;
+
+		float dotABFromB =
+			Vector3.Dot(
+				edgeAB,
+				toPointFromB);
+
+		float dotACFromB =
+			Vector3.Dot(
+				edgeAC,
+				toPointFromB);
+
+		if (dotABFromB >=
+				0.0f &&
+			dotACFromB <=
+				dotABFromB)
+		{
+			return vertexB;
+		}
+
+		float vertexCRegion =
+			dotABFromA *
+				dotACFromB -
+			dotABFromB *
+				dotACFromA;
+
+		if (vertexCRegion <=
+				0.0f &&
+			dotABFromA >=
+				0.0f &&
+			dotABFromB <=
+				0.0f)
+		{
+			float edgeProgress =
+				dotABFromA /
+				(
+					dotABFromA -
+					dotABFromB
+				);
+
+			return vertexA +
+				edgeAB *
+					edgeProgress;
+		}
+
+		Vector3 toPointFromC =
+			point -
+				vertexC;
+
+		float dotABFromC =
+			Vector3.Dot(
+				edgeAB,
+				toPointFromC);
+
+		float dotACFromC =
+			Vector3.Dot(
+				edgeAC,
+				toPointFromC);
+
+		if (dotACFromC >=
+				0.0f &&
+			dotABFromC <=
+				dotACFromC)
+		{
+			return vertexC;
+		}
+
+		float vertexBRegion =
+			dotABFromC *
+				dotACFromA -
+			dotABFromA *
+				dotACFromC;
+
+		if (vertexBRegion <=
+				0.0f &&
+			dotACFromA >=
+				0.0f &&
+			dotACFromC <=
+				0.0f)
+		{
+			float edgeProgress =
+				dotACFromA /
+				(
+					dotACFromA -
+					dotACFromC
+				);
+
+			return vertexA +
+				edgeAC *
+					edgeProgress;
+		}
+
+		float vertexARegion =
+			dotABFromB *
+				dotACFromC -
+			dotABFromC *
+				dotACFromB;
+
+		if (vertexARegion <=
+				0.0f &&
+			dotACFromB -
+				dotABFromB >=
+				0.0f &&
+			dotABFromC -
+				dotACFromC >=
+				0.0f)
+		{
+			float edgeProgress =
+				(
+					dotACFromB -
+					dotABFromB
+				) /
+				(
+					dotACFromB -
+						dotABFromB +
+					dotABFromC -
+						dotACFromC
+				);
+
+			return vertexB +
+				(
+					vertexC -
+						vertexB
+				) *
+				edgeProgress;
+		}
+
+		float inverseArea =
+			1.0f /
+			(
+				vertexARegion +
+				vertexBRegion +
+				vertexCRegion
+			);
+
+		float barycentricB =
+			vertexBRegion *
+			inverseArea;
+
+		float barycentricC =
+			vertexCRegion *
+			inverseArea;
+
+		return vertexA +
+			edgeAB *
+				barycentricB +
+			edgeAC *
+				barycentricC;
+	}
 	/// <summary>
 	/// Surface上の接触地点から、
 	/// その地点を構成しているTriangleを取得します。
