@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// ボール非所持時の電撃チャージ・発射(ボール奪取/敵スタン)を担当するモジュールのインターフェース。
 /// </summary>
 public interface IElectricAction

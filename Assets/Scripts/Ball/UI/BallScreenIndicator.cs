@@ -1,5 +1,6 @@
 ﻿using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// ボールの画面上での位置を示すインジケーターを管理します。
@@ -18,7 +19,8 @@ public class BallScreenIndicator : MonoBehaviour
 	private enum EIndicatorState
 	{
 		Free,
-		HeldByOther,
+		HeldByAlly,
+		HeldByEnemy,
 		HeldBySelf
 	}
 
@@ -60,6 +62,14 @@ public class BallScreenIndicator : MonoBehaviour
 	private Camera m_TargetCamera;
 	private Canvas m_Canvas;
 	private RectTransform m_CanvasRectTransform;
+
+	private ulong m_ColorHolderClientId = ulong.MaxValue;
+	private PlayerNetworkProfile m_ColorHolderProfile;
+	private bool m_HasResolvedColorHolderProfile;
+
+	private PlayerNetworkProfile m_LocalPlayerProfile;
+	private PlayerNetworkProfile m_HolderPlayerProfile;
+	private ulong m_CachedHolderClientId = ulong.MaxValue;
 
 	/// <summary>
 	/// Canvasの参照を取得します。
@@ -184,24 +194,153 @@ public class BallScreenIndicator : MonoBehaviour
 	/// 現在のボール所持状態を取得します。
 	/// </summary>
 	/// <returns>
-	/// Free、HeldByOther、HeldBySelfのいずれかです。
+	/// Free、HeldByAlly、HeldByEnemy、HeldBySelfのいずれかです。
 	/// </returns>
 	private EIndicatorState GetIndicatorState()
 	{
+		NetworkManager networkManager =
+			NetworkManager.Singleton;
+
 		if (!m_BallController.HasHolder)
 		{
+			ResetHolderProfileCache();
 			return EIndicatorState.Free;
 		}
 
-		if (NetworkManager.Singleton != null &&
-			NetworkManager.Singleton.IsListening &&
-			m_BallController.CurrentHolderId ==
-			NetworkManager.Singleton.LocalClientId)
+		if (networkManager == null ||
+			!networkManager.IsListening)
+		{
+			return EIndicatorState.HeldByEnemy;
+		}
+
+		ulong holderClientId =
+			m_BallController.CurrentHolderId;
+
+		if (holderClientId ==
+			networkManager.LocalClientId)
 		{
 			return EIndicatorState.HeldBySelf;
 		}
 
-		return EIndicatorState.HeldByOther;
+		if (!TryGetLocalPlayerProfile(
+			networkManager,
+			out PlayerNetworkProfile localProfile) ||
+			!TryGetHolderPlayerProfile(
+				networkManager,
+				holderClientId,
+				out PlayerNetworkProfile holderProfile))
+		{
+			return EIndicatorState.HeldByEnemy;
+		}
+
+		if (localProfile.Team !=
+				ETeamType.None &&
+			localProfile.Team ==
+				holderProfile.Team)
+		{
+			return EIndicatorState.HeldByAlly;
+		}
+
+		return EIndicatorState.HeldByEnemy;
+	}
+
+	/// <summary>
+	/// ローカルPlayerのProfileを取得します。
+	/// 一度取得できた参照は再利用します。
+	/// </summary>
+	private bool TryGetLocalPlayerProfile(
+		NetworkManager networkManager,
+		out PlayerNetworkProfile playerProfile)
+	{
+		if (m_LocalPlayerProfile != null)
+		{
+			playerProfile =
+				m_LocalPlayerProfile;
+
+			return true;
+		}
+
+		NetworkObject localPlayerObject =
+			networkManager.LocalClient != null
+				? networkManager.LocalClient.PlayerObject
+				: null;
+
+		if (localPlayerObject == null)
+		{
+			playerProfile =
+				null;
+
+			return false;
+		}
+
+		m_LocalPlayerProfile =
+			localPlayerObject.GetComponent<PlayerNetworkProfile>();
+
+		playerProfile =
+			m_LocalPlayerProfile;
+
+		return playerProfile !=
+			null;
+	}
+
+	/// <summary>
+	/// 現在のボール所持者のProfileを取得します。
+	/// 所持者が変わった場合だけ参照を取り直します。
+	/// </summary>
+	private bool TryGetHolderPlayerProfile(
+		NetworkManager networkManager,
+		ulong holderClientId,
+		out PlayerNetworkProfile playerProfile)
+	{
+		if (m_CachedHolderClientId !=
+			holderClientId)
+		{
+			m_CachedHolderClientId =
+				holderClientId;
+
+			m_HolderPlayerProfile =
+				null;
+		}
+
+		if (m_HolderPlayerProfile != null)
+		{
+			playerProfile =
+				m_HolderPlayerProfile;
+
+			return true;
+		}
+
+		if (!networkManager.ConnectedClients.TryGetValue(
+			holderClientId,
+			out NetworkClient holderClient) ||
+			holderClient.PlayerObject == null)
+		{
+			playerProfile =
+				null;
+
+			return false;
+		}
+
+		m_HolderPlayerProfile =
+			holderClient.PlayerObject.GetComponent<PlayerNetworkProfile>();
+
+		playerProfile =
+			m_HolderPlayerProfile;
+
+		return playerProfile !=
+			null;
+	}
+
+	/// <summary>
+	/// ボールがFreeになった場合の所持者Profileキャッシュを破棄します。
+	/// </summary>
+	private void ResetHolderProfileCache()
+	{
+		m_CachedHolderClientId =
+			ulong.MaxValue;
+
+		m_HolderPlayerProfile =
+			null;
 	}
 
 	/// <summary>
@@ -222,6 +361,9 @@ public class BallScreenIndicator : MonoBehaviour
 		}
 
 		ShowOnlyIndicator(
+			activeIndicator);
+
+		ApplyHolderTeamColor(
 			activeIndicator);
 
 		UpdateOnScreenIndicatorTransform(
@@ -249,6 +391,9 @@ public class BallScreenIndicator : MonoBehaviour
 		ShowOnlyIndicator(
 			activeIndicator);
 
+		ApplyHolderTeamColor(
+			activeIndicator);
+
 		UpdateOffscreenIndicatorTransform(
 			activeIndicator,
 			viewportPosition);
@@ -265,11 +410,12 @@ public class BallScreenIndicator : MonoBehaviour
 			case EIndicatorState.Free:
 				return m_OnScreenFreeIndicator;
 
-			case EIndicatorState.HeldByOther:
-				return m_OnScreenHeldByOtherIndicator;
-
+			case EIndicatorState.HeldByAlly:
 			case EIndicatorState.HeldBySelf:
 				return m_OnScreenHeldBySelfIndicator;
+
+			case EIndicatorState.HeldByEnemy:
+				return m_OnScreenHeldByOtherIndicator;
 		}
 
 		return null;
@@ -286,16 +432,152 @@ public class BallScreenIndicator : MonoBehaviour
 			case EIndicatorState.Free:
 				return m_OffscreenFreeIndicator;
 
-			case EIndicatorState.HeldByOther:
-				return m_OffscreenHeldByOtherIndicator;
-
+			case EIndicatorState.HeldByAlly:
 			case EIndicatorState.HeldBySelf:
 				return m_OffscreenHeldBySelfIndicator;
+
+			case EIndicatorState.HeldByEnemy:
+				return m_OffscreenHeldByOtherIndicator;
 		}
 
 		return null;
 	}
 
+	/// <summary>
+	/// ボール所持者のTeamに合わせて、
+	/// 現在表示するIndicator全体をTeam Colorへ変更します。
+	/// Freeの場合は元のIndicator色を変更しません。
+	/// </summary>
+	private void ApplyHolderTeamColor(
+		RectTransform indicatorTransform)
+	{
+		if (indicatorTransform == null ||
+			m_BallController == null ||
+			!m_BallController.HasHolder)
+		{
+			return;
+		}
+
+		ETeamType holderTeam =
+			GetHolderTeamForIndicator();
+
+		Color teamColor;
+
+		switch (holderTeam)
+		{
+			case ETeamType.Red:
+				teamColor =
+					Color.red;
+				break;
+
+			case ETeamType.Blue:
+				teamColor =
+					Color.blue;
+				break;
+
+			default:
+				return;
+		}
+
+		Graphic[] graphics =
+			indicatorTransform.GetComponentsInChildren<Graphic>(
+				true);
+
+		for (int graphicIndex = 0;
+			graphicIndex < graphics.Length;
+			graphicIndex++)
+		{
+			Graphic graphic =
+				graphics[graphicIndex];
+
+			if (graphic == null)
+			{
+				continue;
+			}
+
+			Color currentColor =
+				graphic.color;
+
+			graphic.color =
+				new Color(
+					teamColor.r,
+					teamColor.g,
+					teamColor.b,
+					currentColor.a);
+		}
+	}
+
+	/// <summary>
+	/// 現在のボール所持者のTeamを取得します。
+	/// 所持者が変わった場合だけPlayerNetworkProfileを再取得します。
+	/// </summary>
+	private ETeamType GetHolderTeamForIndicator()
+	{
+		NetworkManager networkManager =
+			NetworkManager.Singleton;
+
+		if (networkManager == null ||
+			!networkManager.IsListening ||
+			m_BallController == null ||
+			!m_BallController.HasHolder)
+		{
+			ResetHolderTeamColorCache();
+			return ETeamType.None;
+		}
+
+		ulong holderClientId =
+			m_BallController.CurrentHolderId;
+
+		if (m_ColorHolderClientId !=
+			holderClientId)
+		{
+			m_ColorHolderClientId =
+				holderClientId;
+
+			m_ColorHolderProfile =
+				null;
+
+			m_HasResolvedColorHolderProfile =
+				false;
+		}
+
+		if (!m_HasResolvedColorHolderProfile)
+		{
+			m_HasResolvedColorHolderProfile =
+				true;
+
+			if (networkManager.ConnectedClients.TryGetValue(
+				holderClientId,
+				out NetworkClient holderClient) &&
+				holderClient.PlayerObject != null)
+			{
+				m_ColorHolderProfile =
+					holderClient.PlayerObject.GetComponent<PlayerNetworkProfile>();
+			}
+		}
+
+		if (m_ColorHolderProfile == null)
+		{
+			return ETeamType.None;
+		}
+
+		return m_ColorHolderProfile.Team;
+	}
+
+	/// <summary>
+	/// Indicator用の所持者Teamキャッシュを初期化します。
+	/// </summary>
+	private void ResetHolderTeamColorCache()
+	{
+		m_ColorHolderClientId =
+			ulong.MaxValue;
+
+		m_ColorHolderProfile =
+			null;
+
+		m_HasResolvedColorHolderProfile =
+			false;
+	}
 	/// <summary>
 	/// 画面内にあるボール位置へIndicatorを配置します。
 	/// </summary>

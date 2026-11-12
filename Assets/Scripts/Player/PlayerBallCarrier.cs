@@ -20,11 +20,14 @@ public class PlayerBallCarrier :
 	[Header("ボール所持位置")]
 	[SerializeField] private Transform m_BallHoldPoint;
 
+	private const float m_PickupRetryInterval = 0.10f;
+
 	private PlayerController m_PlayerController;
 	private PlayerResourceController m_PlayerResourceController;
 	private bool m_HasBall;
 	private bool m_IsPassCharging;
 	private float m_PassChargeRatio;
+	private float m_NextPickupRetryTime;
 
 	/// <summary>
 	/// このプレイヤーが現在ボールを所持しているか取得します。
@@ -101,12 +104,48 @@ public class PlayerBallCarrier :
 	private void OnTriggerEnter(
 		Collider other)
 	{
-		if (!IsOwner)
+		TryRequestPickup(
+			other,
+			true);
+	}
+
+	/// <summary>
+	/// 再取得禁止時間中にキャッチ範囲へ入り続けていた場合も、
+	/// 範囲外へ出ることなく一定間隔で再取得を試します。
+	/// </summary>
+	/// <param name="other">
+	/// 接触中のColliderです。
+	/// </param>
+	private void OnTriggerStay(
+		Collider other)
+	{
+		TryRequestPickup(
+			other,
+			false);
+	}
+
+	/// <summary>
+	/// Owner側から指定ColliderのBall取得を要求します。
+	/// </summary>
+	/// <param name="other">
+	/// 接触対象のColliderです。
+	/// </param>
+	/// <param name="ignoreRetryInterval">
+	/// Triggerへ入った瞬間など、再試行間隔を無視する場合はtrueです。
+	/// </param>
+	private void TryRequestPickup(
+		Collider other,
+		bool ignoreRetryInterval)
+	{
+		if (!IsOwner ||
+			m_HasBall)
 		{
 			return;
 		}
 
-		if (m_HasBall)
+		if (!ignoreRetryInterval &&
+			Time.time <
+				m_NextPickupRetryTime)
 		{
 			return;
 		}
@@ -132,6 +171,10 @@ public class PlayerBallCarrier :
 		{
 			return;
 		}
+
+		m_NextPickupRetryTime =
+			Time.time +
+			m_PickupRetryInterval;
 
 		RequestPickupServerRpc(
 			ballController.NetworkObjectId);
