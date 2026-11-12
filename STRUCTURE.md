@@ -140,3 +140,13 @@ GameRepository/
 ├── player_structure.md          # プレイヤーモジュール仕様・連携手順書
 └── STRUCTURE.md                 # 本ドキュメント
 ```
+
+## ボール所持ジョイントへの追従
+- BallControllerは所持者の有無と所持者NetworkObjectIdの変更を各端末へ反映し、サーバー上の物理・通信用本体をLateUpdateで所持ジョイントへ合わせる。
+- BallHoldAttachmentは描画専用階層の付け替えと復元を担当する。所持時はジョイント直下のローカル位置・回転をゼロにし、解放・Despawn時は元の階層とローカルTransformへ戻す。
+- 設定の入口はPlayerBallCarrierのBall Hold Point(所持ジョイント)とBallControllerのVisual Root(ボール直下の描画専用階層)。物理・通信コンポーネントはVisual Rootに含めない。
+
+## 男女モデル別のボール所持ジョイント
+- PlayerBallCarrierは男女別の所持ジョイントを保持し、PlayerAppearanceが実際に表示しているキャラクター種別に応じてBallHoldPointを返す。外見の初期反映前はPlayerNetworkProfileの種別を参照する。
+- モデル切り替え後は既存のBallController.LateUpdateとBallHoldAttachment.Attachが新しいジョイントへ描画を付け替え、サーバー上の本体も追従する。追加の通信状態は持たない。
+- InspectorではMan Ball Hold PointとWoman Ball Hold Pointに各モデルのジョイントを登録する。従来のBall Hold Point参照は男性用へ引き継ぐ。

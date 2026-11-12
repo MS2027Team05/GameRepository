@@ -1261,7 +1261,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBallCarrier
   ShowTopMostFoldoutHeaderGroup: 1
-  m_BallHoldPoint: {fileID: 8590505130648689296}
+  m_ManBallHoldPoint: {fileID: 7303485531803542605}
+  m_WomanBallHoldPoint: {fileID: 6659655440292655073}
 --- !u!114 &6097049237247373300
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3322,6 +3323,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
   m_PrefabInstance: {fileID: 6399527446096678415}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &7303485531803542605 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -4786058481974220222, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
+  m_PrefabInstance: {fileID: 6399527446096678415}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &7061460037831116195
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3492,6 +3498,11 @@ Transform:
 --- !u!137 &4425335705591314052 stripped
 SkinnedMeshRenderer:
   m_CorrespondingSourceObject: {fileID: 6671708039190754087, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
+  m_PrefabInstance: {fileID: 7061460037831116195}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &6659655440292655073 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -4786058481974220222, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
   m_PrefabInstance: {fileID: 7061460037831116195}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &7383054557484884552 stripped

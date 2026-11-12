@@ -1,5 +1,6 @@
 ﻿using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// プレイヤー側のボール所持処理を担当します。
@@ -18,12 +19,18 @@ public class PlayerBallCarrier :
 	IBallCarrier
 {
 	[Header("ボール所持位置")]
-	[SerializeField] private Transform m_BallHoldPoint;
+	[Tooltip("男性モデルのRig:Human_Ball_Jointを指定します。描画は位置・回転のオフセットなしで追従します。")]
+	[FormerlySerializedAs("m_BallHoldPoint")]
+	[SerializeField] private Transform m_ManBallHoldPoint;
+	[Tooltip("女性モデルのRig:Human_Ball_Jointを指定します。描画は位置・回転のオフセットなしで追従します。")]
+	[SerializeField] private Transform m_WomanBallHoldPoint;
 
 	private const float m_PickupRetryInterval = 0.10f;
 
 	private PlayerController m_PlayerController;
 	private PlayerResourceController m_PlayerResourceController;
+	private PlayerAppearance m_PlayerAppearance;
+	private PlayerNetworkProfile m_PlayerNetworkProfile;
 	private bool m_HasBall;
 	private bool m_IsPassCharging;
 	private float m_PassChargeRatio;
@@ -74,13 +81,30 @@ public class PlayerBallCarrier :
 	}
 
 	/// <summary>
-	/// ボールを所持中に配置する位置を取得します。
+	/// 表示中の男女モデルに対応する所持ジョイントを取得します。
+	/// 外見の初期反映前は、同期済みのキャラクター種別を使用します。
 	/// </summary>
 	public Transform BallHoldPoint
 	{
 		get
 		{
-			return m_BallHoldPoint;
+			ECharacterType characterType = ECharacterType.Man;
+			if (m_PlayerAppearance != null && m_PlayerAppearance.HasAppliedCharacterType)
+			{
+				characterType = m_PlayerAppearance.CurrentCharacterType;
+			}
+			else if (m_PlayerNetworkProfile != null)
+			{
+				characterType = m_PlayerNetworkProfile.CharacterType;
+			}
+
+			// 未登録の場合は、非表示側のモデルへ装着せず取得を拒否します。
+			return characterType switch
+			{
+				ECharacterType.Man => m_ManBallHoldPoint,
+				ECharacterType.Woman => m_WomanBallHoldPoint,
+				_ => null
+			};
 		}
 	}
 
@@ -92,6 +116,8 @@ public class PlayerBallCarrier :
 		m_PlayerController =
 			GetComponent<PlayerController>();
 		m_PlayerResourceController = GetComponent<PlayerResourceController>();
+		m_PlayerAppearance = GetComponent<PlayerAppearance>();
+		m_PlayerNetworkProfile = GetComponent<PlayerNetworkProfile>();
 	}
 
 	/// <summary>
