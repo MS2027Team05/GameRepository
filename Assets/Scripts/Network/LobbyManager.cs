@@ -537,14 +537,7 @@ public class LobbyManager : NetworkBehaviour
 
 	public bool CheckCanStartGame(out string statusMessage)
 	{
-		int connectedCount = m_LobbyPlayers.Count;
-
-		if (!IsServer)
-		{
-			statusMessage = "ホストのゲーム開始を待機しています...";
-			return false;
-		}
-
+		int matchPlayerCount = 0;
 		bool allSeated = true;
 		bool allReady = true;
 		bool allNamesValid = true;
@@ -552,6 +545,13 @@ public class LobbyManager : NetworkBehaviour
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
 			var p = m_LobbyPlayers[i];
+			// 観戦者(Spectator)は試合参加人数やReady判定から除外
+			if (p.Team == ETeamType.Spectator)
+			{
+				continue;
+			}
+
+			matchPlayerCount++;
 			if (p.Team == ETeamType.None)
 			{
 				allSeated = false;
@@ -566,15 +566,21 @@ public class LobbyManager : NetworkBehaviour
 			}
 		}
 
-		bool canStart = (connectedCount >= m_CurrentRequiredPlayers) && allSeated && allReady && allNamesValid;
+		if (!IsServer)
+		{
+			statusMessage = "ホストのゲーム開始を待機しています...";
+			return false;
+		}
+
+		bool canStart = (matchPlayerCount >= m_CurrentRequiredPlayers) && allSeated && allReady && allNamesValid;
 
 		if (canStart)
 		{
 			statusMessage = "全員の準備が完了しました: ゲーム開始ボタンを押してください";
 		}
-		else if (connectedCount < m_CurrentRequiredPlayers)
+		else if (matchPlayerCount < m_CurrentRequiredPlayers)
 		{
-			statusMessage = $"待機中: あと {m_CurrentRequiredPlayers - connectedCount} 台の接続が必要です";
+			statusMessage = $"待機中: あと {m_CurrentRequiredPlayers - matchPlayerCount} 台の接続が必要です";
 		}
 		else if (!allNamesValid)
 		{
@@ -621,19 +627,22 @@ public class LobbyManager : NetworkBehaviour
 			return;
 		}
 
-		int count = 0;
-		for (int i = 0; i < m_LobbyPlayers.Count; i++)
+		if (targetTeam != ETeamType.Spectator)
 		{
-			if (m_LobbyPlayers[i].Team == targetTeam)
+			int count = 0;
+			for (int i = 0; i < m_LobbyPlayers.Count; i++)
 			{
-				count++;
+				if (m_LobbyPlayers[i].Team == targetTeam)
+				{
+					count++;
+				}
 			}
-		}
 
-		if (count >= m_MaxTeamMembers)
-		{
-			Debug.LogWarning($"[LobbyManager] {targetTeam} は満員です (最大 {m_MaxTeamMembers} 名)。");
-			return;
+			if (count >= m_MaxTeamMembers)
+			{
+				Debug.LogWarning($"[LobbyManager] {targetTeam} は満員です (最大 {m_MaxTeamMembers} 名)。");
+				return;
+			}
 		}
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
@@ -642,7 +651,8 @@ public class LobbyManager : NetworkBehaviour
 			{
 				var data = m_LobbyPlayers[i];
 				data.Team = targetTeam;
-				data.IsReady = false;
+				// 観戦者の場合は最初からReady状態として扱う
+				data.IsReady = (targetTeam == ETeamType.Spectator);
 				m_LobbyPlayers[i] = data;
 
 				SessionPlayerDataStore.Instance?.SavePlayerData(data);
@@ -854,6 +864,7 @@ public class LobbyManager : NetworkBehaviour
 
 		for (int i = 0; i < m_LobbyPlayers.Count; i++)
 		{
+			// 観戦者(Spectator)は自動割り当て対象外
 			if (m_LobbyPlayers[i].Team == ETeamType.None)
 			{
 				var data = m_LobbyPlayers[i];

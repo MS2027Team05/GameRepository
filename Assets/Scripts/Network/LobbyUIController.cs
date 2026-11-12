@@ -133,9 +133,10 @@ public class LobbyUIController : MonoBehaviour
 		}
 
 		// 3. プレイヤー操作・キャラクリ3D・デバッグの表示制御
-		if (isServer && !isPlayerHost)
+		bool isSpectator = SpectatorDisplayManager.IsLocalSpectator;
+		if ((isServer && !isPlayerHost) || isSpectator)
 		{
-			// 本番観戦ホスト: プレイヤー操作UIおよびデバッグUIは非表示、3D台座・モデルはタイトル非表示時に表示
+			// 本番観戦ホストおよび観戦者クライアント: プレイヤー操作UIおよびデバッグUIは非表示、3D台座・モデルはタイトル非表示時に表示
 			if (m_PlayerControlPanel != null)
 			{
 				m_PlayerControlPanel.SetActive(false);

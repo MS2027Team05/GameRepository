@@ -52,13 +52,17 @@ GameRepository/
 │   │   │   │       ├── BallSurfaceSimulation.ConcaveAirborne.cs
 │   │   │   │       └── BallSurfaceSimulation.Vertex.cs
 │   │   │   ├── UI/
-│   │   │   │   └── BallScreenIndicator.cs     # ボール位置表示用画面内・画面外インジケーターUI制御
+│   │   │   │   ├── BallScreenIndicator.cs     # ボール位置表示用画面内・画面外インジケーターUI制御
+│   │   │   │   └── BallSpectatorHighlight.cs  # 観戦時のボール最小視認スケール維持・強調制御
 │   │   │   └── Debug/
 │   │   │       └── BallDebugRespawner.cs      # ボール位置リセット用デバッグ機能
 │   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
 │   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理・リザルト遷移演出制御
 │   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
-│   │   │   └── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
+│   │   │   ├── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
+│   │   │   └── Spectator/               # 観戦カメラ演出・自動スイッチング制御
+│   │   │       ├── SpectatorCameraDirector.cs # [EntryPoint] 定点・天地固定追従・ゴール前カメラの自動スイッチング制御
+│   │   │       └── SpectatorOverlayUIController.cs # 観戦中継テロップ(カメラ名・ボール保持チーム)表示制御
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
 │   │   │   ├── SetupResultAndStaffMenu.cs # [EntryPoint] スタッフメニュー拡張・GameScene配置・ResultScene自動生成ツール
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール

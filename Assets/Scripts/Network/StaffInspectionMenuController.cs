@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -25,6 +25,7 @@ public class StaffInspectionMenuController : MonoBehaviour
 	[SerializeField] private GameObject m_LobbyControlsRoot;
 	[SerializeField] private Button m_SetRedTeamButton;
 	[SerializeField] private Button m_SetBlueTeamButton;
+	[SerializeField] private Button m_SetSpectatorTeamButton;
 	[SerializeField] private Button m_LeaveTeamButton;
 	[SerializeField] private Button m_CycleMinPlayersButton;
 	[SerializeField] private Button m_ForceStartButton;
@@ -142,6 +143,7 @@ public class StaffInspectionMenuController : MonoBehaviour
 			// 個別制御
 			if (m_SetRedTeamButton != null) m_SetRedTeamButton.gameObject.SetActive(isLobby);
 			if (m_SetBlueTeamButton != null) m_SetBlueTeamButton.gameObject.SetActive(isLobby);
+			if (m_SetSpectatorTeamButton != null) m_SetSpectatorTeamButton.gameObject.SetActive(isLobby);
 			if (m_LeaveTeamButton != null) m_LeaveTeamButton.gameObject.SetActive(isLobby);
 			if (m_CycleMinPlayersButton != null) m_CycleMinPlayersButton.gameObject.SetActive(isLobby);
 			if (m_ForceStartButton != null) m_ForceStartButton.gameObject.SetActive(isLobby);
@@ -181,6 +183,14 @@ public class StaffInspectionMenuController : MonoBehaviour
 			m_SetBlueTeamButton.onClick.AddListener(() =>
 			{
 				FindLobbyManager()?.JoinTeam(ETeamType.Blue);
+			});
+		}
+
+		if (m_SetSpectatorTeamButton != null)
+		{
+			m_SetSpectatorTeamButton.onClick.AddListener(() =>
+			{
+				SetLocalToSpectator();
 			});
 		}
 
@@ -484,6 +494,28 @@ public class StaffInspectionMenuController : MonoBehaviour
 
 		string targetScene = !string.IsNullOrEmpty(m_BootstrapSceneName) ? m_BootstrapSceneName : "TitleScene";
 		SceneManager.LoadScene(targetScene);
+	}
+
+	/// <summary>
+	/// 自端末を観戦モードに切り替えます(ロビーまたはインゲーム)。
+	/// </summary>
+	private void SetLocalToSpectator()
+	{
+		LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.Spectator);
+
+		var lobby = FindLobbyManager();
+		if (lobby != null)
+		{
+			lobby.JoinTeam(ETeamType.Spectator);
+		}
+
+		if (SpectatorDisplayManager.Instance != null)
+		{
+			SpectatorDisplayManager.Instance.InitializeSpectatorDisplay();
+		}
+
+		PlayerNamePlate.RefreshAll();
+		PlayerSilhouette.RefreshAll();
 	}
 }
 

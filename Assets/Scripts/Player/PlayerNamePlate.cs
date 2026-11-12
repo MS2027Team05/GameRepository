@@ -117,7 +117,12 @@ public class PlayerNamePlate : MonoBehaviour
 
 	private void UpdateBillboardAndScale()
 	{
-		if (m_CachedCamera == null || !m_CachedCamera.isActiveAndEnabled)
+		// 観戦端末では観戦カメラを優先してビルボード追従
+		if (SpectatorDisplayManager.IsLocalSpectator && SpectatorDisplayManager.ActiveSpectatorCamera != null)
+		{
+			m_CachedCamera = SpectatorDisplayManager.ActiveSpectatorCamera;
+		}
+		else if (m_CachedCamera == null || !m_CachedCamera.isActiveAndEnabled)
 		{
 			m_CachedCamera = Camera.main;
 		}
@@ -177,8 +182,8 @@ public class PlayerNamePlate : MonoBehaviour
 			return;
 		}
 
-		// 観戦者判定: ホスト専用端末(観戦カメラ)の場合は全プレイヤー名を表示
-		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
+		// 観戦者判定: 観戦モード端末(観戦ホスト・観戦クライアント)の場合は全プレイヤー名を表示
+		bool isSpectator = SpectatorDisplayManager.IsLocalSpectator;
 		if (isSpectator)
 		{
 			m_NameText.gameObject.SetActive(true);
