@@ -315,6 +315,7 @@ MonoBehaviour:
   m_SensorCollider: {fileID: 5519193905326050400}
   m_ShootPower: 37.5
   m_RepickupDelay: 0.2
+  m_PassBonusMinSpeed: 2
 --- !u!114 &1323764943930010185
 MonoBehaviour:
   m_ObjectHideFlags: 0
