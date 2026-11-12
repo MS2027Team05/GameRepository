@@ -292,6 +292,122 @@ public class BallController : NetworkBehaviour
 		return true;
 	}
 
+
+
+	/// <summary>
+	/// Transformを持つ対象への追尾パス。
+	/// 主に味方プレイヤー用。
+	/// </summary>
+	public bool TryStartHomingPass(Transform target)
+	{
+		if (target == null)
+		{
+			return false;
+		}
+
+		return StartHomingPassInternal(
+			target,
+			Vector3.zero,
+			true
+		);
+	}
+
+	/// <summary>
+	/// 固定座標への追尾パス。
+	/// 主に相手ゴール用。
+	/// </summary>
+	public bool TryStartHomingPass(Vector3 targetPosition)
+	{
+		return StartHomingPassInternal(
+			null,
+			targetPosition,
+			false
+		);
+	}
+
+	/// <summary>
+	/// 追尾パスの共通処理。
+	/// </summary>
+	private bool StartHomingPassInternal(
+		Transform target,
+		Vector3 targetPosition,
+		bool useTransform)
+	{
+		if (!IsServer || !CanPlayMatch())
+		{
+			return false;
+		}
+
+		if (!m_HasHolder.Value)
+		{
+			return false;
+		}
+
+		BallPhysicsController physicsController =
+			GetComponent<BallPhysicsController>();
+
+		if (physicsController == null)
+		{
+			Debug.LogError(
+				"[BallController] BallPhysicsControllerが見つかりません。",
+				this
+			);
+
+			return false;
+		}
+
+		ulong previousHolderClientId =
+			m_CurrentHolderId.Value;
+
+		ETeamType passerTeam = ETeamType.None;
+
+		if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			m_CurrentHolderNetworkObjectId.Value,
+			out NetworkObject previousHolderObject))
+		{
+			PlayerNetworkProfile profile =
+				previousHolderObject.GetComponent<PlayerNetworkProfile>();
+
+			if (profile != null)
+			{
+				passerTeam = profile.Team;
+			}
+		}
+
+		StartRepickupLock(previousHolderClientId);
+
+		if (!DetachFromHolder())
+		{
+			m_HasRepickupLock = false;
+			return false;
+		}
+
+		m_HasHolder.Value = false;
+		m_CurrentHolderId.Value = 0;
+
+		m_LastPasserTeam = passerTeam;
+		m_IsPassInFlight = true;
+
+		// 対象の種類によって追尾方法を切り替える
+		if (useTransform)
+		{
+			physicsController.BeginHoming(target);
+		}
+		else
+		{
+			physicsController.BeginHoming(targetPosition);
+		}
+
+		Debug.Log(
+			"[BallController] 追尾パス開始: " +
+			(useTransform ? target.name : "EnemyGoal")
+		);
+
+		return true;
+	}
+
+
+
 	/// <summary>
 	/// Host上で所持中のボールを指定方向へ射出します。
 	/// </summary>

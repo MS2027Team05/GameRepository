@@ -19,6 +19,11 @@ public class GoalController : MonoBehaviour
 	private bool m_IsPlayingGoalEffect;
 	private uint m_GoalEffectSequence;
 
+	/// <summary>
+	/// このゴールに入った際に得点するチームを取得します。
+	/// </summary>
+	public ETeamType ScoringTeam => m_ScoringTeam;
+
 	private void Awake()
 	{
 		if (m_GoalEffect != null)

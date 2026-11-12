@@ -1113,6 +1113,7 @@ MonoBehaviour:
   m_MovingEffect: {fileID: 392562595453950173}
   m_StartPoint: {fileID: 827173490743744242}
   m_EndPoint: {fileID: 7127360878203389931}
+  m_PassModeDuration: 5
 --- !u!114 &6506262699355711857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1251,6 +1252,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBallCarrier
   ShowTopMostFoldoutHeaderGroup: 1
   m_BallHoldPoint: {fileID: 8590505130648689296}
+  m_PassChargeDuration: 1
 --- !u!114 &6097049237247373300
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1453,6 +1455,7 @@ MonoBehaviour:
   m_AllyTag: Ally
   m_BallTag: Ball
   m_AllyLockOnMarker: {fileID: 0}
+  m_MaxPassTargetDistance: 200
 --- !u!114 &-4857989254335448453
 MonoBehaviour:
   m_ObjectHideFlags: 0
