@@ -57,6 +57,7 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 
 	[Header("参照")]
 	[SerializeField] private LobbyManager m_LobbyManager;
+	[SerializeField] private LobbyUIController m_LobbyUIController;
 	[SerializeField] private PlayerAppearanceCatalog m_AppearanceCatalog;
 	[SerializeField] private LobbyCharacterDisplayManager m_CharacterDisplayManager;
 
@@ -127,6 +128,7 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 		m_IsInitialized = true;
 		SetupListeners();
 		SetupOptionVisuals();
+		SetupModelOptionNavigation();
 		SetPickerMode(EPickerMode.None);
 	}
 
@@ -266,6 +268,15 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 		EPickerMode previousMode = m_CurrentMode;
 		SetPickerMode(EPickerMode.None);
 		RestoreFocusAfterClose(previousMode);
+		if (previousMode == EPickerMode.Model)
+		{
+			m_LobbyUIController.SetInitialSelectedButton(m_OpenModelPickerButton);
+		}
+		else if (previousMode == EPickerMode.Color)
+		{
+			m_LobbyUIController.SetInitialSelectedButton(m_OpenColorPickerButton);
+		}
+
 	}
 
 	private void SetupListeners()
@@ -346,6 +357,42 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 					m_ModelOptions[i].SelectedIndicator = indicator;
 				}
 			}
+		}
+	}
+
+
+	/// <summary>
+	/// モデル選択ボタンのゲームパッド左右ナビゲーションを明示的に設定します。
+	/// m_ModelOptionsの配列順を左から右への並び順として扱います。
+	/// </summary>
+	private void SetupModelOptionNavigation()
+	{
+		if (m_ModelOptions == null || m_ModelOptions.Length == 0)
+		{
+			return;
+		}
+
+		for (int i = 0; i < m_ModelOptions.Length; i++)
+		{
+			Button button = m_ModelOptions[i].OptionButton;
+			if (button == null)
+			{
+				continue;
+			}
+
+			Navigation navigation = button.navigation;
+			navigation.mode = Navigation.Mode.Explicit;
+
+			// 配列の1つ前を左、1つ後を右の移動先に設定
+			navigation.selectOnLeft = i > 0
+				? m_ModelOptions[i - 1].OptionButton
+				: null;
+
+			navigation.selectOnRight = i < m_ModelOptions.Length - 1
+				? m_ModelOptions[i + 1].OptionButton
+				: null;
+
+			button.navigation = navigation;
 		}
 	}
 
@@ -520,6 +567,10 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 		{
 			FocusInitialOptionOnOpen(mode);
 		}
+		else
+		{
+			RestoreFocusAfterClose(EPickerMode.None);
+		}
 	}
 
 	private void FocusInitialOptionOnOpen(EPickerMode mode)
@@ -566,7 +617,18 @@ public sealed class LobbyAppearancePickerUI : MonoBehaviour
 
 		if (targetFocus != null)
 		{
-			EventSystem.current.SetSelectedGameObject(targetFocus);
+			Selectable selectable = targetFocus.GetComponent<Selectable>();
+
+			if (selectable != null &&
+				selectable.gameObject.activeInHierarchy &&
+				selectable.IsInteractable())
+			{
+				EventSystem.current.SetSelectedGameObject(targetFocus);
+			}
+			else
+			{
+				EventSystem.current.SetSelectedGameObject(null);
+			}
 		}
 	}
 

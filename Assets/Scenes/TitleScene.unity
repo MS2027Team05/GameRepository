@@ -131,6 +131,7 @@ GameObject:
   - component: {fileID: 104055141}
   - component: {fileID: 104055140}
   - component: {fileID: 104055139}
+  - component: {fileID: 104055142}
   m_Layer: 5
   m_Name: debughost
   m_TagString: Untagged
@@ -240,6 +241,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 104055137}
   m_CullTransparentMesh: 1
+--- !u!114 &104055142
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 104055137}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &123013183
 GameObject:
   m_ObjectHideFlags: 0
@@ -663,6 +682,7 @@ GameObject:
   - component: {fileID: 377390726}
   - component: {fileID: 377390725}
   - component: {fileID: 377390724}
+  - component: {fileID: 377390727}
   m_Layer: 5
   m_Name: StartButton
   m_TagString: Untagged
@@ -772,6 +792,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 377390722}
   m_CullTransparentMesh: 1
+--- !u!114 &377390727
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 377390722}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &404412827
 GameObject:
   m_ObjectHideFlags: 0
@@ -1129,6 +1167,7 @@ GameObject:
   - component: {fileID: 492791910}
   - component: {fileID: 492791909}
   - component: {fileID: 492791908}
+  - component: {fileID: 492791911}
   m_Layer: 5
   m_Name: InputIp
   m_TagString: Untagged
@@ -1295,6 +1334,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 492791906}
   m_CullTransparentMesh: 1
+--- !u!114 &492791911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 492791906}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &566722279
 GameObject:
   m_ObjectHideFlags: 0
@@ -1444,6 +1501,7 @@ GameObject:
   - component: {fileID: 581295286}
   - component: {fileID: 581295285}
   - component: {fileID: 581295284}
+  - component: {fileID: 581295287}
   m_Layer: 5
   m_Name: JoinBlue
   m_TagString: Untagged
@@ -1553,6 +1611,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 581295282}
   m_CullTransparentMesh: 1
+--- !u!114 &581295287
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581295282}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &647854287
 GameObject:
   m_ObjectHideFlags: 0
@@ -1565,6 +1641,7 @@ GameObject:
   - component: {fileID: 647854291}
   - component: {fileID: 647854290}
   - component: {fileID: 647854289}
+  - component: {fileID: 647854292}
   m_Layer: 5
   m_Name: client
   m_TagString: Untagged
@@ -1674,6 +1751,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 647854287}
   m_CullTransparentMesh: 1
+--- !u!114 &647854292
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 647854287}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &702992950
 GameObject:
   m_ObjectHideFlags: 0
@@ -2149,6 +2244,7 @@ GameObject:
   - component: {fileID: 810371859}
   - component: {fileID: 810371858}
   - component: {fileID: 810371857}
+  - component: {fileID: 810371860}
   m_Layer: 5
   m_Name: LeaveButton
   m_TagString: Untagged
@@ -2258,6 +2354,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 810371855}
   m_CullTransparentMesh: 1
+--- !u!114 &810371860
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 810371855}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &914261787
 GameObject:
   m_ObjectHideFlags: 0
@@ -2270,6 +2384,7 @@ GameObject:
   - component: {fileID: 914261791}
   - component: {fileID: 914261790}
   - component: {fileID: 914261789}
+  - component: {fileID: 914261792}
   m_Layer: 5
   m_Name: LeaveTeam
   m_TagString: Untagged
@@ -2379,6 +2494,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 914261787}
   m_CullTransparentMesh: 1
+--- !u!114 &914261792
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 914261787}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &941482081
 GameObject:
   m_ObjectHideFlags: 0
@@ -2391,6 +2524,7 @@ GameObject:
   - component: {fileID: 941482085}
   - component: {fileID: 941482084}
   - component: {fileID: 941482083}
+  - component: {fileID: 941482086}
   m_Layer: 5
   m_Name: livehost
   m_TagString: Untagged
@@ -2500,6 +2634,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 941482081}
   m_CullTransparentMesh: 1
+--- !u!114 &941482086
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 941482081}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &960849253
 GameObject:
   m_ObjectHideFlags: 0
@@ -2786,6 +2938,7 @@ GameObject:
   - component: {fileID: 1080749634}
   - component: {fileID: 1080749633}
   - component: {fileID: 1080749632}
+  - component: {fileID: 1080749635}
   m_Layer: 5
   m_Name: Cancel
   m_TagString: Untagged
@@ -2895,6 +3048,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1080749630}
   m_CullTransparentMesh: 1
+--- !u!114 &1080749635
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1080749630}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &1083494003
 GameObject:
   m_ObjectHideFlags: 0
@@ -3171,7 +3342,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.EventSystem
-  m_FirstSelected: {fileID: 0}
+  m_FirstSelected: {fileID: 941482081}
   m_sendNavigationEvents: 1
   m_DragThreshold: 10
 --- !u!4 &1219652655
@@ -3658,6 +3829,7 @@ GameObject:
   - component: {fileID: 1459445615}
   - component: {fileID: 1459445614}
   - component: {fileID: 1459445613}
+  - component: {fileID: 1459445616}
   m_Layer: 5
   m_Name: LeaveButton
   m_TagString: Untagged
@@ -3767,6 +3939,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1459445611}
   m_CullTransparentMesh: 1
+--- !u!114 &1459445616
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1459445611}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &1562938655
 GameObject:
   m_ObjectHideFlags: 0
@@ -4214,6 +4404,7 @@ GameObject:
   - component: {fileID: 1821480227}
   - component: {fileID: 1821480226}
   - component: {fileID: 1821480225}
+  - component: {fileID: 1821480228}
   m_Layer: 5
   m_Name: JoinRed
   m_TagString: Untagged
@@ -4323,6 +4514,24 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1821480223}
   m_CullTransparentMesh: 1
+--- !u!114 &1821480228
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1821480223}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1 &1841345832
 GameObject:
   m_ObjectHideFlags: 0
