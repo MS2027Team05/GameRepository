@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -30,17 +30,12 @@ namespace Stage
 
 	/// <summary>
 	/// 基準となるオブジェクトのBoxColliderサイズを基に、指定軸へ等間隔に複製配置するコンポーネント。
-	/// [ExecuteAlways]により、Prefab編集モードおよび通常Scene編集の両方でパラメータ変更時に即時反映されます。
+	/// 専用のCustomEditor経由でパラメータ変更時または手動実行時にのみ再構築を行います(シーンロード時の意図しない再生成・Dirty化を防止するため)。
 	/// 再帰複製を防止するため、本コンポーネントは雛形オブジェクト自身ではなく管理用親オブジェクト(Root)にアタッチして使用します。
 	/// </summary>
-	[ExecuteAlways]
 	[AddComponentMenu("Stage/Stage Object Bilateral Placer")]
 	public sealed class StageObjectBilateralPlacer : MonoBehaviour
 	{
-#if UNITY_EDITOR
-		private static bool m_IsSpawning;
-#endif
-
 		[Header("対象オブジェクト設定")]
 		[Tooltip("複製基準となる雛形オブジェクト(BoxColliderを保持している必要があります)")]
 		[SerializeField] private GameObject m_TemplateObject;
@@ -71,98 +66,6 @@ namespace Stage
 		[Header("生成管理設定")]
 		[Tooltip("複製オブジェクトを格納するコンテナTransform(未指定時は自動生成されます)")]
 		[SerializeField] private Transform m_GeneratedContainer;
-
-#if UNITY_EDITOR
-		private bool m_IsRebuildScheduled;
-		private GameObject m_PrevTemplateObject;
-		private BoxCollider m_PrevTargetCollider;
-		private EAlignmentAxis m_PrevAlignmentAxis;
-		private EPlacementDirection m_PrevPlacementDirection;
-		private int m_PrevCountPerSide;
-		private bool m_PrevIncludeCenter;
-		private float m_PrevGap;
-#endif
-
-		private void OnEnable()
-		{
-#if UNITY_EDITOR
-			if (!Application.isPlaying)
-			{
-				UpdatePrevParameters();
-			}
-#endif
-		}
-
-#if UNITY_EDITOR
-		private void OnValidate()
-		{
-			if (Application.isPlaying || m_IsSpawning)
-			{
-				return;
-			}
-
-			// パラメータが実際に変更された場合のみ再構築を要求し、AutoSaveの無限保存ループを防止
-			if (CheckParametersChanged())
-			{
-				ScheduleRebuild();
-			}
-		}
-
-		private bool CheckParametersChanged()
-		{
-			if (m_TemplateObject != m_PrevTemplateObject ||
-				m_TargetCollider != m_PrevTargetCollider ||
-				m_AlignmentAxis != m_PrevAlignmentAxis ||
-				m_PlacementDirection != m_PrevPlacementDirection ||
-				m_CountPerSide != m_PrevCountPerSide ||
-				m_IncludeCenter != m_PrevIncludeCenter ||
-				!Mathf.Approximately(m_Gap, m_PrevGap))
-			{
-				UpdatePrevParameters();
-				return true;
-			}
-
-			return false;
-		}
-
-		private void UpdatePrevParameters()
-		{
-			m_PrevTemplateObject = m_TemplateObject;
-			m_PrevTargetCollider = m_TargetCollider;
-			m_PrevAlignmentAxis = m_AlignmentAxis;
-			m_PrevPlacementDirection = m_PlacementDirection;
-			m_PrevCountPerSide = m_CountPerSide;
-			m_PrevIncludeCenter = m_IncludeCenter;
-			m_PrevGap = m_Gap;
-		}
-
-		/// <summary>
-		/// OnValidate内の直接操作を避け、安全なタイミングで再構築を遅延実行します。
-		/// </summary>
-		private void ScheduleRebuild()
-		{
-			if (m_IsRebuildScheduled || m_IsSpawning)
-			{
-				return;
-			}
-
-			m_IsRebuildScheduled = true;
-			EditorApplication.delayCall += DelayedRebuild;
-		}
-
-		private void DelayedRebuild()
-		{
-			EditorApplication.delayCall -= DelayedRebuild;
-			m_IsRebuildScheduled = false;
-
-			if (this == null)
-			{
-				return;
-			}
-
-			Rebuild();
-		}
-#endif
 
 		/// <summary>
 		/// 配置オブジェクトを再構築します。
@@ -253,71 +156,59 @@ namespace Stage
 			// 雛形オブジェクトのローカル回転を反映した移動方向ベクトル
 			Vector3 moveDirection = templateRotation * localAxis;
 
-#if UNITY_EDITOR
-			m_IsSpawning = true;
-#endif
-			try
+			bool spawnPositive = m_PlacementDirection == EPlacementDirection.Both || m_PlacementDirection == EPlacementDirection.Positive;
+			bool spawnNegative = m_PlacementDirection == EPlacementDirection.Both || m_PlacementDirection == EPlacementDirection.Negative;
+
+			if (m_IncludeCenter)
 			{
-				bool spawnPositive = m_PlacementDirection == EPlacementDirection.Both || m_PlacementDirection == EPlacementDirection.Positive;
-				bool spawnNegative = m_PlacementDirection == EPlacementDirection.Both || m_PlacementDirection == EPlacementDirection.Negative;
+				// 基準オブジェクト自身を中心として残し、指定方向へ複製を並べる
+				m_TemplateObject.SetActive(true);
 
-				if (m_IncludeCenter)
+				for (int i = 1; i <= m_CountPerSide; i++)
 				{
-					// 基準オブジェクト自身を中心として残し、指定方向へ複製を並べる
-					m_TemplateObject.SetActive(true);
-
-					for (int i = 1; i <= m_CountPerSide; i++)
+					if (spawnPositive)
 					{
-						if (spawnPositive)
-						{
-							Vector3 positiveOffset = moveDirection * (stepDistance * i);
-							SpawnInstance(centerLocalPosition + positiveOffset, templateRotation, localScale, containerTransform, $"+{i}");
-						}
+						Vector3 positiveOffset = moveDirection * (stepDistance * i);
+						SpawnInstance(centerLocalPosition + positiveOffset, templateRotation, localScale, containerTransform, $"+{i}");
+					}
 
-						if (spawnNegative)
-						{
-							Vector3 negativeOffset = -moveDirection * (stepDistance * i);
-							SpawnInstance(centerLocalPosition + negativeOffset, templateRotation, localScale, containerTransform, $"-{i}");
-						}
+					if (spawnNegative)
+					{
+						Vector3 negativeOffset = -moveDirection * (stepDistance * i);
+						SpawnInstance(centerLocalPosition + negativeOffset, templateRotation, localScale, containerTransform, $"-{i}");
+					}
+				}
+			}
+			else
+			{
+				// 基準オブジェクト自身は非アクティブ化し、指定方向へ複製を並べる
+				m_TemplateObject.SetActive(false);
+
+				if (m_PlacementDirection == EPlacementDirection.Both)
+				{
+					// 両端配置の場合は中心を挟んで左右均等に対称配置
+					for (int i = 0; i < m_CountPerSide; i++)
+					{
+						float distance = stepDistance * (i + 0.5f);
+
+						Vector3 positiveOffset = moveDirection * distance;
+						SpawnInstance(centerLocalPosition + positiveOffset, templateRotation, localScale, containerTransform, $"+{i + 1}");
+
+						Vector3 negativeOffset = -moveDirection * distance;
+						SpawnInstance(centerLocalPosition + negativeOffset, templateRotation, localScale, containerTransform, $"-{i + 1}");
 					}
 				}
 				else
 				{
-					// 基準オブジェクト自身は非アクティブ化し、指定方向へ複製を並べる
-					m_TemplateObject.SetActive(false);
-
-					if (m_PlacementDirection == EPlacementDirection.Both)
+					// 片側配置の場合は基準位置から順に指定方向へ配置
+					for (int i = 0; i < m_CountPerSide; i++)
 					{
-						// 両端配置の場合は中心を挟んで左右均等に対称配置
-						for (int i = 0; i < m_CountPerSide; i++)
-						{
-							float distance = stepDistance * (i + 0.5f);
-
-							Vector3 positiveOffset = moveDirection * distance;
-							SpawnInstance(centerLocalPosition + positiveOffset, templateRotation, localScale, containerTransform, $"+{i + 1}");
-
-							Vector3 negativeOffset = -moveDirection * distance;
-							SpawnInstance(centerLocalPosition + negativeOffset, templateRotation, localScale, containerTransform, $"-{i + 1}");
-						}
-					}
-					else
-					{
-						// 片側配置の場合は基準位置から順に指定方向へ配置
-						for (int i = 0; i < m_CountPerSide; i++)
-						{
-							float distance = stepDistance * i;
-							Vector3 offset = (m_PlacementDirection == EPlacementDirection.Positive) ? (moveDirection * distance) : (-moveDirection * distance);
-							string suffix = (m_PlacementDirection == EPlacementDirection.Positive) ? $"+{i + 1}" : $"-{i + 1}";
-							SpawnInstance(centerLocalPosition + offset, templateRotation, localScale, containerTransform, suffix);
-						}
+						float distance = stepDistance * i;
+						Vector3 offset = (m_PlacementDirection == EPlacementDirection.Positive) ? (moveDirection * distance) : (-moveDirection * distance);
+						string suffix = (m_PlacementDirection == EPlacementDirection.Positive) ? $"+{i + 1}" : $"-{i + 1}";
+						SpawnInstance(centerLocalPosition + offset, templateRotation, localScale, containerTransform, suffix);
 					}
 				}
-			}
-			finally
-			{
-#if UNITY_EDITOR
-				m_IsSpawning = false;
-#endif
 			}
 
 #if UNITY_EDITOR

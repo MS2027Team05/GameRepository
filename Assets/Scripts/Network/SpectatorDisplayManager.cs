@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -85,6 +85,24 @@ public class SpectatorDisplayManager : MonoBehaviour
 			}
 
 			return false;
+		}
+	}
+
+	/// <summary>
+	/// 自端末のメイン画面(Display 1)が観戦専用映像を出力しているかを取得します。
+	/// プレイヤー兼任ホスト(Display 1でプレイ、Display 2で観戦出力)の場合はfalseを返します。
+	/// </summary>
+	public static bool IsDisplay1Spectator
+	{
+		get
+		{
+			Camera activeCam = ActiveSpectatorCamera;
+			if (activeCam != null)
+			{
+				return activeCam.targetDisplay == 0;
+			}
+
+			return IsLocalSpectator && !NetworkConnectManager.IsPlayerHost;
 		}
 	}
 

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -269,6 +269,11 @@ public class NetworkConnectManager : NetworkBehaviour
 		}
 
 		IsPlayerHost = asPlayer;
+		IsSpectatorClient = false;
+		if (asPlayer && LocalPlayerProfilePreferences.GetAssignedTeam() == ETeamType.Spectator)
+		{
+			LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.None);
+		}
 		SetStatusMessage(asPlayer ? "Host(Player兼任)起動中..." : "Host(観戦専用)起動中...");
 
 		ushort port = m_DefaultPort > 0 ? m_DefaultPort : (ushort)7777;
@@ -315,6 +320,10 @@ public class NetworkConnectManager : NetworkBehaviour
 		if (asSpectator)
 		{
 			LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.Spectator);
+		}
+		else if (LocalPlayerProfilePreferences.GetAssignedTeam() == ETeamType.Spectator)
+		{
+			LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.None);
 		}
 
 		string targetIp = GetTargetIpAddress();

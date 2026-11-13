@@ -65,6 +65,7 @@ GameRepository/
 │   │   │       └── SpectatorOverlayUIController.cs # 観戦中継テロップ(カメラ名・ボール保持チーム)表示制御
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
 │   │   │   ├── SetupResultAndStaffMenu.cs # [EntryPoint] スタッフメニュー拡張・GameScene配置・ResultScene自動生成ツール
+│   │   │   ├── StageObjectBilateralPlacerEditor.cs # StageObjectBilateralPlacer用カスタムInspector(手動/編集時再構築・Prefab誤編集防止)
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
 │   │   ├── Network/             # 通信接続・同期制御
@@ -91,7 +92,7 @@ GameRepository/
 │   │   │   ├── StageRailRingBuilder.cs       # [EntryPoint] 外周レール(3種)・往復キューブ・外側足場一括生成コンポーネント
 │   │   │   ├── StageRailPatternSwitcher.cs   # 外周レール(3種+None)x足場(On/Off)2x3パターン切り替え・マルチ同期コンポーネント
 │   │   │   ├── StageShuttleBlock.cs          # 4分割レール区間を往復移動するブロック(キューブ)コンポーネント
-│   │   │   └── StageObjectBilateralPlacer.cs # 基準BoxColliderサイズに基づく等間隔両端配置・エディタ即時反映コンポーネント
+│   │   │   └── StageObjectBilateralPlacer.cs # 基準BoxColliderサイズに基づく等間隔両端配置コンポーネント(CustomEditorから再構築)
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
 │   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御

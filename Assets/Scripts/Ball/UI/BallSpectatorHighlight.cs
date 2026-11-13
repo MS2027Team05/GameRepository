@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// 観戦カメラから見てボールが見失われないよう、強調表示・視認性向上を行うコンポーネント。
@@ -14,27 +14,44 @@ public class BallSpectatorHighlight : MonoBehaviour
 	[SerializeField] private float m_MinScaleMultiplier = 1.0f;
 	[SerializeField] private float m_MaxScaleMultiplier = 2.5f;
 
-	private Vector3 m_InitialLocalScale;
+	private const string m_SpectatorOnlyLayerName = "SpectatorOnly";
+
+	private Vector3 m_MarkerInitialLocalScale;
+	private bool m_HasMarkerInitialScale;
 
 	private void Awake()
 	{
-		m_InitialLocalScale = transform.localScale;
+		if (m_HighlightMarker != null)
+		{
+			m_MarkerInitialLocalScale = m_HighlightMarker.transform.localScale;
+			m_HasMarkerInitialScale = true;
+
+			int spectatorLayer = LayerMask.NameToLayer(m_SpectatorOnlyLayerName);
+			if (spectatorLayer >= 0)
+			{
+				ApplyLayerRecursively(m_HighlightMarker.transform, spectatorLayer);
+			}
+		}
 	}
 
 	private void LateUpdate()
 	{
-		// 観戦カメラがアクティブな場合のみ強調を適用
+		if (m_HighlightMarker == null) return;
+
+		// 観戦カメラがアクティブな場合のみ強調マーカーを表示
 		Camera spectatorCam = SpectatorDisplayManager.ActiveSpectatorCamera;
 		bool isSpectating = spectatorCam != null;
 
-		if (m_HighlightMarker != null)
+		if (m_HighlightMarker.activeSelf != isSpectating)
 		{
 			m_HighlightMarker.SetActive(isSpectating);
 		}
 
+		if (!m_HasMarkerInitialScale) return;
+
 		if (!isSpectating || !m_KeepMinimumVisibleScale)
 		{
-			transform.localScale = m_InitialLocalScale;
+			m_HighlightMarker.transform.localScale = m_MarkerInitialLocalScale;
 			return;
 		}
 
@@ -42,6 +59,15 @@ public class BallSpectatorHighlight : MonoBehaviour
 		float refDist = m_ReferenceDistance > 0.001f ? m_ReferenceDistance : 15.0f;
 		float scaleMultiplier = Mathf.Clamp(dist / refDist, m_MinScaleMultiplier, m_MaxScaleMultiplier);
 
-		transform.localScale = m_InitialLocalScale * scaleMultiplier;
+		m_HighlightMarker.transform.localScale = m_MarkerInitialLocalScale * scaleMultiplier;
+	}
+
+	private static void ApplyLayerRecursively(Transform root, int layer)
+	{
+		root.gameObject.layer = layer;
+		for (int i = 0; i < root.childCount; i++)
+		{
+			ApplyLayerRecursively(root.GetChild(i), layer);
+		}
 	}
 }

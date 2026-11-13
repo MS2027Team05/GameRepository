@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -31,6 +31,7 @@ public class PlayerNamePlate : MonoBehaviour
 	[SerializeField] private Color m_DefaultColor;
 
 	private static readonly List<PlayerNamePlate> m_Instances = new List<PlayerNamePlate>();
+	private static readonly Camera[] m_CameraBuffer = new Camera[8];
 
 	private PlayerNetworkProfile m_Profile;
 	private NetworkObject m_NetworkObject;
@@ -117,14 +118,23 @@ public class PlayerNamePlate : MonoBehaviour
 
 	private void UpdateBillboardAndScale()
 	{
-		// 観戦端末では観戦カメラを優先してビルボード追従
-		if (SpectatorDisplayManager.IsLocalSpectator && SpectatorDisplayManager.ActiveSpectatorCamera != null)
+		Camera spectatorCam = SpectatorDisplayManager.ActiveSpectatorCamera;
+
+		// Display 1で観戦映像を出力している純粋観戦端末のみ、観戦カメラを優先してビルボード追従
+		if (SpectatorDisplayManager.IsDisplay1Spectator && spectatorCam != null)
 		{
-			m_CachedCamera = SpectatorDisplayManager.ActiveSpectatorCamera;
+			m_CachedCamera = spectatorCam;
 		}
-		else if (m_CachedCamera == null || !m_CachedCamera.isActiveAndEnabled)
+		else
 		{
-			m_CachedCamera = Camera.main;
+			// 通常プレイヤー(デバッグホストのDisplay 1を含む)では観戦カメラやDisplay 2用カメラを使用しない
+			if (m_CachedCamera == null ||
+				!m_CachedCamera.isActiveAndEnabled ||
+				m_CachedCamera == spectatorCam ||
+				m_CachedCamera.targetDisplay != 0)
+			{
+				m_CachedCamera = ResolvePlayerMainCamera(spectatorCam);
+			}
 		}
 
 		if (m_CachedCamera == null) return;
@@ -145,6 +155,28 @@ public class PlayerNamePlate : MonoBehaviour
 
 			transform.localScale = m_InitialScale * scaleMultiplier;
 		}
+	}
+
+	private static Camera ResolvePlayerMainCamera(Camera spectatorCam)
+	{
+		Camera mainCam = Camera.main;
+		if (mainCam != null && mainCam.isActiveAndEnabled && mainCam != spectatorCam && mainCam.targetDisplay == 0)
+		{
+			return mainCam;
+		}
+
+		int count = Camera.GetAllCameras(m_CameraBuffer);
+		int limit = Mathf.Min(count, m_CameraBuffer.Length);
+		for (int i = 0; i < limit; i++)
+		{
+			Camera cam = m_CameraBuffer[i];
+			if (cam != null && cam.isActiveAndEnabled && cam != spectatorCam && cam.targetDisplay == 0)
+			{
+				return cam;
+			}
+		}
+
+		return null;
 	}
 
 	private void UpdateNamePlate()
