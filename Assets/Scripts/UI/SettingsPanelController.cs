@@ -8,6 +8,10 @@ using UnityEngine.UI;
 /// </summary>
 public class SettingsPanelController : MonoBehaviour
 {
+	[Header("ボタン初期選択用参照")]
+	[SerializeField] private LobbyUIController m_LobbyUIController;
+	[SerializeField] private Button m_InitialSelectedButton;
+
 	[Header("閉じるボタン参照")]
 	[SerializeField] private Button m_CloseButton;
 
@@ -37,6 +41,7 @@ public class SettingsPanelController : MonoBehaviour
 	{
 		gameObject.SetActive(false);
 		OnClosed?.Invoke();
+		m_LobbyUIController.SetInitialSelectedButton(m_InitialSelectedButton);
 	}
 
 	// --- 将来的な設定項目のプレースホルダー/拡張ポイント ---

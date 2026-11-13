@@ -8,6 +8,7 @@ using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -219,6 +220,9 @@ public class NetworkConnectManager : NetworkBehaviour
 		if (m_GeneralPanel != null) m_GeneralPanel.SetActive(false);
 		if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(false);
 		if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(false);
+
+		// JoinPanelの最初の選択ボタンを設定
+		SetInitialSelectedButton(m_HostSpectatorButton);
 	}
 
 	/// <summary>
@@ -234,11 +238,17 @@ public class NetworkConnectManager : NetworkBehaviour
 			if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(true);
 			// 兼任ホストの場合はクライアント用チーム操作パネルも合わせて表示
 			if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(IsPlayerHost);
+
+			// ホスト用パネルの最初の選択ボタンを設定
+			SetInitialSelectedButton(m_StartLobbyButton);
 		}
 		else
 		{
 			if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(true);
 			if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(false);
+
+			// クライアント用パネルの最初の選択ボタンを設定
+			SetInitialSelectedButton(m_JoinRedTeamButton);
 		}
 	}
 
@@ -644,6 +654,23 @@ public class NetworkConnectManager : NetworkBehaviour
 		}
 
 		return "127.0.0.1";
+	}
+
+	/// <summary>
+	/// 指定したボタンをEventSystemの初期選択対象に設定します。
+	/// </summary>
+	private void SetInitialSelectedButton(Button button)
+	{
+		if (button == null || !button.gameObject.activeInHierarchy)
+		{
+			return;
+		}
+
+		if (EventSystem.current != null)
+		{
+			EventSystem.current.SetSelectedGameObject(null);
+			EventSystem.current.SetSelectedGameObject(button.gameObject);
+		}
 	}
 
 	/// <summary>

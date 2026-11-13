@@ -2,6 +2,7 @@
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 /// <summary>
 /// ロビー画面のUI表示およびパネル切り替え制御を担当するクラス。
@@ -14,6 +15,11 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private LobbyManager m_LobbyManager;
 	[SerializeField] private TitleOverlayController m_TitleOverlay;
 	[SerializeField] private LobbyAppearancePickerUI m_AppearancePickerUI;
+
+	[Header("タイトルボタン参照")]
+	[SerializeField] private Button m_TitleStartButton;
+	[SerializeField] private Button m_TitleSettingsButton;
+	[SerializeField] private Button m_TitleQuitButton;
 
 	[Header("パネルルート参照")]
 	[SerializeField] private GameObject m_HostControlPanel;
@@ -88,6 +94,12 @@ public class LobbyUIController : MonoBehaviour
 		}
 
 		RefreshAllUI();
+
+		// タイトル画面が表示されていなければ初期選択
+		if (m_TitleOverlay == null || !m_TitleOverlay.IsTitleActive)
+		{
+			SetLobbyInitialSelectedButton();
+		}
 	}
 
 	private void OnDestroy()
@@ -116,35 +128,21 @@ public class LobbyUIController : MonoBehaviour
 		bool isTitleActive = m_TitleOverlay != null && m_TitleOverlay.IsTitleActive;
 
 		// 1. ホスト操作パネル: サーバー(Host)かつタイトル画面非表示時のみ表示
-		if (m_HostControlPanel != null)
-		{
-			m_HostControlPanel.SetActive(isServer && !isTitleActive);
-		}
+		SetPanelActive(
+			m_HostControlPanel,
+			isServer && !isTitleActive,
+			m_StartGameButton);
 
 		// 2. ロード中パネル・切断通知パネル: 初期状態では非表示
-		if (m_LoadingPanel != null)
-		{
-			m_LoadingPanel.SetActive(false);
-		}
-
-		if (m_DisconnectNoticePanel != null)
-		{
-			m_DisconnectNoticePanel.SetActive(false);
-		}
+		SetPanelActive(m_LoadingPanel, false);
+		SetPanelActive(m_DisconnectNoticePanel, false);
 
 		// 3. プレイヤー操作・キャラクリ3D・デバッグの表示制御
 		if (isServer && !isPlayerHost)
 		{
 			// 本番観戦ホスト: プレイヤー操作UIおよびデバッグUIは非表示、3D台座・モデルはタイトル非表示時に表示
-			if (m_PlayerControlPanel != null)
-			{
-				m_PlayerControlPanel.SetActive(false);
-			}
-
-			if (m_DebugPanel != null)
-			{
-				m_DebugPanel.SetActive(false);
-			}
+			SetPanelActive(m_PlayerControlPanel, false);
+			SetDebugControlsActive(false);
 
 			if (m_CharacterDisplayRoot != null)
 			{
@@ -155,10 +153,10 @@ public class LobbyUIController : MonoBehaviour
 		{
 			// クライアントおよび兼任ホスト: タイトル表示中はキャラクリUI、3D表示、デバッグパネルをすべて非表示
 			bool showControls = !isTitleActive;
-			if (m_PlayerControlPanel != null)
-			{
-				m_PlayerControlPanel.SetActive(showControls);
-			}
+			SetPanelActive(
+				m_PlayerControlPanel,
+				showControls,
+				m_ReadyButton);
 
 			if (m_CharacterDisplayRoot != null)
 			{
@@ -182,9 +180,12 @@ public class LobbyUIController : MonoBehaviour
 		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
 
 		// ホスト端末ならタイトル解除時にホスト用パネルを表示
-		if (isServer && m_HostControlPanel != null)
+		if (isServer)
 		{
-			m_HostControlPanel.SetActive(true);
+			SetPanelActive(
+				m_HostControlPanel,
+				true,
+				m_StartGameButton);
 		}
 
 		// 3D台座・モデルを表示
@@ -196,10 +197,10 @@ public class LobbyUIController : MonoBehaviour
 		if (!isServer || isPlayerHost)
 		{
 			// クライアントまたは兼任ホストならキャラクリUIを表示
-			if (m_PlayerControlPanel != null)
-			{
-				m_PlayerControlPanel.SetActive(true);
-			}
+			SetPanelActive(
+				m_PlayerControlPanel,
+				true,
+				m_ReadyButton);
 
 			// 兼任ホストの場合はデバッグパネルも合わせて表示
 			if (isServer && isPlayerHost)
@@ -209,10 +210,19 @@ public class LobbyUIController : MonoBehaviour
 		}
 
 		RefreshAllUI();
+
+		// ロビー画面の初期選択ボタンを設定
+		SetLobbyInitialSelectedButton();
 	}
 
 	private void HandleTitleShown()
 	{
+		// ロビー側の選択状態を解除
+		if (EventSystem.current != null)
+		{
+			EventSystem.current.SetSelectedGameObject(null);
+		}
+
 		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
 		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
 
@@ -222,10 +232,7 @@ public class LobbyUIController : MonoBehaviour
 		}
 
 		// タイトルが表示されている間はホスト用パネルを非表示
-		if (m_HostControlPanel != null)
-		{
-			m_HostControlPanel.SetActive(false);
-		}
+		SetPanelActive(m_HostControlPanel, false);
 
 		// 3Dオブジェクトを非表示
 		if (m_CharacterDisplayRoot != null)
@@ -236,10 +243,7 @@ public class LobbyUIController : MonoBehaviour
 		if (!isServer || isPlayerHost)
 		{
 			// キャラクリUI、デバッグパネルを非表示
-			if (m_PlayerControlPanel != null)
-			{
-				m_PlayerControlPanel.SetActive(false);
-			}
+			SetPanelActive(m_PlayerControlPanel, false);
 
 			SetDebugControlsActive(false);
 		}
@@ -247,10 +251,7 @@ public class LobbyUIController : MonoBehaviour
 
 	private void SetDebugControlsActive(bool active)
 	{
-		if (m_DebugPanel != null)
-		{
-			m_DebugPanel.SetActive(active);
-		}
+		SetPanelActive(m_DebugPanel, active);
 
 		if (m_DebugToggleSceneButton != null)
 		{
@@ -260,6 +261,12 @@ public class LobbyUIController : MonoBehaviour
 		if (m_DebugCycleMinPlayersButton != null)
 		{
 			m_DebugCycleMinPlayersButton.gameObject.SetActive(active);
+		}
+
+		// デバッグパネル表示時も、兼任ホストの初期選択はREADYボタンにする
+		if (active)
+		{
+			SetInitialSelectedButton(m_ReadyButton);
 		}
 	}
 
@@ -273,15 +280,9 @@ public class LobbyUIController : MonoBehaviour
 			m_AppearancePickerUI.ClosePicker();
 		}
 
-		if (m_HostControlPanel != null)
-		{
-			m_HostControlPanel.SetActive(false);
-		}
+		SetPanelActive(m_HostControlPanel, false);
 
-		if (m_PlayerControlPanel != null)
-		{
-			m_PlayerControlPanel.SetActive(false);
-		}
+		SetPanelActive(m_PlayerControlPanel, false);
 
 		if (m_CharacterDisplayRoot != null)
 		{
@@ -293,6 +294,7 @@ public class LobbyUIController : MonoBehaviour
 		if (m_TitleOverlay != null)
 		{
 			m_TitleOverlay.ShowTitle();
+			SetInitialSelectedButton(m_TitleStartButton);
 		}
 	}
 
@@ -303,30 +305,18 @@ public class LobbyUIController : MonoBehaviour
 			m_AppearancePickerUI.ClosePicker();
 		}
 
-		if (m_HostControlPanel != null)
-		{
-			m_HostControlPanel.SetActive(false);
-		}
+		SetPanelActive(m_HostControlPanel, false);
 
-		if (m_PlayerControlPanel != null)
-		{
-			m_PlayerControlPanel.SetActive(false);
-		}
+		SetPanelActive(m_PlayerControlPanel, false);
 
-		if (m_DebugPanel != null)
-		{
-			m_DebugPanel.SetActive(false);
-		}
+		SetDebugControlsActive(false);
 
 		if (m_CharacterDisplayRoot != null)
 		{
 			m_CharacterDisplayRoot.SetActive(false);
 		}
 
-		if (m_LoadingPanel != null)
-		{
-			m_LoadingPanel.SetActive(true);
-		}
+		SetPanelActive(m_LoadingPanel, true);
 	}
 
 	private void ShowDisconnectNoticePanel()
@@ -336,34 +326,98 @@ public class LobbyUIController : MonoBehaviour
 			m_AppearancePickerUI.ClosePicker();
 		}
 
-		if (m_HostControlPanel != null)
-		{
-			m_HostControlPanel.SetActive(false);
-		}
+		SetPanelActive(m_HostControlPanel, false);
 
-		if (m_PlayerControlPanel != null)
-		{
-			m_PlayerControlPanel.SetActive(false);
-		}
+		SetPanelActive(m_PlayerControlPanel, false);
 
-		if (m_DebugPanel != null)
-		{
-			m_DebugPanel.SetActive(false);
-		}
+		SetDebugControlsActive(false);
 
-		if (m_LoadingPanel != null)
-		{
-			m_LoadingPanel.SetActive(false);
-		}
+		SetPanelActive(m_LoadingPanel, false);
 
 		if (m_CharacterDisplayRoot != null)
 		{
 			m_CharacterDisplayRoot.SetActive(false);
 		}
 
-		if (m_DisconnectNoticePanel != null)
+		SetPanelActive(m_DisconnectNoticePanel, true);
+	}
+
+	/// <summary>
+	/// 端末の役割に応じてロビー画面の初期選択ボタンを設定します。
+	/// </summary>
+	private void SetLobbyInitialSelectedButton()
+	{
+		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
+		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
+
+		// 本番観戦ホストの場合
+		if (isServer && !isPlayerHost)
 		{
-			m_DisconnectNoticePanel.SetActive(true);
+			SetInitialSelectedButton(m_StartGameButton);
+		}
+		// クライアントおよびデバッグ兼任ホストの場合
+		else
+		{
+			SetInitialSelectedButton(m_ReadyButton);
+		}
+	}
+
+	/// <summary>
+	/// 指定したSelectableを初期選択状態にします。
+	/// </summary>
+	public void SetInitialSelectedButton(Selectable selectable)
+	{
+		if (EventSystem.current == null)
+		{
+			return;
+		}
+
+		// 以前の選択状態を解除
+		EventSystem.current.SetSelectedGameObject(null);
+
+		// 選択可能なUIだけを選択する
+		if (selectable != null &&
+			selectable.gameObject.activeInHierarchy &&
+			selectable.IsInteractable())
+		{
+			EventSystem.current.SetSelectedGameObject(selectable.gameObject);
+		}
+	}
+
+
+	/// <summary>
+	/// UIパネルの表示を切り替え、表示した場合は初期選択ボタンを設定します。
+	/// 非表示にするパネル内のUIが選択されている場合は、選択状態を解除します。
+	/// </summary>
+	private void SetPanelActive(
+		GameObject panel,
+		bool active,
+		Selectable initialSelectedButton = null)
+	{
+		if (panel == null) return;
+
+		// 表示状態が変わらない場合は何もしない
+		if (panel.activeSelf == active) return;
+
+		// 非表示にするパネル内のUIが選択されている場合は選択解除
+		if (!active && EventSystem.current != null)
+		{
+			GameObject selectedObject = EventSystem.current.currentSelectedGameObject;
+
+			if (selectedObject != null &&
+				(selectedObject == panel ||
+				 selectedObject.transform.IsChildOf(panel.transform)))
+			{
+				EventSystem.current.SetSelectedGameObject(null);
+			}
+		}
+
+		panel.SetActive(active);
+
+		// パネル表示時、初期選択ボタンが指定されていれば選択
+		if (active && initialSelectedButton != null)
+		{
+			SetInitialSelectedButton(initialSelectedButton);
 		}
 	}
 
