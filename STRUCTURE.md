@@ -35,6 +35,7 @@ GameRepository/
 │   │   │   │   ├── BallPhysicsController.cs           # [EntryPoint] Free Flight・Surface Physics状態統括
 │   │   │   │   ├── BallPhysicsController.Air.cs       # 飛行・Surface探索・吸着処理
 │   │   │   │   ├── BallPhysicsController.Collision.cs # Collision処理
+│   │   │   │   ├── BallPhysicsController.Homing.cs    # 追尾パス物理処理
 │   │   │   │   ├── BallPhysicsController.Surface.cs   # BallSurface Physics連携
 │   │   │   │   ├── BallBounce.cs                      # ボールの跳ね返り挙動制御
 │   │   │   │   └── Attraction/                        # 疑似重力・Surface探索
