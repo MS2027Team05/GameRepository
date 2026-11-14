@@ -155,10 +155,10 @@ public class SessionPlayerDataStore : MonoBehaviour
 	{
 		m_LatestMatchResult = new MatchResultData
 		{
-			RedScore = redScore,
-			BlueScore = blueScore,
-			WinnerTeam = winnerTeam,
-			HasResult = true,
+			m_RedScore = redScore,
+			m_BlueScore = blueScore,
+			m_WinnerTeam = winnerTeam,
+			m_HasResult = true,
 		};
 	}
 
@@ -177,8 +177,8 @@ public class SessionPlayerDataStore : MonoBehaviour
 /// </summary>
 public struct MatchResultData
 {
-	public int RedScore;
-	public int BlueScore;
-	public ETeamType WinnerTeam;
-	public bool HasResult;
+	public int m_RedScore;
+	public int m_BlueScore;
+	public ETeamType m_WinnerTeam;
+	public bool m_HasResult;
 }

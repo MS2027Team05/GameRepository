@@ -60,12 +60,12 @@ public class ResultUIController : MonoBehaviour
 		int blueScore = 0;
 		ETeamType winnerTeam = ETeamType.None;
 
-		if (SessionPlayerDataStore.Instance != null && SessionPlayerDataStore.Instance.LatestMatchResult.HasResult)
+		if (SessionPlayerDataStore.Instance != null && SessionPlayerDataStore.Instance.LatestMatchResult.m_HasResult)
 		{
 			var matchResult = SessionPlayerDataStore.Instance.LatestMatchResult;
-			redScore = matchResult.RedScore;
-			blueScore = matchResult.BlueScore;
-			winnerTeam = matchResult.WinnerTeam;
+			redScore = matchResult.m_RedScore;
+			blueScore = matchResult.m_BlueScore;
+			winnerTeam = matchResult.m_WinnerTeam;
 		}
 		else if (MatchManager.Instance != null)
 		{
