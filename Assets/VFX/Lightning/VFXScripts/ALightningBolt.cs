@@ -2,317 +2,470 @@
 
 public abstract class ALightningBolt : MonoBehaviour
 {
-    [Header("電撃本数の設定")]
-    [SerializeField] private int m_BoltCount;
-    [SerializeField] private int m_MaxActiveBoltCount;
+	[Header("プレハブエフェクトの設定")]
+	[Tooltip("オンかつプレハブ登録済みの場合、プログラム生成の電撃の代わりにプレハブを再生します。")]
+	[SerializeField] private bool m_UsePrefabEffect;
+	[Tooltip("電撃全体を置き換えるプレハブ。ParticleSystemは明示的に再生し、全粒子の終了後も再生条件が成立していれば再生し直します。")]
+	[SerializeField] private GameObject m_EffectPrefab;
 
-    [Header("電撃形状の設定")]
-    [SerializeField] private int m_SegmentCount;
-    [SerializeField] private float m_Displacement;
+	[Header("電撃本数の設定")]
+	[SerializeField] private int m_BoltCount;
+	[SerializeField] private int m_MaxActiveBoltCount;
 
-    [Header("電撃の見た目設定")]
-    [SerializeField] private Material m_CoreMaterial;
-    [SerializeField] private Material m_GlowMaterial;
-    [SerializeField] private float m_CoreWidth;
-    [SerializeField] private float m_GlowWidth;
+	[Header("電撃形状の設定")]
+	[SerializeField] private int m_SegmentCount;
+	[SerializeField] private float m_Displacement;
 
-    [Range(0f, 1f)]
-    [SerializeField] private float m_EndWidthRatio;
+	[Header("電撃の見た目設定")]
+	[SerializeField] private Material m_CoreMaterial;
+	[SerializeField] private Material m_GlowMaterial;
+	[SerializeField] private float m_CoreWidth;
+	[SerializeField] private float m_GlowWidth;
 
-    [Header("電撃アニメーションの設定")]
-    [SerializeField] private float m_RefreshInterval;
-    [SerializeField] private float m_Lifetime;
-    [SerializeField] private float m_SpawnInterval;
+	[Range(0f, 1f)]
+	[SerializeField] private float m_EndWidthRatio;
 
-    private BoltData[] m_Bolts;
-    private Transform m_BoltContainer;
-    private float m_SpawnTimer;
-    private int m_ActiveBoltCount;
-    private int m_SpawnCycle;
-    private bool m_HasFinishedSpawning;
+	[Header("電撃アニメーションの設定")]
+	[SerializeField] private float m_RefreshInterval;
+	[SerializeField] private float m_Lifetime;
+	[SerializeField] private float m_SpawnInterval;
 
-    protected sealed class BoltData
-    {
-        public LineRenderer m_CoreLineRenderer;
-        public LineRenderer m_GlowLineRenderer;
-        public Vector3[] m_Positions;
-        public Vector3 m_StartPosition;
-        public Vector3 m_EndPosition;
-        public Vector3 m_Direction;
-        public float m_LifetimeTimer;
-        public float m_RefreshTimer;
-        public bool m_IsActive;
-        public int m_LastActivatedSpawnCycle;
-    }
+	private BoltData[] m_Bolts;
+	private Transform m_BoltContainer;
+	private float m_SpawnTimer;
+	private int m_ActiveBoltCount;
+	private int m_SpawnCycle;
+	private bool m_HasFinishedSpawning;
+	private GameObject m_PrefabContainer;
+	private GameObject m_InstantiatedPrefab;
+	private ParticleSystem[] m_PrefabParticles;
+	private bool m_IsUsingPrefab;
 
-    private void Awake()
-    {
-        CreateBoltContainer();
-        CreateBoltPool();
-    }
+	protected sealed class BoltData
+	{
+		public LineRenderer m_CoreLineRenderer;
+		public LineRenderer m_GlowLineRenderer;
+		public Vector3[] m_Positions;
+		public Vector3 m_StartPosition;
+		public Vector3 m_EndPosition;
+		public Vector3 m_Direction;
+		public float m_LifetimeTimer;
+		public float m_RefreshTimer;
+		public bool m_IsActive;
+		public int m_LastActivatedSpawnCycle;
+	}
 
-    private void Update()
-    {
-        UpdateActiveBolts();
-        UpdateSpawn();
-    }
+	private void Update()
+	{
+		UpdateSource();
 
-    protected virtual void InitializeBolt(BoltData bolt)
-    {
-    }
+		bool usePrefab = m_UsePrefabEffect && m_EffectPrefab != null;
+		if (m_IsUsingPrefab != usePrefab)
+		{
+			ClearActiveBolts();
+			StopPrefabEffect();
+			m_IsUsingPrefab = usePrefab;
+		}
 
-    protected virtual bool CanSpawnBolt()
-    {
-        return true;
-    }
+		if (usePrefab)
+		{
+			UpdatePrefabEffect();
+			return;
+		}
 
-    protected virtual bool ReusesDeactivatedBolts => true;
+		if (m_Bolts == null)
+		{
+			CreateBoltContainer();
+			CreateBoltPool();
+		}
 
-    protected abstract void UpdateBoltPosition(BoltData bolt);
+		UpdateActiveBolts();
+		UpdateSpawn();
+	}
 
-    protected virtual Vector3 AdjustRandomOffset(Vector3 randomOffset)
-    {
-        return randomOffset;
-    }
+	protected virtual void OnDisable()
+	{
+		ClearActiveBolts();
+		StopPrefabEffect();
+	}
 
-    protected void ResetSpawnCycle()
-    {
-        m_SpawnCycle++;
-        m_HasFinishedSpawning = false;
-        m_SpawnTimer = 0f;
-    }
+	protected virtual bool CanPlayPrefabEffect()
+	{
+		return CanSpawnBolt();
+	}
 
-    private void CreateBoltContainer()
-    {
-        GameObject containerObject = new GameObject("LightningBolt");
+	protected virtual void UpdatePrefabEffectTransform(Transform effectTransform)
+	{
+	}
 
-        containerObject.transform.SetParent(transform);
-        containerObject.transform.localPosition = Vector3.zero;
-        containerObject.transform.localRotation = Quaternion.identity;
-        containerObject.transform.localScale = Vector3.one;
+	private void UpdatePrefabEffect()
+	{
+		if (!CanPlayPrefabEffect())
+		{
+			StopPrefabEffect();
+			return;
+		}
 
-        m_BoltContainer = containerObject.transform;
-    }
+		if (m_PrefabContainer == null || m_InstantiatedPrefab != m_EffectPrefab)
+		{
+			StopPrefabEffect();
+			if (m_PrefabContainer != null)
+			{
+				Destroy(m_PrefabContainer);
+			}
 
-    private void CreateBoltPool()
-    {
-        m_Bolts = new BoltData[m_BoltCount];
+			// 非アクティブな親の下で生成し、位置設定前の自動再生を防ぎます。
+			m_PrefabContainer = new GameObject("LightningPrefabEffect");
+			m_PrefabContainer.SetActive(false);
+			m_PrefabContainer.transform.SetParent(transform, false);
+			GameObject effect = Instantiate(m_EffectPrefab, m_PrefabContainer.transform, false);
+			effect.SetActive(true);
+			m_PrefabParticles = effect.GetComponentsInChildren<ParticleSystem>(true);
+			m_InstantiatedPrefab = m_EffectPrefab;
+		}
 
-        for (int i = 0; i < m_BoltCount; i++)
-        {
-            GameObject boltObject = new GameObject($"LightningBolt_{i}");
+		UpdatePrefabEffectTransform(m_PrefabContainer.transform);
+		if (!m_PrefabContainer.activeSelf)
+		{
+			m_PrefabContainer.SetActive(true);
+			PlayPrefabParticles();
+		}
+		else if (m_PrefabParticles.Length > 0 && !ArePrefabParticlesAlive())
+		{
+			PlayPrefabParticles();
+		}
+	}
 
-            boltObject.transform.SetParent(m_BoltContainer);
-            boltObject.transform.localPosition = Vector3.zero;
-            boltObject.transform.localRotation = Quaternion.identity;
-            boltObject.transform.localScale = Vector3.one;
+	private bool ArePrefabParticlesAlive()
+	{
+		// 子も個別に確認し、再生待機中や残存粒子がある間は再スタートしません。
+		for (int i = 0; i < m_PrefabParticles.Length; i++)
+		{
+			ParticleSystem particles = m_PrefabParticles[i];
+			if (particles != null && particles.gameObject.activeInHierarchy && particles.IsAlive(false))
+			{
+				return true;
+			}
+		}
 
-            LineRenderer glowLineRenderer =
-                CreateLineRenderer(
-                    boltObject.transform,
-                    "Glow",
-                    m_GlowMaterial,
-                    m_GlowWidth);
+		return false;
+	}
 
-            LineRenderer coreLineRenderer =
-                CreateLineRenderer(
-                    boltObject.transform,
-                    "Core",
-                    m_CoreMaterial,
-                    m_CoreWidth);
+	private void PlayPrefabParticles()
+	{
+		for (int i = 0; i < m_PrefabParticles.Length; i++)
+		{
+			ParticleSystem particles = m_PrefabParticles[i];
+			if (particles != null && particles.gameObject.activeInHierarchy)
+			{
+				// 階層を重複して再生しないよう、各ParticleSystemを個別に開始します。
+				particles.Play(false);
+			}
+		}
+	}
 
-            m_Bolts[i] = new BoltData
-            {
-                m_CoreLineRenderer = coreLineRenderer,
-                m_GlowLineRenderer = glowLineRenderer,
-                m_Positions = new Vector3[m_SegmentCount + 1],
-                m_IsActive = false,
-                m_LastActivatedSpawnCycle = -1
-            };
-        }
-    }
+	private void StopPrefabEffect()
+	{
+		if (m_PrefabContainer == null || !m_PrefabContainer.activeSelf)
+		{
+			return;
+		}
 
-    private LineRenderer CreateLineRenderer(
-        Transform parent,
-        string objectName,
-        Material material,
-        float lineWidth)
-    {
-        GameObject lineObject = new GameObject(objectName);
+		for (int i = 0; i < m_PrefabParticles.Length; i++)
+		{
+			if (m_PrefabParticles[i] != null)
+			{
+				m_PrefabParticles[i].Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
+			}
+		}
 
-        lineObject.transform.SetParent(parent);
-        lineObject.transform.localPosition = Vector3.zero;
-        lineObject.transform.localRotation = Quaternion.identity;
-        lineObject.transform.localScale = Vector3.one;
+		m_PrefabContainer.SetActive(false);
+	}
 
-        LineRenderer lineRenderer = lineObject.AddComponent<LineRenderer>();
+	protected virtual void UpdateSource()
+	{
+	}
 
-        lineRenderer.positionCount = m_SegmentCount + 1;
-        lineRenderer.startWidth = lineWidth;
-        lineRenderer.endWidth = lineWidth * m_EndWidthRatio;
-        lineRenderer.useWorldSpace = true;
-        lineRenderer.enabled = false;
+	protected virtual void InitializeBolt(BoltData bolt)
+	{
+	}
 
-        if (material != null)
-        {
-            lineRenderer.sharedMaterial = material;
-        }
+	protected virtual bool CanSpawnBolt()
+	{
+		return true;
+	}
 
-        return lineRenderer;
-    }
+	protected virtual bool ReusesDeactivatedBolts => true;
 
-    private void UpdateActiveBolts()
-    {
-        for (int i = 0; i < m_Bolts.Length; i++)
-        {
-            BoltData bolt = m_Bolts[i];
+	protected float Displacement => m_Displacement;
 
-            if (!bolt.m_IsActive)
-            {
-                continue;
-            }
+	protected abstract void UpdateBoltPosition(BoltData bolt);
 
-            bolt.m_LifetimeTimer += Time.deltaTime;
-            bolt.m_RefreshTimer += Time.deltaTime;
+	protected virtual void UpdateBoltTransform(BoltData bolt)
+	{
+	}
 
-            if (bolt.m_LifetimeTimer >= m_Lifetime)
-            {
-                DeactivateBolt(bolt);
-                continue;
-            }
+	protected virtual Vector3 AdjustRandomOffset(Vector3 randomOffset)
+	{
+		return randomOffset;
+	}
 
-            if (bolt.m_RefreshTimer < m_RefreshInterval)
-            {
-                continue;
-            }
+	protected void ResetSpawnCycle()
+	{
+		StopPrefabEffect();
+		m_SpawnCycle++;
+		m_HasFinishedSpawning = false;
+		m_SpawnTimer = 0f;
+	}
 
-            bolt.m_RefreshTimer = 0f;
+	protected void ClearActiveBolts()
+	{
+		if (m_Bolts == null)
+		{
+			return;
+		}
 
-            UpdateBoltPosition(bolt);
-            GenerateLightning(bolt);
-        }
-    }
+		for (int i = 0; i < m_Bolts.Length; i++)
+		{
+			if (m_Bolts[i].m_IsActive)
+			{
+				DeactivateBolt(m_Bolts[i]);
+			}
+		}
+	}
 
-    private void UpdateSpawn()
-    {
-        if (m_HasFinishedSpawning ||
-            m_ActiveBoltCount >= m_MaxActiveBoltCount ||
-            !CanSpawnBolt())
-        {
-            return;
-        }
+	private void CreateBoltContainer()
+	{
+		GameObject containerObject = new GameObject("LightningBolt");
 
-        m_SpawnTimer += Time.deltaTime;
+		containerObject.transform.SetParent(transform);
+		containerObject.transform.localPosition = Vector3.zero;
+		containerObject.transform.localRotation = Quaternion.identity;
+		containerObject.transform.localScale = Vector3.one;
 
-        if (m_SpawnTimer < m_SpawnInterval)
-        {
-            return;
-        }
+		m_BoltContainer = containerObject.transform;
+	}
 
-        BoltData availableBolt = GetAvailableBolt();
+	private void CreateBoltPool()
+	{
+		m_Bolts = new BoltData[m_BoltCount];
 
-        if (availableBolt == null)
-        {
-            if (!ReusesDeactivatedBolts)
-            {
-                m_HasFinishedSpawning = true;
-            }
+		for (int i = 0; i < m_BoltCount; i++)
+		{
+			GameObject boltObject = new GameObject($"LightningBolt_{i}");
 
-            return;
-        }
+			boltObject.transform.SetParent(m_BoltContainer);
+			boltObject.transform.localPosition = Vector3.zero;
+			boltObject.transform.localRotation = Quaternion.identity;
+			boltObject.transform.localScale = Vector3.one;
 
-        m_SpawnTimer = 0f;
+			LineRenderer glowLineRenderer =
+				CreateLineRenderer(
+					boltObject.transform,
+					"Glow",
+					m_GlowMaterial,
+					m_GlowWidth);
 
-        ActivateBolt(availableBolt);
-    }
+			LineRenderer coreLineRenderer =
+				CreateLineRenderer(
+					boltObject.transform,
+					"Core",
+					m_CoreMaterial,
+					m_CoreWidth);
 
-    private BoltData GetAvailableBolt()
-    {
-        for (int i = 0; i < m_Bolts.Length; i++)
-        {
-            BoltData bolt = m_Bolts[i];
+			m_Bolts[i] = new BoltData
+			{
+				m_CoreLineRenderer = coreLineRenderer,
+				m_GlowLineRenderer = glowLineRenderer,
+				m_Positions = new Vector3[m_SegmentCount + 1],
+				m_IsActive = false,
+				m_LastActivatedSpawnCycle = -1
+			};
+		}
+	}
 
-            if (!bolt.m_IsActive &&
-                (bolt.m_LastActivatedSpawnCycle != m_SpawnCycle ||
-                 ReusesDeactivatedBolts))
-            {
-                return bolt;
-            }
-        }
+	private LineRenderer CreateLineRenderer(
+		Transform parent,
+		string objectName,
+		Material material,
+		float lineWidth)
+	{
+		GameObject lineObject = new GameObject(objectName);
 
-        return null;
-    }
+		lineObject.transform.SetParent(parent);
+		lineObject.transform.localPosition = Vector3.zero;
+		lineObject.transform.localRotation = Quaternion.identity;
+		lineObject.transform.localScale = Vector3.one;
 
-    private void ActivateBolt(BoltData bolt)
-    {
-        bolt.m_IsActive = true;
-        bolt.m_LastActivatedSpawnCycle = m_SpawnCycle;
-        bolt.m_LifetimeTimer = 0f;
-        bolt.m_RefreshTimer = 0f;
+		LineRenderer lineRenderer = lineObject.AddComponent<LineRenderer>();
 
-        ApplyBoltSettings(bolt);
-        InitializeBolt(bolt);
-        UpdateBoltPosition(bolt);
-        GenerateLightning(bolt);
-        SetBoltVisible(bolt, true);
+		lineRenderer.positionCount = m_SegmentCount + 1;
+		lineRenderer.startWidth = lineWidth;
+		lineRenderer.endWidth = lineWidth * m_EndWidthRatio;
+		lineRenderer.useWorldSpace = true;
+		lineRenderer.enabled = false;
 
-        m_ActiveBoltCount++;
-    }
+		if (material != null)
+		{
+			lineRenderer.sharedMaterial = material;
+		}
 
-    private void DeactivateBolt(BoltData bolt)
-    {
-        bolt.m_IsActive = false;
-        SetBoltVisible(bolt, false);
+		return lineRenderer;
+	}
 
-        m_ActiveBoltCount--;
-    }
+	private void UpdateActiveBolts()
+	{
+		for (int i = 0; i < m_Bolts.Length; i++)
+		{
+			BoltData bolt = m_Bolts[i];
 
-    private static void SetBoltVisible(
-        BoltData bolt,
-        bool isVisible)
-    {
-        bolt.m_CoreLineRenderer.enabled = isVisible;
-        bolt.m_GlowLineRenderer.enabled = isVisible;
-    }
+			if (!bolt.m_IsActive)
+			{
+				continue;
+			}
 
-    private void ApplyBoltSettings(BoltData bolt)
-    {
-        int requiredPositionCount = m_SegmentCount + 1;
+			bolt.m_LifetimeTimer += Time.deltaTime;
+			bolt.m_RefreshTimer += Time.deltaTime;
 
-        if (bolt.m_Positions.Length != requiredPositionCount)
-        {
-            bolt.m_Positions = new Vector3[requiredPositionCount];
-            bolt.m_CoreLineRenderer.positionCount = requiredPositionCount;
-            bolt.m_GlowLineRenderer.positionCount = requiredPositionCount;
-        }
+			if (bolt.m_LifetimeTimer >= m_Lifetime)
+			{
+				DeactivateBolt(bolt);
+				continue;
+			}
 
-        bolt.m_CoreLineRenderer.startWidth = m_CoreWidth;
-        bolt.m_CoreLineRenderer.endWidth = m_CoreWidth * m_EndWidthRatio;
-        bolt.m_GlowLineRenderer.startWidth = m_GlowWidth;
-        bolt.m_GlowLineRenderer.endWidth = m_GlowWidth * m_EndWidthRatio;
-    }
+			if (bolt.m_RefreshTimer >= m_RefreshInterval)
+			{
+				bolt.m_RefreshTimer = 0f;
 
-    private void GenerateLightning(BoltData bolt)
-    {
-        bolt.m_Positions[0] = bolt.m_StartPosition;
-        bolt.m_Positions[^1] = bolt.m_EndPosition;
+				UpdateBoltPosition(bolt);
+				GenerateLightning(bolt);
+			}
 
-        for (int i = 1; i < m_SegmentCount; i++)
-        {
-            float progress = (float)i / m_SegmentCount;
-            Vector3 basePosition =
-                Vector3.Lerp(
-                    bolt.m_StartPosition,
-                    bolt.m_EndPosition,
-                    progress);
+			UpdateBoltTransform(bolt);
+		}
+	}
 
-            Vector3 randomOffset =
-                AdjustRandomOffset(Random.insideUnitSphere * m_Displacement);
+	private void UpdateSpawn()
+	{
+		if (m_HasFinishedSpawning ||
+			m_ActiveBoltCount >= m_MaxActiveBoltCount ||
+			!CanSpawnBolt())
+		{
+			return;
+		}
 
-            bolt.m_Positions[i] = basePosition + randomOffset;
-        }
+		m_SpawnTimer += Time.deltaTime;
 
-        bolt.m_GlowLineRenderer.SetPositions(bolt.m_Positions);
-        bolt.m_CoreLineRenderer.SetPositions(bolt.m_Positions);
-    }
+		if (m_SpawnTimer < m_SpawnInterval)
+		{
+			return;
+		}
+
+		BoltData availableBolt = GetAvailableBolt();
+
+		if (availableBolt == null)
+		{
+			if (!ReusesDeactivatedBolts)
+			{
+				m_HasFinishedSpawning = true;
+			}
+
+			return;
+		}
+
+		m_SpawnTimer = 0f;
+
+		ActivateBolt(availableBolt);
+	}
+
+	private BoltData GetAvailableBolt()
+	{
+		for (int i = 0; i < m_Bolts.Length; i++)
+		{
+			BoltData bolt = m_Bolts[i];
+
+			if (!bolt.m_IsActive &&
+				(bolt.m_LastActivatedSpawnCycle != m_SpawnCycle ||
+				 ReusesDeactivatedBolts))
+			{
+				return bolt;
+			}
+		}
+
+		return null;
+	}
+
+	private void ActivateBolt(BoltData bolt)
+	{
+		bolt.m_IsActive = true;
+		bolt.m_LastActivatedSpawnCycle = m_SpawnCycle;
+		bolt.m_LifetimeTimer = 0f;
+		bolt.m_RefreshTimer = 0f;
+
+		ApplyBoltSettings(bolt);
+		InitializeBolt(bolt);
+		UpdateBoltPosition(bolt);
+		GenerateLightning(bolt);
+		UpdateBoltTransform(bolt);
+		SetBoltVisible(bolt, true);
+
+		m_ActiveBoltCount++;
+	}
+
+	private void DeactivateBolt(BoltData bolt)
+	{
+		bolt.m_IsActive = false;
+		SetBoltVisible(bolt, false);
+
+		m_ActiveBoltCount--;
+	}
+
+	private static void SetBoltVisible(
+		BoltData bolt,
+		bool isVisible)
+	{
+		bolt.m_CoreLineRenderer.enabled = isVisible;
+		bolt.m_GlowLineRenderer.enabled = isVisible;
+	}
+
+	private void ApplyBoltSettings(BoltData bolt)
+	{
+		int requiredPositionCount = m_SegmentCount + 1;
+
+		if (bolt.m_Positions.Length != requiredPositionCount)
+		{
+			bolt.m_Positions = new Vector3[requiredPositionCount];
+			bolt.m_CoreLineRenderer.positionCount = requiredPositionCount;
+			bolt.m_GlowLineRenderer.positionCount = requiredPositionCount;
+		}
+
+		bolt.m_CoreLineRenderer.startWidth = m_CoreWidth;
+		bolt.m_CoreLineRenderer.endWidth = m_CoreWidth * m_EndWidthRatio;
+		bolt.m_GlowLineRenderer.startWidth = m_GlowWidth;
+		bolt.m_GlowLineRenderer.endWidth = m_GlowWidth * m_EndWidthRatio;
+	}
+
+	protected virtual void GenerateLightning(BoltData bolt)
+	{
+		bolt.m_Positions[0] = bolt.m_StartPosition;
+		bolt.m_Positions[^1] = bolt.m_EndPosition;
+
+		for (int i = 1; i < m_SegmentCount; i++)
+		{
+			float progress = (float)i / m_SegmentCount;
+			Vector3 basePosition =
+				Vector3.Lerp(
+					bolt.m_StartPosition,
+					bolt.m_EndPosition,
+					progress);
+
+			Vector3 randomOffset =
+				AdjustRandomOffset(Random.insideUnitSphere * m_Displacement);
+
+			bolt.m_Positions[i] = basePosition + randomOffset;
+		}
+
+		bolt.m_GlowLineRenderer.SetPositions(bolt.m_Positions);
+		bolt.m_CoreLineRenderer.SetPositions(bolt.m_Positions);
+	}
 }

@@ -468,6 +468,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd289497ab964493bd8cc0e45554e6bd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PointToPointLightningBolt
+  m_UsePrefabEffect: 0
+  m_EffectPrefab: {fileID: 0}
   m_BoltCount: 10
   m_MaxActiveBoltCount: 5
   m_SegmentCount: 5
