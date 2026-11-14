@@ -162,6 +162,7 @@ GameObject:
   - component: {fileID: 7810532941759177924}
   - component: {fileID: 3558045125194342948}
   - component: {fileID: 7969707258151822165}
+  - component: {fileID: 2053310451881934135}
   m_Layer: 8
   m_Name: Ball
   m_TagString: Untagged
@@ -359,7 +360,6 @@ MonoBehaviour:
   m_SurfaceMaxBounceNormalSpeed: 10
   m_SurfaceMaxBounceTangentialSpeed: 15
   m_SurfaceGroundDeceleration: 5
-  m_EnableBounceDistanceDebug: 1
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4
@@ -461,6 +461,23 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.5
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &2053310451881934135
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7223661482325723954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5ef4defa1c442e4995e65433b362fb7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BallSpectatorHighlight
+  m_HighlightMarker: {fileID: 0}
+  m_KeepMinimumVisibleScale: 1
+  m_ReferenceDistance: 15
+  m_MinScaleMultiplier: 1
+  m_MaxScaleMultiplier: 2.5
 --- !u!1001 &7213067859241305935
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -74,12 +74,6 @@ public class PlayerSpawner : NetworkBehaviour
 		{
 			ulong clientId = client.ClientId;
 
-			// 観戦専用ホスト(本番モード)の場合、サーバー(ClientId=0)のキャラはスポーンさせない
-			if (clientId == NetworkManager.ServerClientId && !isPlayerHost)
-			{
-				continue;
-			}
-
 			// ロビーデータストアからプレイヤー情報を取得(未登録時はデフォルト生成)
 			LobbyPlayerData playerData;
 			if (SessionPlayerDataStore.Instance != null)
@@ -89,6 +83,12 @@ public class PlayerSpawner : NetworkBehaviour
 			else
 			{
 				playerData = new LobbyPlayerData(clientId, $"Player {clientId}");
+			}
+
+			// 観戦専用ホスト(本番モード)または観戦クライアントの場合、キャラはスポーンさせない
+			if ((clientId == NetworkManager.ServerClientId && !isPlayerHost) || playerData.Team == ETeamType.Spectator)
+			{
+				continue;
 			}
 
 			// 未所属時のフォールバック(Red優先で空いている方へ)

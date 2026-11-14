@@ -31,6 +31,7 @@ public class PlayerNamePlate : MonoBehaviour
 	[SerializeField] private Color m_DefaultColor;
 
 	private static readonly List<PlayerNamePlate> m_Instances = new List<PlayerNamePlate>();
+	private static readonly Camera[] m_CameraBuffer = new Camera[8];
 
 	private PlayerNetworkProfile m_Profile;
 	private NetworkObject m_NetworkObject;
@@ -117,9 +118,23 @@ public class PlayerNamePlate : MonoBehaviour
 
 	private void UpdateBillboardAndScale()
 	{
-		if (m_CachedCamera == null || !m_CachedCamera.isActiveAndEnabled)
+		Camera spectatorCam = SpectatorDisplayManager.ActiveSpectatorCamera;
+
+		// Display 1で観戦映像を出力している純粋観戦端末のみ、観戦カメラを優先してビルボード追従
+		if (SpectatorDisplayManager.IsDisplay1Spectator && spectatorCam != null)
 		{
-			m_CachedCamera = Camera.main;
+			m_CachedCamera = spectatorCam;
+		}
+		else
+		{
+			// 通常プレイヤー(デバッグホストのDisplay 1を含む)では観戦カメラやDisplay 2用カメラを使用しない
+			if (m_CachedCamera == null ||
+				!m_CachedCamera.isActiveAndEnabled ||
+				m_CachedCamera == spectatorCam ||
+				m_CachedCamera.targetDisplay != 0)
+			{
+				m_CachedCamera = ResolvePlayerMainCamera(spectatorCam);
+			}
 		}
 
 		if (m_CachedCamera == null) return;
@@ -140,6 +155,28 @@ public class PlayerNamePlate : MonoBehaviour
 
 			transform.localScale = m_InitialScale * scaleMultiplier;
 		}
+	}
+
+	private static Camera ResolvePlayerMainCamera(Camera spectatorCam)
+	{
+		Camera mainCam = Camera.main;
+		if (mainCam != null && mainCam.isActiveAndEnabled && mainCam != spectatorCam && mainCam.targetDisplay == 0)
+		{
+			return mainCam;
+		}
+
+		int count = Camera.GetAllCameras(m_CameraBuffer);
+		int limit = Mathf.Min(count, m_CameraBuffer.Length);
+		for (int i = 0; i < limit; i++)
+		{
+			Camera cam = m_CameraBuffer[i];
+			if (cam != null && cam.isActiveAndEnabled && cam != spectatorCam && cam.targetDisplay == 0)
+			{
+				return cam;
+			}
+		}
+
+		return null;
 	}
 
 	private void UpdateNamePlate()
@@ -177,8 +214,8 @@ public class PlayerNamePlate : MonoBehaviour
 			return;
 		}
 
-		// 観戦者判定: ホスト専用端末(観戦カメラ)の場合は全プレイヤー名を表示
-		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
+		// 観戦者判定: 観戦モード端末(観戦ホスト・観戦クライアント)の場合は全プレイヤー名を表示
+		bool isSpectator = SpectatorDisplayManager.IsLocalSpectator;
 		if (isSpectator)
 		{
 			m_NameText.gameObject.SetActive(true);

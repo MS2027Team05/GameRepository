@@ -21,7 +21,8 @@ public class BallScreenIndicator : MonoBehaviour
 		Free,
 		HeldByAlly,
 		HeldByEnemy,
-		HeldBySelf
+		HeldBySelf,
+		HeldByOther
 	}
 
 	[Header("追跡対象")]
@@ -163,10 +164,16 @@ public class BallScreenIndicator : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 現在使用されているメインカメラを取得します。
+	/// 現在使用されているカメラ(観戦時は観戦カメラ、プレイヤー時はメインカメラ)を取得します。
 	/// </summary>
 	private void TrySetTargetCamera()
 	{
+		if (SpectatorDisplayManager.IsLocalSpectator && SpectatorDisplayManager.ActiveSpectatorCamera != null)
+		{
+			m_TargetCamera = SpectatorDisplayManager.ActiveSpectatorCamera;
+			return;
+		}
+
 		m_TargetCamera =
 			Camera.main;
 	}
@@ -215,6 +222,12 @@ public class BallScreenIndicator : MonoBehaviour
 
 		ulong holderClientId =
 			m_BallController.CurrentHolderId;
+
+		if (SpectatorDisplayManager.IsLocalSpectator)
+		{
+			// 観戦者視点では保持者のチーム色をそのまま表示
+			return EIndicatorState.HeldByOther;
+		}
 
 		if (holderClientId ==
 			networkManager.LocalClientId)
@@ -415,6 +428,7 @@ public class BallScreenIndicator : MonoBehaviour
 				return m_OnScreenHeldBySelfIndicator;
 
 			case EIndicatorState.HeldByEnemy:
+			case EIndicatorState.HeldByOther:
 				return m_OnScreenHeldByOtherIndicator;
 		}
 
@@ -437,6 +451,7 @@ public class BallScreenIndicator : MonoBehaviour
 				return m_OffscreenHeldBySelfIndicator;
 
 			case EIndicatorState.HeldByEnemy:
+			case EIndicatorState.HeldByOther:
 				return m_OffscreenHeldByOtherIndicator;
 		}
 
