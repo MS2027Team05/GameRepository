@@ -72,7 +72,12 @@ public partial class BallPhysicsController : NetworkBehaviour
 		/// AttachSurfaceへ吸着して
 		/// 完全停止している状態です。
 		/// </summary>
-		StuckToSurface
+		StuckToSurface,
+
+		/// <summary>
+		/// 味方プレイヤーまたはゴールを追尾している状態です。
+		/// </summary>
+		Homing
 	}
 
 	[Header("シュート後の移動")]
@@ -458,6 +463,10 @@ public partial class BallPhysicsController : NetworkBehaviour
 				UpdateSurfaceSimulation();
 				break;
 
+			case EBallMotionState.Homing:
+				UpdateHoming();
+				break;
+
 			case EBallMotionState.Idle:
 			case EBallMotionState.StuckToSurface:
 				break;
@@ -497,6 +506,8 @@ public partial class BallPhysicsController : NetworkBehaviour
 	/// </summary>
 	private void ResetInternalState()
 	{
+		ClearHomingState();
+
 		ChangeMotionState(
 			EBallMotionState.Idle);
 
@@ -518,6 +529,8 @@ public partial class BallPhysicsController : NetworkBehaviour
 	/// </summary>
 	public void ResetMotionState()
 	{
+		ClearHomingState();
+
 		if (!IsServer)
 		{
 			return;
