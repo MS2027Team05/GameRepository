@@ -268,6 +268,7 @@ GameObject:
   - component: {fileID: 47576409}
   - component: {fileID: 47576408}
   - component: {fileID: 47576407}
+  - component: {fileID: 47576410}
   m_Layer: 5
   m_Name: DeepBlue
   m_TagString: Untagged
@@ -307,12 +308,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
     m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnDown: {fileID: 1912267369}
+    m_SelectOnLeft: {fileID: 1290711175}
+    m_SelectOnRight: {fileID: 1205774623}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -388,6 +389,7 @@ GameObject:
   - component: {fileID: 124520061}
   - component: {fileID: 124520060}
   - component: {fileID: 124520059}
+  - component: {fileID: 124520062}
   m_Layer: 5
   m_Name: White
   m_TagString: Untagged
@@ -427,12 +429,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
+    m_SelectOnUp: {fileID: 1912267369}
     m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnLeft: {fileID: 1356328420}
+    m_SelectOnRight: {fileID: 1003135707}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -587,6 +589,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbyAppearancePickerUI
   m_LobbyManager: {fileID: 1703596163}
+  m_LobbyUIController: {fileID: 510647428}
   m_AppearanceCatalog: {fileID: 11400000, guid: 63c00479311eda84194acbf4acda3d83, type: 2}
   m_CharacterDisplayManager: {fileID: 1742224917}
   m_OpenModelPickerButton: {fileID: 863234653}
@@ -596,7 +599,7 @@ MonoBehaviour:
   m_ModelSelectionPanel: {fileID: 2097344206}
   m_ColorSelectionPanel: {fileID: 1164052865}
   m_CheckmarkFontAsset: {fileID: 11400000, guid: d47a798be9b7f2c4d843d19098a301e5, type: 2}
-  m_CloseOnSelect: 0
+  m_CloseOnSelect: 1
   m_FollowTargetRoot: {fileID: 467332605}
   m_FollowCanvasOffset: {x: 0, y: 0}
   m_CanvasMarginX: 20
@@ -668,6 +671,7 @@ GameObject:
   - component: {fileID: 132388253}
   - component: {fileID: 132388252}
   - component: {fileID: 132388251}
+  - component: {fileID: 132388254}
   m_Layer: 5
   m_Name: QuitButton
   m_TagString: Untagged
@@ -789,6 +793,7 @@ GameObject:
   - component: {fileID: 191064401}
   - component: {fileID: 191064400}
   - component: {fileID: 191064399}
+  - component: {fileID: 191064402}
   m_Layer: 5
   m_Name: ReadyButton
   m_TagString: Untagged
@@ -1159,6 +1164,7 @@ GameObject:
   - component: {fileID: 258126114}
   - component: {fileID: 258126113}
   - component: {fileID: 258126112}
+  - component: {fileID: 258126115}
   m_Layer: 5
   m_Name: LightBlue
   m_TagString: Untagged
@@ -1198,12 +1204,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnUp: {fileID: 1290711175}
+    m_SelectOnDown: {fileID: 1356328420}
+    m_SelectOnLeft: {fileID: 619542548}
+    m_SelectOnRight: {fileID: 1912267369}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -1279,6 +1285,7 @@ GameObject:
   - component: {fileID: 267875641}
   - component: {fileID: 267875640}
   - component: {fileID: 267875639}
+  - component: {fileID: 267875642}
   m_Layer: 5
   m_Name: WomanButton
   m_TagString: Untagged
@@ -1989,6 +1996,7 @@ RectTransform:
   - {fileID: 1915950181}
   - {fileID: 789851297}
   - {fileID: 982748864}
+  - {fileID: 1778775588}
   - {fileID: 1038678219}
   - {fileID: 696377421}
   - {fileID: 1304707253}
@@ -2015,6 +2023,9 @@ MonoBehaviour:
   m_LobbyManager: {fileID: 1703596163}
   m_TitleOverlay: {fileID: 1164873881}
   m_AppearancePickerUI: {fileID: 126805511}
+  m_TitleStartButton: {fileID: 1006691465}
+  m_TitleSettingsButton: {fileID: 1751525836}
+  m_TitleQuitButton: {fileID: 132388251}
   m_HostControlPanel: {fileID: 789851296}
   m_PlayerControlPanel: {fileID: 982748863}
   m_DebugPanel: {fileID: 1915950180}
@@ -2046,6 +2057,7 @@ GameObject:
   - component: {fileID: 556626668}
   - component: {fileID: 556626667}
   - component: {fileID: 556626666}
+  - component: {fileID: 556626669}
   m_Layer: 5
   m_Name: Black
   m_TagString: Untagged
@@ -2085,12 +2097,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
     m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
+    m_SelectOnDown: {fileID: 619542548}
     m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnRight: {fileID: 1290711175}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -2335,6 +2347,7 @@ GameObject:
   - component: {fileID: 564458974}
   - component: {fileID: 564458973}
   - component: {fileID: 564458972}
+  - component: {fileID: 564458975}
   m_Layer: 5
   m_Name: ChangeSceneButton
   m_TagString: Untagged
@@ -2456,6 +2469,7 @@ GameObject:
   - component: {fileID: 619542550}
   - component: {fileID: 619542549}
   - component: {fileID: 619542548}
+  - component: {fileID: 619542551}
   m_Layer: 5
   m_Name: Green
   m_TagString: Untagged
@@ -2495,12 +2509,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
+    m_SelectOnUp: {fileID: 556626666}
+    m_SelectOnDown: {fileID: 694157833}
     m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnRight: {fileID: 258126112}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -2576,6 +2590,7 @@ GameObject:
   - component: {fileID: 647964629}
   - component: {fileID: 647964628}
   - component: {fileID: 647964627}
+  - component: {fileID: 647964630}
   m_Layer: 5
   m_Name: ManButton
   m_TagString: Untagged
@@ -2834,6 +2849,7 @@ GameObject:
   - component: {fileID: 694157835}
   - component: {fileID: 694157834}
   - component: {fileID: 694157833}
+  - component: {fileID: 694157836}
   m_Layer: 5
   m_Name: Purple
   m_TagString: Untagged
@@ -2873,12 +2889,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
+    m_SelectOnUp: {fileID: 619542548}
     m_SelectOnDown: {fileID: 0}
     m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnRight: {fileID: 1356328420}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -3248,6 +3264,7 @@ GameObject:
   - component: {fileID: 844375452}
   - component: {fileID: 844375451}
   - component: {fileID: 844375450}
+  - component: {fileID: 844375453}
   m_Layer: 5
   m_Name: StartButton
   m_TagString: Untagged
@@ -3369,6 +3386,7 @@ GameObject:
   - component: {fileID: 863234655}
   - component: {fileID: 863234654}
   - component: {fileID: 863234653}
+  - component: {fileID: 863234656}
   m_Layer: 5
   m_Name: ChangeModel
   m_TagString: Untagged
@@ -3813,7 +3831,6 @@ RectTransform:
   m_Children:
   - {fileID: 983576854}
   - {fileID: 191064398}
-  - {fileID: 1778775588}
   - {fileID: 467332605}
   m_Father: {fileID: 510647427}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -3872,6 +3889,7 @@ GameObject:
   - component: {fileID: 983576857}
   - component: {fileID: 983576856}
   - component: {fileID: 983576855}
+  - component: {fileID: 983576858}
   m_Layer: 5
   m_Name: LeaveButton
   m_TagString: Untagged
@@ -3993,6 +4011,7 @@ GameObject:
   - component: {fileID: 1003135709}
   - component: {fileID: 1003135708}
   - component: {fileID: 1003135707}
+  - component: {fileID: 1003135710}
   m_Layer: 5
   m_Name: Yellow
   m_TagString: Untagged
@@ -4032,11 +4051,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
+    m_SelectOnUp: {fileID: 1378021429}
     m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
+    m_SelectOnLeft: {fileID: 124520059}
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
@@ -4113,6 +4132,7 @@ GameObject:
   - component: {fileID: 1006691467}
   - component: {fileID: 1006691466}
   - component: {fileID: 1006691465}
+  - component: {fileID: 1006691468}
   m_Layer: 5
   m_Name: StartButton
   m_TagString: Untagged
@@ -4371,6 +4391,7 @@ GameObject:
   - component: {fileID: 1031570468}
   - component: {fileID: 1031570467}
   - component: {fileID: 1031570466}
+  - component: {fileID: 1031570469}
   m_Layer: 5
   m_Name: ChangeMinPlayer
   m_TagString: Untagged
@@ -5465,6 +5486,7 @@ GameObject:
   - component: {fileID: 1205774625}
   - component: {fileID: 1205774624}
   - component: {fileID: 1205774623}
+  - component: {fileID: 1205774626}
   m_Layer: 5
   m_Name: DeepRed
   m_TagString: Untagged
@@ -5504,11 +5526,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
     m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
+    m_SelectOnDown: {fileID: 1378021429}
+    m_SelectOnLeft: {fileID: 47576407}
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
@@ -5618,6 +5640,7 @@ GameObject:
   - component: {fileID: 1290711177}
   - component: {fileID: 1290711176}
   - component: {fileID: 1290711175}
+  - component: {fileID: 1290711178}
   m_Layer: 5
   m_Name: Blue
   m_TagString: Untagged
@@ -5657,12 +5680,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
     m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnDown: {fileID: 258126112}
+    m_SelectOnLeft: {fileID: 556626666}
+    m_SelectOnRight: {fileID: 47576407}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -6210,6 +6233,7 @@ GameObject:
   - component: {fileID: 1356328422}
   - component: {fileID: 1356328421}
   - component: {fileID: 1356328420}
+  - component: {fileID: 1356328423}
   m_Layer: 5
   m_Name: Red
   m_TagString: Untagged
@@ -6249,12 +6273,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
+    m_SelectOnUp: {fileID: 258126112}
     m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnLeft: {fileID: 694157833}
+    m_SelectOnRight: {fileID: 124520059}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -6330,6 +6354,7 @@ GameObject:
   - component: {fileID: 1375586323}
   - component: {fileID: 1375586322}
   - component: {fileID: 1375586321}
+  - component: {fileID: 1375586324}
   m_Layer: 5
   m_Name: ForceStartButton
   m_TagString: Untagged
@@ -6451,6 +6476,7 @@ GameObject:
   - component: {fileID: 1378021431}
   - component: {fileID: 1378021430}
   - component: {fileID: 1378021429}
+  - component: {fileID: 1378021432}
   m_Layer: 5
   m_Name: Orange
   m_TagString: Untagged
@@ -6490,11 +6516,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
+    m_SelectOnUp: {fileID: 1205774623}
+    m_SelectOnDown: {fileID: 1003135707}
+    m_SelectOnLeft: {fileID: 1912267369}
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
@@ -6567,6 +6593,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 510647427}
     m_Modifications:
+    - target: {fileID: 420824808193070213, guid: c961061c6836acc4580f11cef90e5fad, type: 3}
+      propertyPath: m_LobbyUIController
+      value: 
+      objectReference: {fileID: 510647428}
+    - target: {fileID: 420824808193070213, guid: c961061c6836acc4580f11cef90e5fad, type: 3}
+      propertyPath: m_InitialSelectedButton
+      value: 
+      objectReference: {fileID: 1006691465}
     - target: {fileID: 3261395228599445156, guid: c961061c6836acc4580f11cef90e5fad, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -6658,7 +6692,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1932192562199638225, guid: c961061c6836acc4580f11cef90e5fad, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1416526226}
   m_SourcePrefab: {fileID: 100100000, guid: c961061c6836acc4580f11cef90e5fad, type: 3}
 --- !u!224 &1416526223 stripped
 RectTransform:
@@ -6874,7 +6911,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.EventSystem
-  m_FirstSelected: {fileID: 0}
+  m_FirstSelected: {fileID: 1006691463}
   m_sendNavigationEvents: 1
   m_DragThreshold: 10
 --- !u!4 &1670214812
@@ -7058,6 +7095,7 @@ GameObject:
   - component: {fileID: 1751525838}
   - component: {fileID: 1751525837}
   - component: {fileID: 1751525836}
+  - component: {fileID: 1751525839}
   m_Layer: 5
   m_Name: SettingButton
   m_TagString: Untagged
@@ -7078,6 +7116,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2001399487}
+  - {fileID: 1528895760}
   m_Father: {fileID: 1164873880}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -7180,12 +7219,12 @@ GameObject:
   - component: {fileID: 1778775590}
   - component: {fileID: 1778775589}
   m_Layer: 5
-  m_Name: PlayerName
+  m_Name: ClientPanelPlayerName
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1778775588
 RectTransform:
   m_ObjectHideFlags: 0
@@ -7199,7 +7238,8 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 499759010}
-  m_Father: {fileID: 982748864}
+  - {fileID: 433313024}
+  m_Father: {fileID: 510647427}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -7743,6 +7783,7 @@ GameObject:
   - component: {fileID: 1912267371}
   - component: {fileID: 1912267370}
   - component: {fileID: 1912267369}
+  - component: {fileID: 1912267372}
   m_Layer: 5
   m_Name: LightGreen
   m_TagString: Untagged
@@ -7782,12 +7823,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
+    m_SelectOnUp: {fileID: 47576407}
+    m_SelectOnDown: {fileID: 124520059}
+    m_SelectOnLeft: {fileID: 258126112}
+    m_SelectOnRight: {fileID: 1378021429}
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
@@ -8416,6 +8457,7 @@ GameObject:
   - component: {fileID: 2105924520}
   - component: {fileID: 2105924519}
   - component: {fileID: 2105924518}
+  - component: {fileID: 2105924521}
   m_Layer: 5
   m_Name: ChangeColor
   m_TagString: Untagged
@@ -8687,6 +8729,663 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2acc31258a632a548a5fbcdea3fa60dd, type: 3}
+--- !u!114 &47576410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 47576405}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &124520062
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 124520057}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &132388254
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132388249}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &191064402
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 191064397}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &258126115
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 258126110}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &267875642
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 267875637}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!1 &433313023
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 433313024}
+  - component: {fileID: 433313026}
+  - component: {fileID: 433313025}
+  m_Layer: 0
+  m_Name: UIFocusGlowOutline
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &433313024
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 433313023}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 727.6201, y: -136.14911, z: 613.1749}
+  m_LocalScale: {x: 2.9813664, y: 2.9813664, z: 2.9813664}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1778775588}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &433313025
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 433313023}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &433313026
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 433313023}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a98125502f715b4b83cfb77b434e436, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Selectable
+  m_Navigation:
+    m_Mode: 3
+    m_WrapAround: 0
+    m_SelectOnUp: {fileID: 0}
+    m_SelectOnDown: {fileID: 0}
+    m_SelectOnLeft: {fileID: 0}
+    m_SelectOnRight: {fileID: 0}
+  m_Transition: 1
+  m_Colors:
+    m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
+    m_HighlightedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+    m_PressedColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+    m_SelectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+    m_DisabledColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 0.5019608}
+    m_ColorMultiplier: 1
+    m_FadeDuration: 0.1
+  m_SpriteState:
+    m_HighlightedSprite: {fileID: 0}
+    m_PressedSprite: {fileID: 0}
+    m_SelectedSprite: {fileID: 0}
+    m_DisabledSprite: {fileID: 0}
+  m_AnimationTriggers:
+    m_NormalTrigger: Normal
+    m_HighlightedTrigger: Highlighted
+    m_PressedTrigger: Pressed
+    m_SelectedTrigger: Selected
+    m_DisabledTrigger: Disabled
+  m_Interactable: 1
+  m_TargetGraphic: {fileID: 0}
+--- !u!114 &556626669
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 556626664}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &564458975
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 564458970}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &619542551
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 619542546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &647964630
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 647964625}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &694157836
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 694157831}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &844375453
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 844375448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &863234656
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 863234651}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &983576858
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 983576853}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1003135710
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1003135705}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1006691468
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1006691463}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1031570469
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031570464}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1205774626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1205774621}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1290711178
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1290711173}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1356328423
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1356328418}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1375586324
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1375586319}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1378021432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1378021427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!1 &1416526225 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1932192562199638225, guid: c961061c6836acc4580f11cef90e5fad, type: 3}
+  m_PrefabInstance: {fileID: 1416526222}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1416526226
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1416526225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!1 &1528895759
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1528895760}
+  - component: {fileID: 1528895762}
+  - component: {fileID: 1528895761}
+  m_Layer: 0
+  m_Name: UIFocusGlowOutline
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1528895760
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1528895759}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -162.50986, y: -302.14905, z: 541.6392}
+  m_LocalScale: {x: 2.9813664, y: 2.9813664, z: 2.9813664}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1751525835}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1528895761
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1528895759}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1528895762
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1528895759}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a98125502f715b4b83cfb77b434e436, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Selectable
+  m_Navigation:
+    m_Mode: 3
+    m_WrapAround: 0
+    m_SelectOnUp: {fileID: 0}
+    m_SelectOnDown: {fileID: 0}
+    m_SelectOnLeft: {fileID: 0}
+    m_SelectOnRight: {fileID: 0}
+  m_Transition: 1
+  m_Colors:
+    m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
+    m_HighlightedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+    m_PressedColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+    m_SelectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+    m_DisabledColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 0.5019608}
+    m_ColorMultiplier: 1
+    m_FadeDuration: 0.1
+  m_SpriteState:
+    m_HighlightedSprite: {fileID: 0}
+    m_PressedSprite: {fileID: 0}
+    m_SelectedSprite: {fileID: 0}
+    m_DisabledSprite: {fileID: 0}
+  m_AnimationTriggers:
+    m_NormalTrigger: Normal
+    m_HighlightedTrigger: Highlighted
+    m_PressedTrigger: Pressed
+    m_SelectedTrigger: Selected
+    m_DisabledTrigger: Disabled
+  m_Interactable: 1
+  m_TargetGraphic: {fileID: 0}
+--- !u!114 &1751525839
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1751525834}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &1912267372
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1912267367}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
+--- !u!114 &2105924521
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2105924516}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b27d389a7a5fe7e4482c561d9d11b40d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFocusGlowOutline
+  m_GlowColor: {r: 1, g: 0.9, b: 0.05, a: 1}
+  m_IdleColor: {r: 0, g: 0, b: 0, a: 0}
+  m_OutlineDistance: {x: 3.5, y: -3.5}
+  m_EnablePulse: 1
+  m_PulseSpeed: 5
+  m_PulseIntensity: 0.18
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
