@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Ally
   - Ball
+  - Goal
   layers:
   - Default
   - TransparentFX
@@ -17,7 +18,7 @@ TagManager:
   - Ground
   - Ball
   - Goal
-  - 
+  - BallSurface
   - 
   - 
   - 

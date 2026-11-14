@@ -20,6 +20,10 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 		false,
 		NetworkVariableReadPermission.Everyone,
 		NetworkVariableWritePermission.Owner);
+	private readonly NetworkVariable<uint> m_RespawnVersion = new NetworkVariable<uint>(
+		0,
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Owner);
 
 	private void Awake()
 	{
@@ -37,6 +41,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 	public override void OnNetworkSpawn()
 	{
 		m_IsMoving.OnValueChanged += HandleMovingChanged;
+		m_RespawnVersion.OnValueChanged += HandleRespawnChanged;
 		ApplyMovingState(m_IsMoving.Value);
 	}
 
@@ -48,6 +53,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 		}
 
 		bool shouldMove =
+			m_PlayerController.IsMatchActionEnabled &&
 			m_PlayerController.CurrentState == PlayerController.EPlayerState.Idle &&
 			m_SurfaceMover.CurrentPlaneSpeed > m_MoveSpeedThreshold;
 
@@ -70,6 +76,42 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 	public override void OnNetworkDespawn()
 	{
 		m_IsMoving.OnValueChanged -= HandleMovingChanged;
+		m_RespawnVersion.OnValueChanged -= HandleRespawnChanged;
+	}
+
+	/// <summary>
+	/// Ownerで歩行判定を解除し、全端末のAnimatorを初期状態へ戻します。
+	/// </summary>
+	public void ResetForRespawn()
+	{
+		if (!IsSpawned)
+		{
+			ResetAnimators();
+			return;
+		}
+		if (!IsOwner) return;
+		m_IsMoving.Value = false;
+		m_RespawnVersion.Value++;
+	}
+
+	private void HandleRespawnChanged(uint previousValue, uint newValue)
+	{
+		ResetAnimators();
+	}
+
+	private void ResetAnimators()
+	{
+		if (m_Animators == null) return;
+		foreach (Animator animator in m_Animators)
+		{
+			if (animator == null || animator.runtimeAnimatorController == null) continue;
+			animator.Rebind();
+			animator.SetBool(m_IsMovingHash, false);
+			if (animator.isActiveAndEnabled)
+			{
+				animator.Update(0f);
+			}
+		}
 	}
 
 	private void HandleMovingChanged(bool previousValue, bool newValue)

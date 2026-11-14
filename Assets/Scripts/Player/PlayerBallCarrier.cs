@@ -20,8 +20,14 @@ public class PlayerBallCarrier :
 	[Header("ボール所持位置")]
 	[SerializeField] private Transform m_BallHoldPoint;
 
+	private const float m_PickupRetryInterval = 0.10f;
+
 	private PlayerController m_PlayerController;
+	private PlayerResourceController m_PlayerResourceController;
 	private bool m_HasBall;
+	private bool m_IsPassCharging;
+	private float m_PassChargeRatio;
+	private float m_NextPickupRetryTime;
 
 	/// <summary>
 	/// このプレイヤーが現在ボールを所持しているか取得します。
@@ -31,6 +37,39 @@ public class PlayerBallCarrier :
 		get
 		{
 			return m_HasBall;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスの長押しチャージ中であるか取得します。
+	/// </summary>
+	public bool IsPassCharging
+	{
+		get
+		{
+			return m_IsPassCharging;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスのチャージ進捗率(0.0〜1.0)を取得します。
+	/// </summary>
+	public float PassChargeRatio
+	{
+		get
+		{
+			return m_PassChargeRatio;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスのチャージが満タンに達しているか取得します。
+	/// </summary>
+	public bool IsPassChargeFull
+	{
+		get
+		{
+			return m_PassChargeRatio >= 1.0f;
 		}
 	}
 
@@ -52,6 +91,7 @@ public class PlayerBallCarrier :
 	{
 		m_PlayerController =
 			GetComponent<PlayerController>();
+		m_PlayerResourceController = GetComponent<PlayerResourceController>();
 	}
 
 	/// <summary>
@@ -64,12 +104,48 @@ public class PlayerBallCarrier :
 	private void OnTriggerEnter(
 		Collider other)
 	{
-		if (!IsOwner)
+		TryRequestPickup(
+			other,
+			true);
+	}
+
+	/// <summary>
+	/// 再取得禁止時間中にキャッチ範囲へ入り続けていた場合も、
+	/// 範囲外へ出ることなく一定間隔で再取得を試します。
+	/// </summary>
+	/// <param name="other">
+	/// 接触中のColliderです。
+	/// </param>
+	private void OnTriggerStay(
+		Collider other)
+	{
+		TryRequestPickup(
+			other,
+			false);
+	}
+
+	/// <summary>
+	/// Owner側から指定ColliderのBall取得を要求します。
+	/// </summary>
+	/// <param name="other">
+	/// 接触対象のColliderです。
+	/// </param>
+	/// <param name="ignoreRetryInterval">
+	/// Triggerへ入った瞬間など、再試行間隔を無視する場合はtrueです。
+	/// </param>
+	private void TryRequestPickup(
+		Collider other,
+		bool ignoreRetryInterval)
+	{
+		if (!IsOwner ||
+			m_HasBall)
 		{
 			return;
 		}
 
-		if (m_HasBall)
+		if (!ignoreRetryInterval &&
+			Time.time <
+				m_NextPickupRetryTime)
 		{
 			return;
 		}
@@ -95,6 +171,10 @@ public class PlayerBallCarrier :
 		{
 			return;
 		}
+
+		m_NextPickupRetryTime =
+			Time.time +
+			m_PickupRetryInterval;
 
 		RequestPickupServerRpc(
 			ballController.NetworkObjectId);
@@ -129,6 +209,30 @@ public class PlayerBallCarrier :
 		ballController.TrySetHolder(
 			OwnerClientId,
 			NetworkObjectId);
+	}
+
+	/// <summary>
+	/// Hostが味方からのパス受取を確認したときに、対象Ownerへボーナス付与を通知します。
+	/// </summary>
+	public void NotifyFriendlyPassReceivedServer()
+	{
+		if (!IsServer || !IsSpawned)
+		{
+			return;
+		}
+
+		ReceiveFriendlyPassBonusOwnerRpc();
+	}
+
+	[Rpc(SendTo.Owner)]
+	private void ReceiveFriendlyPassBonusOwnerRpc()
+	{
+		if (!IsOwner)
+		{
+			return;
+		}
+
+		m_PlayerResourceController?.ApplyFriendlyPassBonus();
 	}
 
 	/// <summary>
@@ -326,6 +430,11 @@ public class PlayerBallCarrier :
 
 		m_HasBall = hasBall;
 
+		if (!hasBall)
+		{
+			CancelPassCharge();
+		}
+
 		// 移動速度などプレイヤー固有の変更は、
 		// そのプレイヤーを操作するOwner側だけに通知します。
 		if (!IsOwner)
@@ -340,5 +449,68 @@ public class PlayerBallCarrier :
 
 		m_PlayerController.NotifyBallStateChanged(
 			hasBall);
+	}
+
+	// =========================================================================
+	// 追尾パスアクション用インターフェース窓口 (PG3担当: 本実装対象)
+	// =========================================================================
+
+	/// <summary>
+	/// 長押しによる追尾パスチャージおよびキャンセル案内UIの表示を開始します(PG3本実装対象)。
+	/// </summary>
+	public void BeginPassCharge()
+	{
+		if (!IsOwner || !m_HasBall)
+		{
+			return;
+		}
+
+		m_IsPassCharging = true;
+		m_PassChargeRatio = 0.0f;
+	}
+
+	/// <summary>
+	/// 追尾パスチャージの状態を毎フレーム更新します(PG3本実装対象)。
+	/// </summary>
+	/// <param name="deltaTime">経過時間(秒)</param>
+	public void UpdatePassCharge(float deltaTime)
+	{
+		if (!m_IsPassCharging)
+		{
+			return;
+		}
+
+		// TODO(PG3): Inspector設定のチャージ完了時間に応じてm_PassChargeRatioを更新しUIへ反映する
+	}
+
+	/// <summary>
+	/// 追尾パスチャージをキャンセルし、関連UIを非表示にします(PG3本実装対象)。
+	/// </summary>
+	public void CancelPassCharge()
+	{
+		m_IsPassCharging = false;
+		m_PassChargeRatio = 0.0f;
+	}
+
+	/// <summary>
+	/// ロックオン対象(味方プレイヤーまたは相手ゴール)へ向けて追尾パスを射出します(PG3本実装対象)。
+	/// </summary>
+	/// <param name="targetObject">追尾対象のGameObject</param>
+	/// <param name="targetType">追尾対象の種類</param>
+	public void ShootHoming(GameObject targetObject, ELockOnTargetType targetType)
+	{
+		CancelPassCharge();
+
+		if (!IsOwner || !m_HasBall || targetObject == null)
+		{
+			return;
+		}
+
+		// TODO(PG3): BallController / BallPhysicsControllerのHoming射出ServerRpcを呼び出す(仮実装として対象方向へ通常射出)
+		Vector3 toTarget = targetObject.transform.position - transform.position;
+		if (toTarget.sqrMagnitude > Mathf.Epsilon)
+		{
+			Shoot(toTarget.normalized);
+		}
 	}
 }
