@@ -13,6 +13,9 @@ public class SessionPlayerDataStore : MonoBehaviour
 
 	// サーバー上で各ClientIdの設定データを保持するキャッシュ
 	private readonly Dictionary<ulong, LobbyPlayerData> m_PlayerDataCache = new Dictionary<ulong, LobbyPlayerData>();
+	private MatchResultData m_LatestMatchResult;
+
+	public MatchResultData LatestMatchResult => m_LatestMatchResult;
 
 	private bool IsServer { get => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer; }
 
@@ -146,10 +149,36 @@ public class SessionPlayerDataStore : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 試合結果(スコア・勝敗)を保存します。
+	/// </summary>
+	public void SetMatchResult(int redScore, int blueScore, ETeamType winnerTeam)
+	{
+		m_LatestMatchResult = new MatchResultData
+		{
+			m_RedScore = redScore,
+			m_BlueScore = blueScore,
+			m_WinnerTeam = winnerTeam,
+			m_HasResult = true,
+		};
+	}
+
+	/// <summary>
 	/// セッション終了時やロビー解散時に全キャッシュをクリアします。
 	/// </summary>
 	public void ClearAll()
 	{
 		m_PlayerDataCache.Clear();
+		m_LatestMatchResult = default;
 	}
+}
+
+/// <summary>
+/// 試合終了時のスコアおよび勝敗結果を保持する構造体。
+/// </summary>
+public struct MatchResultData
+{
+	public int m_RedScore;
+	public int m_BlueScore;
+	public ETeamType m_WinnerTeam;
+	public bool m_HasResult;
 }

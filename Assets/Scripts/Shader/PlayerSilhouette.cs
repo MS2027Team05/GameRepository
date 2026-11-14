@@ -313,7 +313,7 @@ public class PlayerSilhouette : MonoBehaviour
 		ETeamType myTeam = m_Profile != null ? m_Profile.Team : ETeamType.None;
 
 		// ローカルクライアント情報の判定
-		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
+		bool isSpectator = SpectatorDisplayManager.IsLocalSpectator;
 		ETeamType localPlayerTeam = GetLocalPlayerTeam();
 
 		// 遮蔽シルエットの表示可否: 観戦者または自チーム(味方)の場合のみ有効
@@ -397,7 +397,7 @@ public class PlayerSilhouette : MonoBehaviour
 		}
 
 		// 遮蔽シルエットの表示可否を判定
-		bool isSpectator = !NetworkConnectManager.IsPlayerHost && (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
+		bool isSpectator = SpectatorDisplayManager.IsLocalSpectator;
 		ETeamType localPlayerTeam = GetLocalPlayerTeam();
 		ETeamType myTeam = m_Profile != null ? m_Profile.Team : ETeamType.None;
 
