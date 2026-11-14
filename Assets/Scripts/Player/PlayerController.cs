@@ -81,7 +81,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	// パスモードの経過時間
 	private float m_PassModeTimer = 0.0f;
 
-	// パスモードの制限時間（Inspectorから変更可能）
+	// パスモードの制限時間(Inspectorから変更可能)
 	[SerializeField] private float m_PassModeDuration = 5.0f;
 
 	// 最後にログを出したロックオン対象
