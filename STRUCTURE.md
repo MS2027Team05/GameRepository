@@ -17,6 +17,7 @@ GameRepository/
 │   └── skills/                  # Unity公式AIエージェントSkills
 ├── Assets/
 │   ├── Audios/                  # 音声リソース格納 (AI学習対象外)
+│   ├── Effect/                  # エフェクト用プレハブ格納
 │   ├── Fonts/                   # フォントリソース格納 (AI学習対象外)
 │   ├── haikei/                  # 背景モデル・マテリアル・テクスチャ・Prefab格納
 │   ├── Materials/               # マテリアル・シェーダー関連格納
