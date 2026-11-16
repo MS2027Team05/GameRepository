@@ -11,7 +11,7 @@
 得点後は`GoalCelebration`で全プレイヤーとボールをその場に停止します。各端末の`GoalController`が子を含めた粒子の消滅を確認し、`MatchManager`が接続中の対象端末すべての完了を受信してから再配置へ進めます。`MatchHudController`は同じ状態に連動してInspector指定の得点メッセージを表示します。
 得点メッセージの文言はHUDのInspectorでチームごとに設定し、`MatchManager.GoalScoringTeam`が同期する得点先から選択します。
 ゴールリプレイは`Game/Replay/ReplayRecorder`がクライアント側リングバッファへプレイヤーとボールの座標・状態を記録し、`MatchManager`の再生設定(`AfterEveryGoal` / `AfterMatchBestGoal` / `Both`)に応じて`GoalCelebration`後または試合終了後に`GoalReplay`へ遷移して再生する。ベストゴール判定は`IGoalHighlightEvaluator`に分離し、試合内の貢献度スコアとも連携する。
-試合終了時の個人表彰(称号)と展示用累計統計は`Game/Stats/MatchStatsTracker`が各クライアント(移動・燃料・視認時間)とサーバー(パス・パスカット・セーブ・ゴール・アシスト・陣地・保持時間)の記録を集約し、`MatchAwardEvaluator`で各プレイヤー1〜3個の称号を選出後、`MatchManager`が`SessionPlayerDataStore`経由でリザルト画面へ引き継ぐ。累計統計は`ExhibitionStatsStore`がローカルJSON(`Path.Combine(Application.persistentDataPath, "ExhibitionStats.json")` / Windows標準例: `%USERPROFILE%\AppData\LocalLow\<CompanyName>\<ProductName>\ExhibitionStats.json`)へ保存し、リザルト画面およびF1スタッフメニューから参照・初期化できる。
+試合終了時の個人表彰(称号)と展示用累計統計は`Game/Stats/MatchStatsTracker`が各クライアント(移動・燃料・視認時間)とサーバー(パス・パスカット・セーブ・ゴール・アシスト・陣地・保持時間)の記録を集約し、`MatchAwardEvaluator`で各プレイヤー1〜3個の称号を選出後、`MatchManager`が`SessionPlayerDataStore`経由でリザルト画面へ引き継ぐ。リザルト画面ではローカルプレイヤー自身の個人表彰のみを`UI/ResultAwardItemUI`で表示する。累計統計は`ExhibitionStatsStore`がローカルJSON(`Path.Combine(Application.persistentDataPath, "ExhibitionStats.json")` / Windows標準例: `%USERPROFILE%\AppData\LocalLow\<CompanyName>\<ProductName>\ExhibitionStats.json`)へ保存し、F1スタッフメニューから参照・初期化できる。
 リザルト画面(`ResultUIController`)から`LobbyScene`へ戻る際は、ホスト(Server)が通信を切断せずに`SessionPlayerDataStore.ResetAllReadyStates()`および`NetworkManager.Singleton.SceneManager.LoadScene`を実行し、全端末を同期して`LobbyScene`へ復帰させる(ただし遷移先が`TitleScene`の場合は従来通り切断してタイトルへ戻る)。
 
 ```text
@@ -146,7 +146,8 @@ GameRepository/
 │   │       ├── PlayerResourceGaugeUI.cs # リソース現在値・最大値からFilled Imageを更新するゲージUI
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・ロビー復帰制御
 │   │       ├── MatchHudController.cs    # 試合残り時間・チーム得点のHUD表示制御
-│   │       ├── ResultUIController.cs    # [EntryPoint] リザルト画面制御・スコア/プレイヤー外見表示・タイトル復帰
+│   │       ├── ResultAwardItemUI.cs     # リザルト画面の個人表彰1項目分(金/銀メダル・文言・個別背景)表示制御
+│   │       ├── ResultUIController.cs    # [EntryPoint] リザルト画面制御・スコア/プレイヤー外見/自身の実績表示・復帰制御
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定

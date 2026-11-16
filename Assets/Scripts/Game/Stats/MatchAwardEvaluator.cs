@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -208,14 +208,22 @@ public static class MatchAwardEvaluator
 	/// </summary>
 	public static string FormatAwardLabel(in PlayerAwardEntry award)
 	{
+		string rankTag = award.m_Rank <= 1 ? "#1" : "#2";
+		return $"{rankTag} {FormatAwardUiText(award)}";
+	}
+
+	/// <summary>
+	/// 称号データをUI表示用の「最多ゴール (3回)」形式の文字列へ整形します。
+	/// </summary>
+	public static string FormatAwardUiText(in PlayerAwardEntry award)
+	{
 		AwardDefinition def = GetDefinition(award.m_Category);
 		string title = award.m_Rank <= 1 ? def.m_Rank1Title : def.m_Rank2Title;
-		string rankTag = award.m_Rank <= 1 ? "#1" : "#2";
 		string valueStr = def.m_IsInteger
 			? $"{Mathf.RoundToInt(award.m_Value)}{def.m_Unit}"
 			: $"{award.m_Value:F1}{def.m_Unit}";
 
-		return $"{rankTag} {title} ({valueStr})";
+		return $"{title} ({valueStr})";
 	}
 
 	/// <summary>

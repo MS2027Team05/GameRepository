@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -25,16 +25,16 @@ public class ResultUIController : MonoBehaviour
 	[SerializeField] private PlayerAppearanceCatalog m_AppearanceCatalog;
 
 	[Header("参加プレイヤー表示(UIテキストリスト)")]
-	[Tooltip("各プレイヤーの所属チーム・名前・外見設定・個人表彰を表示するUIテキスト(任意)")]
+	[Tooltip("各プレイヤーの所属チーム・名前を表示するUIテキスト(任意)")]
 	[SerializeField] private TextMeshProUGUI m_PlayerListText;
 
-	[Header("個人表彰・展示統計UI(任意)")]
-	[Tooltip("ローカルプレイヤー自身の称号(1〜3個)を表示する専用テキスト(任意)")]
-	[SerializeField] private TextMeshProUGUI m_LocalAwardsText;
-	[Tooltip("3D台座(m_PlayerDisplays)の各スロットに対応する称号テキスト配列(任意)")]
-	[SerializeField] private TextMeshProUGUI[] m_PedestalAwardTexts;
-	[Tooltip("展示用の累計統計を表示する専用テキスト(任意。未設定時は一覧末尾へ追記)")]
-	[SerializeField] private TextMeshProUGUI m_ExhibitionStatsText;
+	[Header("ローカル個人表彰UI(任意)")]
+	[Tooltip("ローカルプレイヤーの個人表彰全体を覆うパネル(背景を含む親オブジェクト)")]
+	[SerializeField] private GameObject m_LocalAwardsRoot;
+	[Tooltip("ローカルプレイヤーの個人表彰を表示するスロット配列(最大3個)")]
+	[SerializeField] private ResultAwardItemUI[] m_LocalAwardItems;
+	[Tooltip("個人表彰が存在しない場合(観戦時等)に表示する代替テキスト(任意)")]
+	[SerializeField] private TextMeshProUGUI m_NoLocalAwardsText;
 
 	[Header("タイトル・ロビー復帰")]
 	[SerializeField] private Button m_ReturnToTitleButton;
@@ -122,7 +122,7 @@ public class ResultUIController : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 参加全プレイヤーのモデル・カラー・名前・個人表彰および展示統計をUIに反映します。
+	/// 参加全プレイヤーのモデル・カラー・名前およびローカルプレイヤーの個人表彰をUIに反映します。
 	/// </summary>
 	private void DisplayPlayers()
 	{
@@ -135,22 +135,14 @@ public class ResultUIController : MonoBehaviour
 		{
 			if (m_PlayerListText != null)
 			{
-				m_Builder.Clear();
-				m_Builder.AppendLine("プレイヤー情報なし(オフライン検証)");
-				if (m_ExhibitionStatsText == null)
-				{
-					m_Builder.AppendLine();
-					ExhibitionStatsStore.AppendSummaryText(m_Builder, GetExhibitionSnapshot(store));
-				}
-				m_PlayerListText.text = m_Builder.ToString();
+				m_PlayerListText.text = "プレイヤー情報なし(オフライン検証)";
 			}
 
 			DisplayLocalPlayerAwards(store);
-			DisplayExhibitionStats(store);
 			return;
 		}
 
-		// 3D台座および台座別称号テキストへの反映
+		// 3D台座への反映
 		int displayIndex = 0;
 		if (m_PlayerDisplays != null && m_PlayerDisplays.Length > 0)
 		{
@@ -170,7 +162,6 @@ public class ResultUIController : MonoBehaviour
 					display.ApplyPlayerData(playerData, nameColor);
 				}
 
-				UpdatePedestalAwardText(displayIndex, playerData.ClientId, store);
 				displayIndex++;
 			}
 
@@ -184,37 +175,18 @@ public class ResultUIController : MonoBehaviour
 			}
 		}
 
-		if (m_PedestalAwardTexts != null)
-		{
-			for (int i = displayIndex; i < m_PedestalAwardTexts.Length; i++)
-			{
-				if (m_PedestalAwardTexts[i] != null)
-				{
-					m_PedestalAwardTexts[i].text = string.Empty;
-				}
-			}
-		}
-
 		DisplayLocalPlayerAwards(store);
-		DisplayExhibitionStats(store);
 
 		// UIテキスト一覧への反映
 		if (m_PlayerListText != null)
 		{
 			m_Builder.Clear();
-			m_Builder.AppendLine("=== 参加プレイヤー・個人表彰 ===");
+			m_Builder.AppendLine("=== 参加プレイヤー ===");
 			foreach (var kvp in allPlayers)
 			{
 				var p = kvp.Value;
 				string teamTag = p.Team == ETeamType.Red ? "[RED]" : (p.Team == ETeamType.Blue ? "[BLUE]" : "[NONE]");
 				m_Builder.Append($"{teamTag} {p.PlayerName}\n");
-				AppendPlayerAwards(m_Builder, p.ClientId, store, "  ");
-			}
-
-			if (m_ExhibitionStatsText == null)
-			{
-				m_Builder.AppendLine();
-				ExhibitionStatsStore.AppendSummaryText(m_Builder, GetExhibitionSnapshot(store));
 			}
 
 			m_PlayerListText.text = m_Builder.ToString();
@@ -223,8 +195,13 @@ public class ResultUIController : MonoBehaviour
 
 	private void DisplayLocalPlayerAwards(SessionPlayerDataStore store)
 	{
-		if (m_LocalAwardsText == null)
+		if (m_LocalAwardItems == null || m_LocalAwardItems.Length == 0)
 		{
+			if (m_LocalAwardsRoot != null)
+			{
+				m_LocalAwardsRoot.SetActive(false);
+			}
+
 			return;
 		}
 
@@ -232,79 +209,72 @@ public class ResultUIController : MonoBehaviour
 			? NetworkManager.Singleton.LocalClientId
 			: 0;
 
-		m_Builder.Clear();
-		m_Builder.AppendLine("【あなたの個人表彰】");
-		if (store != null && store.TryGetPlayerSummary(localClientId, out PlayerMatchSummary summary) &&
-			summary.m_Awards != null && summary.m_Awards.Length > 0)
+		PlayerMatchSummary summary = null;
+		bool hasAwards = store != null
+			&& store.TryGetPlayerSummary(localClientId, out summary)
+			&& summary.m_Awards != null
+			&& summary.m_Awards.Length > 0;
+
+		if (!hasAwards)
 		{
-			AppendAwardEntries(m_Builder, summary.m_Awards, string.Empty);
-		}
-		else
-		{
-			m_Builder.AppendLine("表彰データなし(観戦 / オフライン検証)");
+			HideAllLocalAwardItems();
+			bool showEmptyNotice = m_NoLocalAwardsText != null;
+			if (m_LocalAwardsRoot != null)
+			{
+				m_LocalAwardsRoot.SetActive(showEmptyNotice);
+			}
+
+			if (m_NoLocalAwardsText != null)
+			{
+				m_NoLocalAwardsText.gameObject.SetActive(true);
+			}
+
+			return;
 		}
 
-		m_LocalAwardsText.text = m_Builder.ToString();
+		if (m_LocalAwardsRoot != null)
+		{
+			m_LocalAwardsRoot.SetActive(true);
+		}
+
+		if (m_NoLocalAwardsText != null)
+		{
+			m_NoLocalAwardsText.gameObject.SetActive(false);
+		}
+
+		PlayerAwardEntry[] awards = summary.m_Awards;
+		for (int i = 0; i < m_LocalAwardItems.Length; i++)
+		{
+			ResultAwardItemUI item = m_LocalAwardItems[i];
+			if (item == null)
+			{
+				continue;
+			}
+
+			if (i < awards.Length)
+			{
+				item.SetAward(awards[i]);
+			}
+			else
+			{
+				item.Hide();
+			}
+		}
 	}
 
-	private void UpdatePedestalAwardText(int displayIndex, ulong clientId, SessionPlayerDataStore store)
+	private void HideAllLocalAwardItems()
 	{
-		if (m_PedestalAwardTexts == null || displayIndex < 0 || displayIndex >= m_PedestalAwardTexts.Length)
+		if (m_LocalAwardItems == null)
 		{
 			return;
 		}
 
-		TextMeshProUGUI targetText = m_PedestalAwardTexts[displayIndex];
-		if (targetText == null)
+		for (int i = 0; i < m_LocalAwardItems.Length; i++)
 		{
-			return;
-		}
-
-		m_Builder.Clear();
-		AppendPlayerAwards(m_Builder, clientId, store, string.Empty);
-		targetText.text = m_Builder.ToString();
-	}
-
-	private void DisplayExhibitionStats(SessionPlayerDataStore store)
-	{
-		if (m_ExhibitionStatsText == null)
-		{
-			return;
-		}
-
-		m_Builder.Clear();
-		ExhibitionStatsStore.AppendSummaryText(m_Builder, GetExhibitionSnapshot(store));
-		m_ExhibitionStatsText.text = m_Builder.ToString();
-	}
-
-	private static ExhibitionStatsSnapshot GetExhibitionSnapshot(SessionPlayerDataStore store)
-	{
-		return store != null && store.HasExhibitionStats
-			? store.LatestExhibitionStats
-			: ExhibitionStatsStore.ToSnapshot();
-	}
-
-	private static void AppendPlayerAwards(
-		StringBuilder builder,
-		ulong clientId,
-		SessionPlayerDataStore store,
-		string prefix)
-	{
-		if (store == null || !store.TryGetPlayerSummary(clientId, out PlayerMatchSummary summary) ||
-			summary.m_Awards == null || summary.m_Awards.Length == 0)
-		{
-			builder.AppendLine($"{prefix}- 表彰なし");
-			return;
-		}
-
-		AppendAwardEntries(builder, summary.m_Awards, prefix);
-	}
-
-	private static void AppendAwardEntries(StringBuilder builder, PlayerAwardEntry[] awards, string prefix)
-	{
-		for (int i = 0; i < awards.Length; i++)
-		{
-			builder.AppendLine($"{prefix}{MatchAwardEvaluator.FormatAwardRichText(awards[i])}");
+			if (m_LocalAwardItems[i] != null)
+			{
+				m_LocalAwardItems[i].Hide();
+			}
 		}
 	}
 
