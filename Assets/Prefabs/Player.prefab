@@ -59,7 +59,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.49019608}
@@ -269,7 +269,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ff652103e0d881d4a878112a5d7ff498, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerNamePlate
   m_NameText: {fileID: 4093982885352747298}
   m_HideOnLocalPlayer: 0
@@ -339,7 +339,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9541d86e2fd84c1d9990edf0852d74ab, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshPro
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -466,8 +466,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bd289497ab964493bd8cc0e45554e6bd, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PointToPointLightningBolt
+  m_UsePrefabEffect: 0
+  m_EffectPrefab: {fileID: 0}
   m_BoltCount: 10
   m_MaxActiveBoltCount: 5
   m_SegmentCount: 5
@@ -567,7 +569,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.4490565, g: 0.4490565, b: 0.4490565, a: 1}
@@ -660,7 +662,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
@@ -683,7 +685,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GraphicRaycaster
   m_IgnoreReversedGraphics: 1
   m_BlockingObjects: 0
@@ -798,7 +800,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.49019608}
@@ -980,7 +982,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
   GlobalObjectIdHash: 4203264452
   InScenePlacedSourceGlobalObjectIdHash: 0
@@ -1034,7 +1036,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ff5de3b5ba811164f8c054f88914fff9, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::ClientNetworkTransform
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkTransformExpanded: 1
@@ -1080,7 +1082,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7a72940de5571044d99be82d535c95e2, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInputReceiver
   m_MoveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_LookAction: {fileID: -5630151704836100654, guid: 052faaac586de48259a63d0c4782560b, type: 3}
@@ -1089,9 +1091,9 @@ MonoBehaviour:
   m_BrakeAction: {fileID: 4505039029517225548, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_ShootAction: {fileID: 41435168702994022, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_ViewResetAction: {fileID: 8129071423441501024, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  m_LockOnAction: {fileID: 0}
+  m_LockOnAction: {fileID: -7462022938041611242, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_MoveTriggerAction: {fileID: -1817242124071654599, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  m_SubAction: {fileID: 0}
+  m_SubAction: {fileID: -7462022938041611242, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1102,7 +1104,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: aaa3a2c3539c4d94ea45ab3bd60b51ed, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   ShowTopMostFoldoutHeaderGroup: 1
   m_PlayerCameraObject: {fileID: 6176978571518227029}
@@ -1112,6 +1114,7 @@ MonoBehaviour:
   m_MovingEffect: {fileID: 392562595453950173}
   m_StartPoint: {fileID: 827173490743744242}
   m_EndPoint: {fileID: 7127360878203389931}
+  m_PassModeDuration: 5
 --- !u!114 &6506262699355711857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1122,7 +1125,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 180ecf9b41d478f468eb3e9083753217, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineImpulseSource
   ImpulseDefinition:
     ImpulseChannel: 1
@@ -1175,7 +1178,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ff47b9be831fabc4d9c109233cb5a42e, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::GravityMover
   ShowTopMostFoldoutHeaderGroup: 1
   m_BaseFallSpeed: 20
@@ -1196,7 +1199,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 72454944102d6bb42a49ee2c1d1e9132, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerCameraEffect
   m_CinemachineCamera: {fileID: 6637677870051114966}
   m_CameraPivot: {fileID: 5063456265299468095}
@@ -1256,11 +1259,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 68d8b2642e152524b82ad43fb59f36d1, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBallCarrier
   ShowTopMostFoldoutHeaderGroup: 1
   m_ManBallHoldPoint: {fileID: 7303485531803542605}
   m_WomanBallHoldPoint: {fileID: 6659655440292655073}
+  m_PassChargeDuration: 1
 --- !u!114 &6097049237247373300
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1271,7 +1275,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 84d6580bc7cea4141bb4a0b469289459, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAimGuide
   m_AimReticle: {fileID: 5509881642956187267}
   m_AimPredictionLine: {fileID: 7693887922062000978}
@@ -1300,7 +1304,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 44515c9010c898243b0cfaef0a1bff69, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerOutOfBoundsRespawner
   ShowTopMostFoldoutHeaderGroup: 1
   m_IsRespawnEnabled: 0
@@ -1316,7 +1320,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c341a49390dda194c91e377a613be574, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerGroundDetector
   m_GroundCheckDistance: 1.5
   m_GroundLayerMask:
@@ -1335,7 +1339,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cd64b44efc9278c47bca2a31c108f6a8, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSurfaceMover
   m_GroundMoveSpeed: 10
   m_GroundAcceleration: 15
@@ -1352,7 +1356,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a3a1cadf0e26729468936ba6ba72bc96, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerNetworkProfile
   ShowTopMostFoldoutHeaderGroup: 1
 --- !u!114 &5433142072243466315
@@ -1365,7 +1369,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d021e533dec891c41b7a2c6975c60467, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSilhouette
   m_UseOutline: 1
   m_OutlineMaterial: {fileID: 2100000, guid: cb11e2164cbdccc4a8f71fb348cc0744, type: 2}
@@ -1386,7 +1390,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 77523f70ee577ea418ac0e8dbc4adac6, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerEdgeDiagnostics
   m_EnableDiagnostics: 0
   m_ShowOnScreenHUD: 1
@@ -1412,7 +1416,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1d6f8175cd5d17044a8ff22eeed86e96, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAppearance
   m_AppearanceCatalog: {fileID: 11400000, guid: 63c00479311eda84194acbf4acda3d83, type: 2}
   m_ManModel: {fileID: 6057017828986958686}
@@ -1444,7 +1448,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fea68688048582a40862ff7855c4e244, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAnimationController
   ShowTopMostFoldoutHeaderGroup: 1
   m_Animators:
@@ -1463,7 +1467,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b06efcce98c31c747a7a182dacf9664a, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::LockOnManager
   m_TargetCamera: {fileID: 0}
   m_MaxSearchDistance: 30
@@ -1482,7 +1486,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 66583331e54d25b42b444ce71535107c, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerResourceController
   ShowTopMostFoldoutHeaderGroup: 1
   m_MaxResource: 100
@@ -1506,7 +1510,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dd379dbf2868c7e42b6f5caa05cc8365, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::ElectricAction
   ShowTopMostFoldoutHeaderGroup: 1
   m_ChargeDuration: 1.5
@@ -1754,7 +1758,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -1891,7 +1895,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.49019608}
@@ -2002,7 +2006,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.49019608}
@@ -2080,7 +2084,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.13541469, g: 0.5018867, b: 0.5009586, a: 0.392}
@@ -2110,7 +2114,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 658515dff715e9d43ad4745ad3334025, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerResourceGaugeUI
   m_FillImage: {fileID: 2885279373428061527}
   m_ResourceText: {fileID: 743175473774320236}
@@ -2197,7 +2201,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineCamera
   Priority:
     Enabled: 0
@@ -2240,7 +2244,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00b2d199b96b516448144ab30fb26aed, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineImpulseListener
   ApplyAfter: 2
   ChannelMask: 1
@@ -2618,7 +2622,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d0b89ea63e9ec484782b700967435ecf, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::LandingMarkerEffect
   m_InnerRing: {fileID: 3852954114074167243}
   m_MiddleRing: {fileID: 6578001274456173961}
@@ -2691,7 +2695,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.49019608}
@@ -2757,7 +2761,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ec3d0b6f29e2404b9da661d630a8e724, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRecoveryEffectController
   m_LightningCenter: {x: 0, y: 0.5, z: 0}
   m_LightningRadius: 0.85
@@ -2820,7 +2824,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.13510138, g: 0.6226415, b: 0.59157836, a: 1}
@@ -3142,7 +3146,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -7109589149227940842, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     - target: {fileID: -4204727659268807458, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3150,7 +3154,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -4204727659268807458, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: f026894e8b7e7b7469d65022d2df2592, type: 2}
     - target: {fileID: -2161385379441642910, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3158,7 +3162,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -2161385379441642910, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: 3f4aba630f13053419b234b7768eca15, type: 2}
     - target: {fileID: 919132149155446097, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_Name
@@ -3174,7 +3178,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1201401571519317150, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     - target: {fileID: 1772376216499683464, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3182,7 +3186,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1772376216499683464, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     - target: {fileID: 4047744587175770775, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3190,7 +3194,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4047744587175770775, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: 0ac0df477b446ca438f85afb1de7be52, type: 2}
     - target: {fileID: 5813586786833865523, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3198,7 +3202,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5813586786833865523, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: f026894e8b7e7b7469d65022d2df2592, type: 2}
     - target: {fileID: 6671708039190754087, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3206,7 +3210,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6671708039190754087, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     - target: {fileID: 7509107195380862641, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3218,11 +3222,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7509107195380862641, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     - target: {fileID: 7509107195380862641, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: f67434ec27143b84c8130b621259a318, type: 2}
     - target: {fileID: 8406040248665637945, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_SortingLayer
@@ -3230,7 +3234,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8406040248665637945, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3311,7 +3315,7 @@ Animator:
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
   m_AnimatePhysics: 0
-  m_WarningMessage: 
+  m_WarningMessage:
   m_HasTransformHierarchy: 1
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
@@ -3380,7 +3384,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -7109589149227940842, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: a3c003ee9858a4a43a0f095db30e7cd7, type: 2}
     - target: {fileID: -4204727659268807458, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3388,7 +3392,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -4204727659268807458, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: f026894e8b7e7b7469d65022d2df2592, type: 2}
     - target: {fileID: -3876858254125265034, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3396,7 +3400,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -3876858254125265034, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     - target: {fileID: -2161385379441642910, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3404,7 +3408,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -2161385379441642910, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: 3f4aba630f13053419b234b7768eca15, type: 2}
     - target: {fileID: 919132149155446097, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_Name
@@ -3420,7 +3424,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2461928027090323370, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
     - target: {fileID: 4047744587175770775, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3428,7 +3432,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4047744587175770775, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: 0ac0df477b446ca438f85afb1de7be52, type: 2}
     - target: {fileID: 5813586786833865523, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3436,7 +3440,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5813586786833865523, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: f026894e8b7e7b7469d65022d2df2592, type: 2}
     - target: {fileID: 6671708039190754087, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3444,7 +3448,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6671708039190754087, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: a3c003ee9858a4a43a0f095db30e7cd7, type: 2}
     - target: {fileID: 8144208826691130677, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3452,7 +3456,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8144208826691130677, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: a3c003ee9858a4a43a0f095db30e7cd7, type: 2}
     - target: {fileID: 8406040248665637945, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_SortingLayer
@@ -3460,7 +3464,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8406040248665637945, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value: 
+      value:
       objectReference: {fileID: 2100000, guid: a3c003ee9858a4a43a0f095db30e7cd7, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3530,7 +3534,7 @@ Animator:
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
   m_AnimatePhysics: 0
-  m_WarningMessage: 
+  m_WarningMessage:
   m_HasTransformHierarchy: 1
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0

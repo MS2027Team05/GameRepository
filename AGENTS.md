@@ -17,6 +17,7 @@ Unity 6000.3.27.f2
 - Cinemachine(3.1.7)
 - ShaderGraph(17.3.0)
 - InputSystem(1.20.1)
+- Visual Effect Graph(17.3.0)
 
 # 注意事項
 - 回答及びコメントアウトは日本語で実装すること。

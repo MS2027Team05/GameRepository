@@ -1,4 +1,4 @@
-﻿# ディレクトリ構造 (STRUCTURE.md)
+# ディレクトリ構造 (STRUCTURE.md)
 
 本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
 
@@ -17,6 +17,7 @@ GameRepository/
 │   └── skills/                  # Unity公式AIエージェントSkills
 ├── Assets/
 │   ├── Audios/                  # 音声リソース格納 (AI学習対象外)
+│   ├── Effect/                  # エフェクト用プレハブ格納
 │   ├── Fonts/                   # フォントリソース格納 (AI学習対象外)
 │   ├── haikei/                  # 背景モデル・マテリアル・テクスチャ・Prefab格納
 │   ├── Materials/               # マテリアル・シェーダー関連格納
@@ -35,6 +36,7 @@ GameRepository/
 │   │   │   │   ├── BallPhysicsController.cs           # [EntryPoint] Free Flight・Surface Physics状態統括
 │   │   │   │   ├── BallPhysicsController.Air.cs       # 飛行・Surface探索・吸着処理
 │   │   │   │   ├── BallPhysicsController.Collision.cs # Collision処理
+│   │   │   │   ├── BallPhysicsController.Homing.cs    # 追尾パス物理処理
 │   │   │   │   ├── BallPhysicsController.Surface.cs   # BallSurface Physics連携
 │   │   │   │   ├── BallBounce.cs                      # ボールの跳ね返り挙動制御
 │   │   │   │   └── Attraction/                        # 疑似重力・Surface探索
@@ -52,14 +54,20 @@ GameRepository/
 │   │   │   │       ├── BallSurfaceSimulation.ConcaveAirborne.cs
 │   │   │   │       └── BallSurfaceSimulation.Vertex.cs
 │   │   │   ├── UI/
-│   │   │   │   └── BallScreenIndicator.cs     # ボール位置表示用画面内・画面外インジケーターUI制御
+│   │   │   │   ├── BallScreenIndicator.cs     # ボール位置表示用画面内・画面外インジケーターUI制御
+│   │   │   │   └── BallSpectatorHighlight.cs  # 観戦時のボール最小視認スケール維持・強調制御
 │   │   │   └── Debug/
 │   │   │       └── BallDebugRespawner.cs      # ボール位置リセット用デバッグ機能
 │   │   ├── Game/                # 試合進行・ルール管理。ゴール範囲からの通知を得点先へ接続し、両ゴール共通の得点制限をサーバー側で管理
-│   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理
+│   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理・リザルト遷移演出制御
 │   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
-│   │   │   └── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
+│   │   │   ├── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
+│   │   │   └── Spectator/               # 観戦カメラ演出・自動スイッチング制御
+│   │   │       ├── SpectatorCameraDirector.cs # [EntryPoint] 定点・天地固定追従・ゴール前カメラの自動スイッチング制御
+│   │   │       └── SpectatorOverlayUIController.cs # 観戦中継テロップ(カメラ名・ボール保持チーム)表示制御
 │   │   ├── Editor/              # エディタ拡張・開発支援ツール
+│   │   │   ├── SetupResultAndStaffMenu.cs # [EntryPoint] スタッフメニュー拡張・GameScene配置・ResultScene自動生成ツール
+│   │   │   ├── StageObjectBilateralPlacerEditor.cs # StageObjectBilateralPlacer用カスタムInspector(手動/編集時再構築・Prefab誤編集防止)
 │   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
 │   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
 │   │   ├── Network/             # 通信接続・同期制御
@@ -71,10 +79,10 @@ GameRepository/
 │   │   │   ├── LobbyPlayerDisplay.cs    # ロビー台座用の表示特化キャラクター外見・頭上3Dネーム追従制御
 │   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
 │   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(キャラ・色・固定チーム・IP)永続化・自動反映
-│   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・シーン間データ引継ぎ管理
+│   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・試合結果(スコア/勝敗)保持・シーン間データ引継ぎ管理
 │   │   │   ├── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
 │   │   │   ├── TitleOverlayController.cs # [EntryPoint] ロビー内タイトル画面演出・個別開始制御
-│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1キー緊急管理・診断メニュー制御
+│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1キー緊急管理・診断・インゲーム操作(無制限エネルギー/リスポーン/シーン遷移)制御
 │   │   │   ├── GameSessionResetCoordinator.cs # [EntryPoint] ゲーム終了時の動的オブジェクト破棄・セッション初期化・ロビー復帰制御
 │   │   │   └── TutorialManager.cs       # [EntryPoint] チーム別チュートリアル進捗監視・同期遷移制御
 │   │   ├── Shader/              # シェーダー連携・描画制御スクリプト
@@ -86,7 +94,7 @@ GameRepository/
 │   │   │   ├── StageRailRingBuilder.cs       # [EntryPoint] 外周レール(3種)・往復キューブ・外側足場一括生成コンポーネント
 │   │   │   ├── StageRailPatternSwitcher.cs   # 外周レール(3種+None)x足場(On/Off)2x3パターン切り替え・マルチ同期コンポーネント
 │   │   │   ├── StageShuttleBlock.cs          # 4分割レール区間を往復移動するブロック(キューブ)コンポーネント
-│   │   │   └── StageObjectBilateralPlacer.cs # 基準BoxColliderサイズに基づく等間隔両端配置・エディタ即時反映コンポーネント
+│   │   │   └── StageObjectBilateralPlacer.cs # 基準BoxColliderサイズに基づく等間隔両端配置コンポーネント(CustomEditorから再構築)
 │   │   └── Player/              # プレイヤー制御・挙動ロジック
 │   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
 │   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御
@@ -125,6 +133,7 @@ GameRepository/
 │   │       ├── PlayerResourceGaugeUI.cs # リソース現在値・最大値からFilled Imageを更新するゲージUI
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・ロビー復帰制御
 │   │       ├── MatchHudController.cs    # 試合残り時間・チーム得点のHUD表示制御
+│   │       ├── ResultUIController.cs    # [EntryPoint] リザルト画面制御・スコア/プレイヤー外見表示・タイトル復帰
 │   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定
@@ -155,3 +164,23 @@ GameRepository/
 - `Assets/VFX/Lightning/VFXScripts/`: 継承元の `ALightningBolt` が共通マテリアルの読込、所有者の色取得、変更通知の購読と表示色の反映を担当する。継承先は形状と発生方法を担当する。
 - `Assets/VFX/Lightning/Resources/Lightning/`: 全種類の電流で使う芯用・発光用マテリアルを保持する。色は電流ごとの `MaterialPropertyBlock` で上書きする。
 - `PlayerAppearance.TryGetEffectColor` / `EffectColorChanged`: プレイヤーの選択色を演出へ提供する取得口と変更通知。プレイヤーの子以外へ生成する電流は `ALightningBolt.SetOwner` で所有者を渡す。
+
+## 球面を這う電撃VFX
+- `Assets/VFX/Lightning/VFXScripts` は、電撃のプール・発生周期・寿命・芯と発光の描画を基底クラスで管理し、派生クラスで形状と追従方法を定義する。
+- `ALightningBolt.GenerateLightning` は形状生成、`UpdateBoltTransform` は生成直後と有効な各フレームの追従更新の拡張ポイント。既存の派生クラスは従来の直線ベースの形状生成を利用する。
+- `SphereSurfaceLightningBolt` は球面用の入口。ローカル座標の円弧に接線方向の揺れを加えて球面へ戻し、中心Transformへの追従と球面上の移動を行う。形状の更新間隔と追従更新を分離し、電撃ごとの頂点配列を再利用する。
+- 半径と表面オフセットは中心Transformのローカル単位。球形を保つ均等スケールを想定する。LineRendererの線分による埋まりは分割数と表面オフセットで調整する。
+
+## 移動経路に残る電撃VFX
+
+- `ALightningBolt.UpdateSource` は電撃の更新・発生より前に追跡元の状態を更新する拡張ポイント。`ClearActiveBolts` は有効な電撃をプールへ戻し、表示を終了する。
+- `TrailLightningBolt` は移動経路用の入口。追跡対象の移動を距離でサンプリングし、発生時の経路をワールド座標で固定する。停止中は新規発生を止め、瞬間移動・追跡対象の変更・再有効化で記録を区切る。既存の電撃は寿命で終了するが、コンポーネント無効化時は表示を終了する。
+- 経路の保存・距離制限・等間隔の経路取得は固定長の循環バッファに分離する。電撃ごとの経路配列は再利用する。記録点数の上限でも古い記録を破棄するため、最大長は保存を保証する距離ではなく上限として扱う。
+
+## alpha更新とモデル・電撃色の統合
+
+- 所持状態と追尾パスは `BallController` が管理し、描画の付け替えと復元は `BallHoldAttachment` に委譲する。所持位置は `PlayerBallCarrier.BallHoldPoint` が表示中の男女モデルに応じて提供する。
+- `BallHoldAttachment` は描画配下の電撃へ所有者を明示し、解放時に色の上書きを解除する。ボール本体の投球状態は軌跡電撃の表示条件として同期する。
+- `ALightningBolt` はプログラム生成の電撃と差し替えPrefabの再生を切り替える。生成プールは遅延初期化し、初期化前に受け取った選択色も反映する。無効化時は色通知の購読解除と両方式の再生停止を行う。
+- 色の個別上書きはLineRendererを対象とし、差し替えPrefab内のParticleSystemやVFX Graphの色制御は含めない。
+- `VFX_testScene` はモデルの保持ジョイント確認用配置を残し、alphaの独立したボールとモデル接触電撃の確認用配置を併設する。

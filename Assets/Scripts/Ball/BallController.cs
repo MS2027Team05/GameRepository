@@ -53,6 +53,9 @@ public class BallController : NetworkBehaviour
 	private readonly NetworkVariable<bool> m_HasHolder =
 		new NetworkVariable<bool>();
 
+	private readonly NetworkVariable<bool> m_IsShotInFlight =
+		new NetworkVariable<bool>();
+
 	private Rigidbody m_Rigidbody;
 	private NetworkTransform m_NetworkTransform;
 	private BallPhysicsController m_BallPhysics;
@@ -104,6 +107,11 @@ public class BallController : NetworkBehaviour
 	}
 
 	/// <summary>
+	/// 投球後、停止または所持されるまでの軌跡表示対象か取得します。
+	/// </summary>
+	public bool IsShotInFlight => IsSpawned && !HasHolder && m_IsShotInFlight.Value;
+
+	/// <summary>
 	/// Rigidbodyの参照を取得します。
 	/// </summary>
 	private void Awake()
@@ -123,6 +131,7 @@ public class BallController : NetworkBehaviour
 	{
 		if (IsServer)
 		{
+			m_IsShotInFlight.Value = false;
 			m_InitialPosition = transform.position;
 			m_InitialRotation = transform.rotation;
 			SetMatchPaused(MatchManager.Instance != null && MatchManager.Instance.MatchState != MatchManager.EMatchState.Playing);
@@ -173,6 +182,26 @@ public class BallController : NetworkBehaviour
 		}
 
 		UpdatePassBonusEligibility();
+		UpdateShotInFlight();
+	}
+
+	/// <summary>
+	/// ホストで停止を判定し、停止後は次の投球まで軌跡表示を再開しません。
+	/// </summary>
+	private void UpdateShotInFlight()
+	{
+		if (!m_IsShotInFlight.Value)
+		{
+			return;
+		}
+
+		bool isMoving = m_BallPhysics != null
+			? m_BallPhysics.IsMoving
+			: m_Rigidbody.linearVelocity.sqrMagnitude > Mathf.Epsilon;
+		if (HasHolder || IsMatchPaused || !isMoving)
+		{
+			m_IsShotInFlight.Value = false;
+		}
 	}
 
 	/// <summary>
@@ -308,6 +337,7 @@ public class BallController : NetworkBehaviour
 
 		m_HasHolder.Value =
 			true;
+		m_IsShotInFlight.Value = false;
 
 		// 所持確定時に一度だけ判定し、強制ドロップや敵からの取得では付与しません。
 		bool isFriendlyPass = m_IsPassInFlight &&
@@ -330,8 +360,6 @@ public class BallController : NetworkBehaviour
 
 		return true;
 	}
-
-	//
 
 	/// <summary>
 	/// Host上で現在の所持者からボールを奪い、
@@ -414,7 +442,111 @@ public class BallController : NetworkBehaviour
 		return true;
 	}
 
+	/// <summary>
+	/// Transformを持つ対象への追尾パス。
+	/// 主に味方プレイヤー用。
+	/// </summary>
+	public bool TryStartHomingPass(Transform target)
+	{
+		if (target == null)
+		{
+			return false;
+		}
 
+		return StartHomingPassInternal(
+			target,
+			Vector3.zero,
+			true);
+	}
+
+	/// <summary>
+	/// 固定座標への追尾パス。
+	/// 主に相手ゴール用。
+	/// </summary>
+	public bool TryStartHomingPass(Vector3 targetPosition)
+	{
+		return StartHomingPassInternal(
+			null,
+			targetPosition,
+			false);
+	}
+
+	/// <summary>
+	/// 追尾パスの共通処理。
+	/// </summary>
+	private bool StartHomingPassInternal(
+		Transform target,
+		Vector3 targetPosition,
+		bool useTransform)
+	{
+		if (!IsServer || !CanPlayMatch())
+		{
+			return false;
+		}
+
+		if (!m_HasHolder.Value)
+		{
+			return false;
+		}
+
+		if (m_BallPhysics == null)
+		{
+			Debug.LogError(
+				"[BallController] BallPhysicsControllerが見つかりません。",
+				this);
+
+			return false;
+		}
+
+		ulong previousHolderClientId =
+			m_CurrentHolderId.Value;
+
+		ETeamType passerTeam = ETeamType.None;
+
+		if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			m_CurrentHolderNetworkObjectId.Value,
+			out NetworkObject previousHolderObject))
+		{
+			PlayerNetworkProfile profile =
+				previousHolderObject.GetComponent<PlayerNetworkProfile>();
+
+			if (profile != null)
+			{
+				passerTeam = profile.Team;
+			}
+		}
+
+		StartRepickupLock(previousHolderClientId);
+
+		if (!DetachFromHolder())
+		{
+			m_HasRepickupLock = false;
+			return false;
+		}
+
+		m_HasHolder.Value = false;
+		m_CurrentHolderId.Value = 0;
+
+		m_LastPasserTeam = passerTeam;
+		m_IsPassInFlight = true;
+		m_IsShotInFlight.Value = true;
+
+		// 対象の種類によって追尾方法を切り替える
+		if (useTransform)
+		{
+			m_BallPhysics.BeginHoming(target);
+		}
+		else
+		{
+			m_BallPhysics.BeginHoming(targetPosition);
+		}
+
+		Debug.Log(
+			"[BallController] 追尾パス開始: " +
+			(useTransform ? target.name : "EnemyGoal"));
+
+		return true;
+	}
 	/// <summary>
 	/// Host上で所持中のボールを指定方向へ射出します。
 	/// </summary>
@@ -478,6 +610,7 @@ public class BallController : NetworkBehaviour
 
 		m_LastPasserTeam = passerTeam;
 		m_IsPassInFlight = true;
+		m_IsShotInFlight.Value = true;
 
 		// BallPhysicsControllerへ、
 		// シュート開始を通知します。
@@ -523,6 +656,7 @@ public class BallController : NetworkBehaviour
 
 		// 強制解放されたボールは、味方パスボーナスの対象外です。
 		m_IsPassInFlight = false;
+		m_IsShotInFlight.Value = false;
 		m_LastPasserTeam = ETeamType.None;
 
 		// シュートではない解放として、
@@ -561,6 +695,10 @@ public class BallController : NetworkBehaviour
 	{
 		if (!IsServer || !IsSpawned) return;
 		IsMatchPaused = paused;
+		if (paused)
+		{
+			m_IsShotInFlight.Value = false;
+		}
 		if (!m_Rigidbody.isKinematic)
 		{
 			m_Rigidbody.linearVelocity = Vector3.zero;
@@ -575,6 +713,7 @@ public class BallController : NetworkBehaviour
 	public bool ResetForRestart()
 	{
 		if (!IsServer || !IsSpawned) return false;
+		m_IsShotInFlight.Value = false;
 		ReleaseBall();
 		if (HasHolder || (transform.parent != null && !NetworkObject.TryRemoveParent(true)))
 		{
@@ -586,6 +725,7 @@ public class BallController : NetworkBehaviour
 		m_LastHolderClientId = 0;
 		m_RepickupUnlockTime = 0f;
 		m_CurrentHolderId.Value = 0;
+		ClearHolderAttachment();
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
 		m_Rigidbody.useGravity = false;
@@ -604,6 +744,7 @@ public class BallController : NetworkBehaviour
 	{
 		ApplyHolderState(
 			newValue);
+
 	}
 
 	/// <summary>
@@ -692,6 +833,14 @@ public class BallController : NetworkBehaviour
 			holder.BallHoldPoint.position,
 			holder.BallHoldPoint.rotation);
 
+		if (m_NetworkTransform != null && m_NetworkTransform.CanCommitToTransform)
+		{
+			m_NetworkTransform.Teleport(
+				transform.position,
+				transform.rotation,
+				transform.localScale);
+		}
+
 		return true;
 	}
 
@@ -741,7 +890,7 @@ public class BallController : NetworkBehaviour
 	private void RefreshHolderAttachment()
 	{
 		PlayerBallCarrier holder = null;
-		if (HasHolder && NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+		if (HasHolder && NetworkManager != null && NetworkManager.SpawnManager != null && NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
 			m_CurrentHolderNetworkObjectId.Value, out NetworkObject holderNetworkObject))
 		{
 			holder = holderNetworkObject.GetComponent<PlayerBallCarrier>();
@@ -789,4 +938,5 @@ public class BallController : NetworkBehaviour
 		Transform holdPoint = m_AppliedHolder.BallHoldPoint;
 		transform.SetPositionAndRotation(holdPoint.position, holdPoint.rotation);
 	}
+
 }

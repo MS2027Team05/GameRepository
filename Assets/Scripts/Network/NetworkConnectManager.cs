@@ -8,6 +8,7 @@ using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -23,6 +24,7 @@ public class NetworkConnectManager : NetworkBehaviour
 	[SerializeField] private Button m_HostSpectatorButton;
 	[SerializeField] private Button m_HostPlayerButton;
 	[SerializeField] private Button m_ClientButton;
+	[SerializeField] private Button m_ClientSpectatorButton;
 	[SerializeField] private Button m_QuitButton;
 	[SerializeField] private TMP_InputField m_IpInputField;
 	[SerializeField] private TextMeshProUGUI m_StatusText;
@@ -36,6 +38,7 @@ public class NetworkConnectManager : NetworkBehaviour
 	[SerializeField] private GameObject m_ClientPlayerPanel;
 	[SerializeField] private Button m_JoinRedTeamButton;
 	[SerializeField] private Button m_JoinBlueTeamButton;
+	[SerializeField] private Button m_JoinSpectatorTeamButton;
 	[SerializeField] private Button m_LeaveTeamButton;
 	[SerializeField] private Button m_ClientDisconnectButton;
 
@@ -51,6 +54,9 @@ public class NetworkConnectManager : NetworkBehaviour
 
 	// デバッグ用兼任ホストかどうかの共有フラグ
 	public static bool IsPlayerHost { get; private set; }
+
+	// 観戦者として接続したかどうかのローカルフラグ
+	public static bool IsSpectatorClient { get; private set; }
 
 	private UnityTransport m_UnityTransport;
 	private readonly StringBuilder m_StatusBuilder = new StringBuilder();
@@ -172,6 +178,11 @@ public class NetworkConnectManager : NetworkBehaviour
 			m_ClientButton.onClick.AddListener(StartAsClient);
 		}
 
+		if (m_ClientSpectatorButton != null)
+		{
+			m_ClientSpectatorButton.onClick.AddListener(StartAsSpectatorClient);
+		}
+
 		if (m_QuitButton != null)
 		{
 			m_QuitButton.onClick.AddListener(QuitGame);
@@ -186,6 +197,11 @@ public class NetworkConnectManager : NetworkBehaviour
 		if (m_JoinBlueTeamButton != null)
 		{
 			m_JoinBlueTeamButton.onClick.AddListener(() => RequestSelectTeam(ETeamType.Blue));
+		}
+
+		if (m_JoinSpectatorTeamButton != null)
+		{
+			m_JoinSpectatorTeamButton.onClick.AddListener(() => RequestSelectTeam(ETeamType.Spectator));
 		}
 
 		if (m_LeaveTeamButton != null)
@@ -219,6 +235,9 @@ public class NetworkConnectManager : NetworkBehaviour
 		if (m_GeneralPanel != null) m_GeneralPanel.SetActive(false);
 		if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(false);
 		if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(false);
+
+		// JoinPanelの最初の選択ボタンを設定
+		SetInitialSelectedButton(m_HostSpectatorButton);
 	}
 
 	/// <summary>
@@ -234,11 +253,17 @@ public class NetworkConnectManager : NetworkBehaviour
 			if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(true);
 			// 兼任ホストの場合はクライアント用チーム操作パネルも合わせて表示
 			if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(IsPlayerHost);
+
+			// ホスト用パネルの最初の選択ボタンを設定
+			SetInitialSelectedButton(m_StartLobbyButton);
 		}
 		else
 		{
 			if (m_ClientPlayerPanel != null) m_ClientPlayerPanel.SetActive(true);
 			if (m_HostPlayerPanel != null) m_HostPlayerPanel.SetActive(false);
+
+			// クライアント用パネルの最初の選択ボタンを設定
+			SetInitialSelectedButton(m_JoinRedTeamButton);
 		}
 	}
 
@@ -254,6 +279,11 @@ public class NetworkConnectManager : NetworkBehaviour
 		}
 
 		IsPlayerHost = asPlayer;
+		IsSpectatorClient = false;
+		if (asPlayer && LocalPlayerProfilePreferences.GetAssignedTeam() == ETeamType.Spectator)
+		{
+			LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.None);
+		}
 		SetStatusMessage(asPlayer ? "Host(Player兼任)起動中..." : "Host(観戦専用)起動中...");
 
 		ushort port = m_DefaultPort > 0 ? m_DefaultPort : (ushort)7777;
@@ -275,6 +305,19 @@ public class NetworkConnectManager : NetworkBehaviour
 	/// </summary>
 	public void StartAsClient()
 	{
+		ConnectClientInternal(asSpectator: false);
+	}
+
+	/// <summary>
+	/// 観戦者クライアントとしてホストに接続します(試合には参加せずDisplay 1に観戦画面を出力)。
+	/// </summary>
+	public void StartAsSpectatorClient()
+	{
+		ConnectClientInternal(asSpectator: true);
+	}
+
+	private void ConnectClientInternal(bool asSpectator)
+	{
 		if (NetworkManager.Singleton == null)
 		{
 			SetStatusMessage("エラー: NetworkManagerが見つかりません");
@@ -282,6 +325,16 @@ public class NetworkConnectManager : NetworkBehaviour
 		}
 
 		IsPlayerHost = false;
+		IsSpectatorClient = asSpectator;
+
+		if (asSpectator)
+		{
+			LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.Spectator);
+		}
+		else if (LocalPlayerProfilePreferences.GetAssignedTeam() == ETeamType.Spectator)
+		{
+			LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.None);
+		}
 
 		string targetIp = GetTargetIpAddress();
 		if (!IsValidIpAddress(targetIp))
@@ -298,7 +351,7 @@ public class NetworkConnectManager : NetworkBehaviour
 			m_UnityTransport.SetConnectionData(targetIp, port);
 		}
 
-		SetStatusMessage($"接続試行中: {targetIp}:{port} ...");
+		SetStatusMessage(asSpectator ? $"観戦者として接続試行中: {targetIp}:{port} ..." : $"接続試行中: {targetIp}:{port} ...");
 		bool started = NetworkManager.Singleton.StartClient();
 		if (!started)
 		{
@@ -408,7 +461,11 @@ public class NetworkConnectManager : NetworkBehaviour
 
 	private void UpdateGeneralPanelUI()
 	{
-		int count = m_ConnectedPlayers.Count;
+		int count = 0;
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].Team != ETeamType.Spectator) count++;
+		}
 
 		if (m_PlayerCountText != null)
 		{
@@ -422,6 +479,7 @@ public class NetworkConnectManager : NetworkBehaviour
 
 			int redCount = 0;
 			int blueCount = 0;
+			int spectatorCount = 0;
 
 			for (int i = 0; i < m_ConnectedPlayers.Count; i++)
 			{
@@ -437,6 +495,11 @@ public class NetworkConnectManager : NetworkBehaviour
 					teamStr = "<color=#5588FF>[BLUE]</color>";
 					blueCount++;
 				}
+				else if (p.Team == ETeamType.Spectator)
+				{
+					teamStr = "<color=#88FF88>[観戦]</color>";
+					spectatorCount++;
+				}
 				else
 				{
 					teamStr = "[未所属]";
@@ -445,7 +508,7 @@ public class NetworkConnectManager : NetworkBehaviour
 				m_MemberInfoBuilder.Append($"・#{p.ClientId} {p.PlayerName} : {teamStr}\n");
 			}
 
-			m_MemberInfoBuilder.Append($"\n(Red: {redCount}/2, Blue: {blueCount}/2)");
+			m_MemberInfoBuilder.Append($"\n(Red: {redCount}/2, Blue: {blueCount}/2, 観戦: {spectatorCount})");
 			m_MemberListText.text = m_MemberInfoBuilder.ToString();
 		}
 	}
@@ -531,6 +594,7 @@ public class NetworkConnectManager : NetworkBehaviour
 
 		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
 		{
+			// 観戦者(Spectator)は自動割り当て対象外
 			if (m_ConnectedPlayers[i].Team == ETeamType.None)
 			{
 				var data = m_ConnectedPlayers[i];
@@ -644,6 +708,23 @@ public class NetworkConnectManager : NetworkBehaviour
 		}
 
 		return "127.0.0.1";
+	}
+
+	/// <summary>
+	/// 指定したボタンをEventSystemの初期選択対象に設定します。
+	/// </summary>
+	private void SetInitialSelectedButton(Button button)
+	{
+		if (button == null || !button.gameObject.activeInHierarchy)
+		{
+			return;
+		}
+
+		if (EventSystem.current != null)
+		{
+			EventSystem.current.SetSelectedGameObject(null);
+			EventSystem.current.SetSelectedGameObject(button.gameObject);
+		}
 	}
 
 	/// <summary>

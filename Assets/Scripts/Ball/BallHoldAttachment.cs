@@ -13,6 +13,7 @@ public sealed class BallHoldAttachment
 	private readonly Quaternion m_OriginalLocalRotation;
 	private readonly Vector3 m_OriginalLocalScale;
 	private readonly Vector3 m_OriginalWorldScale;
+	private readonly ALightningBolt[] m_LightningEffects;
 	private Transform m_HoldPoint;
 
 	public BallHoldAttachment(Transform ballRoot, Transform visualRoot)
@@ -39,6 +40,7 @@ public sealed class BallHoldAttachment
 		m_OriginalLocalRotation = visualRoot.localRotation;
 		m_OriginalLocalScale = visualRoot.localScale;
 		m_OriginalWorldScale = visualRoot.lossyScale;
+		m_LightningEffects = visualRoot.GetComponentsInChildren<ALightningBolt>(true);
 	}
 
 	/// <summary>
@@ -69,6 +71,13 @@ public sealed class BallHoldAttachment
 			m_OriginalWorldScale.y / parentScale.y,
 			m_OriginalWorldScale.z / parentScale.z);
 		m_HoldPoint = holdPoint;
+
+		// 祖先の付け替えだけでは子の親変更通知が届かないため、所有者を明示します。
+		PlayerAppearance owner = holdPoint.GetComponentInParent<PlayerAppearance>();
+		foreach (ALightningBolt effect in m_LightningEffects)
+		{
+			effect.SetOwner(owner);
+		}
 	}
 
 	/// <summary>
@@ -86,5 +95,9 @@ public sealed class BallHoldAttachment
 		m_VisualRoot.localRotation = m_OriginalLocalRotation;
 		m_VisualRoot.localScale = m_OriginalLocalScale;
 		m_HoldPoint = null;
+		foreach (ALightningBolt effect in m_LightningEffects)
+		{
+			effect.SetOwner(null);
+		}
 	}
 }
