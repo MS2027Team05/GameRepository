@@ -67,6 +67,8 @@ public class BallController : NetworkBehaviour
 	// Host側で、最後の正常なシュートが味方パスとして受取可能か記録します。
 	private bool m_IsPassInFlight;
 	private ETeamType m_LastPasserTeam;
+	private Vector3 m_LastReleaseOrigin;
+	private bool m_WasFriendlyPassAssisted;
 
 	/// <summary>
 	/// ボールがシュートされたときにHost側で通知します。
@@ -107,6 +109,21 @@ public class BallController : NetworkBehaviour
 	public bool IsShotInFlight => IsSpawned && !HasHolder && m_IsShotInFlight.Value;
 
 	/// <summary>
+	/// サーバー側で最後にボールを保持または放したプレイヤーのClientIdを取得します。
+	/// </summary>
+	public ulong LastInteractingClientId => m_HasHolder.Value ? m_CurrentHolderId.Value : m_LastHolderClientId;
+
+	/// <summary>
+	/// サーバー側で最後にシュート・パス・解放が行われた座標を取得します。
+	/// </summary>
+	public Vector3 LastReleaseOrigin => m_HasHolder.Value ? transform.position : m_LastReleaseOrigin;
+
+	/// <summary>
+	/// サーバー側で直近のプレーが味方パスを経由していたか取得します。
+	/// </summary>
+	public bool WasFriendlyPassAssisted => m_WasFriendlyPassAssisted || m_IsPassInFlight;
+
+	/// <summary>
 	/// Rigidbodyの参照を取得します。
 	/// </summary>
 	private void Awake()
@@ -128,6 +145,8 @@ public class BallController : NetworkBehaviour
 			m_IsShotInFlight.Value = false;
 			m_InitialPosition = transform.position;
 			m_InitialRotation = transform.rotation;
+			m_LastReleaseOrigin = m_InitialPosition;
+			m_WasFriendlyPassAssisted = false;
 			SetMatchPaused(MatchManager.Instance != null && MatchManager.Instance.MatchState != MatchManager.EMatchState.Playing);
 		}
 		m_HasHolder.OnValueChanged +=
@@ -324,6 +343,7 @@ public class BallController : NetworkBehaviour
 
 		m_IsPassInFlight = false;
 		m_LastPasserTeam = ETeamType.None;
+		m_WasFriendlyPassAssisted = isFriendlyPass;
 
 		if (isFriendlyPass)
 		{
@@ -416,6 +436,7 @@ public class BallController : NetworkBehaviour
 
 		// 新しい所持者の状態を設定
 		newHolder.SetBallState(true);
+		m_WasFriendlyPassAssisted = false;
 
 		return true;
 	}
@@ -508,6 +529,7 @@ public class BallController : NetworkBehaviour
 		m_LastPasserTeam = passerTeam;
 		m_IsPassInFlight = true;
 		m_IsShotInFlight.Value = true;
+		m_LastReleaseOrigin = transform.position;
 
 		// 対象の種類によって追尾方法を切り替える
 		if (useTransform)
@@ -589,6 +611,7 @@ public class BallController : NetworkBehaviour
 		m_LastPasserTeam = passerTeam;
 		m_IsPassInFlight = true;
 		m_IsShotInFlight.Value = true;
+		m_LastReleaseOrigin = transform.position;
 
 		// BallPhysicsControllerへ、
 		// シュート開始を通知します。
@@ -636,6 +659,8 @@ public class BallController : NetworkBehaviour
 		m_IsPassInFlight = false;
 		m_IsShotInFlight.Value = false;
 		m_LastPasserTeam = ETeamType.None;
+		m_LastReleaseOrigin = transform.position;
+		m_WasFriendlyPassAssisted = false;
 
 		// シュートではない解放として、
 		// BallPhysicsControllerへ通知します。
@@ -704,6 +729,8 @@ public class BallController : NetworkBehaviour
 		m_RepickupUnlockTime = 0f;
 		m_CurrentHolderId.Value = 0;
 		m_CurrentHolderCarrier = null;
+		m_LastReleaseOrigin = m_InitialPosition;
+		m_WasFriendlyPassAssisted = false;
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
 		m_Rigidbody.useGravity = false;

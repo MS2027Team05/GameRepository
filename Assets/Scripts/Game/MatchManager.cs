@@ -21,6 +21,18 @@ public class MatchManager : NetworkBehaviour
 		Countdown = 3,
 		PreparingRestart = 4,
 		GoalCelebration = 5,
+		GoalReplay = 6,
+	}
+
+	/// <summary>
+	/// ゴールリプレイを再生するタイミング設定。
+	/// </summary>
+	public enum EReplayTriggerMode : byte
+	{
+		AfterEveryGoal = 0,
+		AfterMatchBestGoal = 1,
+		Both = 2,
+		Disabled = 3,
 	}
 
 	[SerializeField] private int m_MatchDurationSeconds;
@@ -36,6 +48,16 @@ public class MatchManager : NetworkBehaviour
 	[Tooltip("遷移先のリザルトシーン名です。空欄の場合はResultSceneが使用されます。")]
 	[SerializeField] private string m_ResultSceneName;
 
+	[Header("ゴールリプレイ設定")]
+	[Tooltip("リプレイを再生するタイミングです(AfterEveryGoal: 検証用・毎ゴール後 / AfterMatchBestGoal: 実運用・試合終了後にベストゴールのみ)。")]
+	[SerializeField] private EReplayTriggerMode m_ReplayTriggerMode;
+	[Tooltip("リプレイ録画コンポーネントです(未設定時は同一オブジェクトまたはシーン内から自動取得・生成)。")]
+	[SerializeField] private ReplayRecorder m_ReplayRecorder;
+	[Tooltip("リプレイ再生コンポーネントです(未設定時は同一オブジェクトまたはシーン内から自動取得・生成)。")]
+	[SerializeField] private ReplayPlayer m_ReplayPlayer;
+	[Tooltip("クライアント応答が揃わない場合のリプレイ強制終了タイムアウト(秒、0以下で既定値10秒)。")]
+	[SerializeField] private float m_ReplayTimeoutSeconds;
+
 	private readonly NetworkVariable<double> m_CountdownEndTime = new NetworkVariable<double>();
 	private readonly NetworkVariable<ETeamType> m_GoalScoringTeam = new NetworkVariable<ETeamType>(
 		ETeamType.None,
@@ -45,10 +67,18 @@ public class MatchManager : NetworkBehaviour
 	private bool m_IsStartRequested;
 	private bool m_IsGoalProcessing;
 	private readonly HashSet<ulong> m_PendingGoalEffectClients = new HashSet<ulong>();
+	private readonly HashSet<ulong> m_PendingReplayClients = new HashSet<ulong>();
 	private uint m_GoalEffectSequence;
 	private uint m_LocalGoalEffectSequence;
 	private int m_LocalGoalEffectCount;
 	private bool m_IsLocalGoalEffectPending;
+	private uint m_ReplaySequence;
+	private uint m_ActiveLocalReplaySequence;
+	private double m_ReplayDeadlineTime;
+	private bool m_IsPostMatchReplay;
+	private bool m_HasBestGoal;
+	private float m_BestGoalScore;
+	private IGoalHighlightEvaluator m_GoalHighlightEvaluator;
 
 	[Header("ゴール判定のデバッグ設定")]
 	[InspectorName("ゴール得点を1回に制限")]
@@ -141,6 +171,11 @@ public class MatchManager : NetworkBehaviour
 		}
 
 		Instance = this;
+		EnsureReplayComponents();
+		if (m_GoalHighlightEvaluator == null)
+		{
+			m_GoalHighlightEvaluator = new DefaultGoalHighlightEvaluator();
+		}
 		SubscribeToNetworkVariables();
 
 		if (IsServer)
@@ -163,14 +198,56 @@ public class MatchManager : NetworkBehaviour
 		{
 			NetworkManager.OnClientDisconnectCallback -= HandleGoalEffectClientDisconnected;
 		}
+		m_ReplayPlayer?.Stop();
 		m_IsLocalGoalEffectPending = false;
 		m_LocalGoalEffectCount = 0;
 		m_PendingGoalEffectClients.Clear();
+		m_PendingReplayClients.Clear();
 		UnsubscribeFromNetworkVariables();
 
 		if (Instance == this)
 		{
 			Instance = null;
+		}
+	}
+
+	/// <summary>
+	/// 将来の試合貢献度システムなどからカスタムのハイライト評価ロジックを差し替えます。
+	/// </summary>
+	public void SetGoalHighlightEvaluator(IGoalHighlightEvaluator evaluator)
+	{
+		if (evaluator != null)
+		{
+			m_GoalHighlightEvaluator = evaluator;
+		}
+	}
+
+	private void EnsureReplayComponents()
+	{
+		if (m_ReplayRecorder == null)
+		{
+			m_ReplayRecorder = GetComponent<ReplayRecorder>();
+			if (m_ReplayRecorder == null)
+			{
+				m_ReplayRecorder = FindFirstObjectByType<ReplayRecorder>();
+			}
+			if (m_ReplayRecorder == null)
+			{
+				m_ReplayRecorder = gameObject.AddComponent<ReplayRecorder>();
+			}
+		}
+
+		if (m_ReplayPlayer == null)
+		{
+			m_ReplayPlayer = GetComponent<ReplayPlayer>();
+			if (m_ReplayPlayer == null)
+			{
+				m_ReplayPlayer = FindFirstObjectByType<ReplayPlayer>();
+			}
+			if (m_ReplayPlayer == null)
+			{
+				m_ReplayPlayer = gameObject.AddComponent<ReplayPlayer>();
+			}
 		}
 	}
 
@@ -195,7 +272,20 @@ public class MatchManager : NetworkBehaviour
 
 		if (m_MatchState.Value == EMatchState.GoalCelebration && m_PendingGoalEffectClients.Count == 0)
 		{
-			BeginRestartPreparation();
+			if (ShouldPlayReplayAfterGoal())
+			{
+				BeginGoalReplay(useBestGoal: false);
+			}
+			else
+			{
+				BeginRestartPreparation();
+			}
+		}
+
+		if (m_MatchState.Value == EMatchState.GoalReplay &&
+			(m_PendingReplayClients.Count == 0 || NetworkManager.ServerTime.Time >= m_ReplayDeadlineTime))
+		{
+			CompleteGoalReplayPhase();
 		}
 
 		if (m_MatchState.Value == EMatchState.PreparingRestart && m_PlayerSpawner.ArePlayersReadyForRestart)
@@ -249,8 +339,14 @@ public class MatchManager : NetworkBehaviour
 		m_GoalScoringTeam.Value = ETeamType.None;
 		m_IsGoalProcessing = false;
 		m_PendingGoalEffectClients.Clear();
+		m_PendingReplayClients.Clear();
 		m_IsLocalGoalEffectPending = false;
 		m_LocalGoalEffectCount = 0;
+		m_IsPostMatchReplay = false;
+		m_HasBestGoal = false;
+		m_BestGoalScore = 0f;
+		m_ReplayPlayer?.Stop();
+		m_ReplayRecorder?.ResetForNewMatch();
 		m_CountdownEndTime.Value = 0d;
 		m_PlayTimeRemaining = 0d;
 		m_RedScore.Value = 0;
@@ -351,6 +447,17 @@ public class MatchManager : NetworkBehaviour
 	/// <returns>得点を加算できた場合はtrue。</returns>
 	public bool TryAddGoalScore(ETeamType team)
 	{
+		return TryAddGoalScore(team, Vector3.zero);
+	}
+
+	/// <summary>
+	/// 両ゴール共通の得点制限を確認し、指定チームへ1点加算します。
+	/// </summary>
+	/// <param name="team">得点を加算するチーム。</param>
+	/// <param name="goalPosition">得点が発生したゴールのワールド座標。</param>
+	/// <returns>得点を加算できた場合はtrue。</returns>
+	public bool TryAddGoalScore(ETeamType team, Vector3 goalPosition)
+	{
 		if (!isActiveAndEnabled || !IsSpawned || !IsServer ||
 			m_MatchState.Value != EMatchState.Playing ||
 			NetworkManager.ServerTime.Time >= m_MatchEndTime ||
@@ -373,12 +480,48 @@ public class MatchManager : NetworkBehaviour
 
 		m_PlayTimeRemaining = Math.Max(0d, m_MatchEndTime - NetworkManager.ServerTime.Time);
 		m_RemainingTimeSeconds.Value = Mathf.CeilToInt((float)m_PlayTimeRemaining);
-		BeginGoalCelebration(team);
+		bool isNewBestGoal = EvaluateGoalHighlight(team, goalPosition);
+		BeginGoalCelebration(team, isNewBestGoal);
 		m_IsGoalProcessing = false;
 		return true;
 	}
 
-	private void BeginGoalCelebration(ETeamType team)
+	private bool EvaluateGoalHighlight(ETeamType team, Vector3 goalPosition)
+	{
+		float shotDistance = (m_Ball != null && goalPosition != Vector3.zero)
+			? Vector3.Distance(m_Ball.LastReleaseOrigin, goalPosition)
+			: 0f;
+
+		GoalHighlightContext context = new GoalHighlightContext
+		{
+			m_ScoringTeam = team,
+			m_RedScoreAfterGoal = m_RedScore.Value,
+			m_BlueScoreAfterGoal = m_BlueScore.Value,
+			m_RemainingTimeSeconds = (float)m_PlayTimeRemaining,
+			m_MatchDurationSeconds = m_MatchDurationSeconds,
+			m_WasFriendlyPassAssist = m_Ball != null && m_Ball.WasFriendlyPassAssisted,
+			m_ShotDistance = shotDistance,
+			m_LastTouchClientId = m_Ball != null ? m_Ball.LastInteractingClientId : 0,
+			m_GoalSequence = m_GoalEffectSequence + 1
+		};
+
+		if (m_GoalHighlightEvaluator == null)
+		{
+			m_GoalHighlightEvaluator = new DefaultGoalHighlightEvaluator();
+		}
+
+		float highlightScore = m_GoalHighlightEvaluator.Evaluate(in context);
+		if (!m_HasBestGoal || highlightScore >= m_BestGoalScore)
+		{
+			m_HasBestGoal = true;
+			m_BestGoalScore = highlightScore;
+			return true;
+		}
+
+		return false;
+	}
+
+	private void BeginGoalCelebration(ETeamType team, bool isNewBestGoal)
 	{
 		m_GoalScoringTeam.Value = team;
 		m_MatchState.Value = EMatchState.GoalCelebration;
@@ -386,24 +529,110 @@ public class MatchManager : NetworkBehaviour
 		m_Ball.SetMatchPaused(true);
 		m_GoalEffectSequence++;
 		m_PendingGoalEffectClients.Clear();
+		CollectActiveDisplayClients(m_PendingGoalEffectClients);
+		NotifyGoalScoredRpc(team, m_GoalEffectSequence, isNewBestGoal);
+	}
+
+	[Rpc(SendTo.ClientsAndHost)]
+	private void NotifyGoalScoredRpc(ETeamType team, uint sequence, bool isNewBestGoal, RpcParams rpcParams = default)
+	{
+		if (rpcParams.Receive.SenderClientId != Unity.Netcode.NetworkManager.ServerClientId) return;
+		EnsureReplayComponents();
+		m_LocalGoalEffectSequence = sequence;
+		m_LocalGoalEffectCount = 0;
+		m_IsLocalGoalEffectPending = true;
+		m_ReplayRecorder?.NotifyGoalScored(team, sequence, isNewBestGoal);
+		GoalScored?.Invoke(team);
+	}
+
+	private bool ShouldPlayReplayAfterGoal()
+	{
+		return m_ReplayTriggerMode == EReplayTriggerMode.AfterEveryGoal ||
+			m_ReplayTriggerMode == EReplayTriggerMode.Both;
+	}
+
+	private bool ShouldPlayReplayAfterMatch()
+	{
+		return m_ReplayTriggerMode == EReplayTriggerMode.AfterMatchBestGoal ||
+			m_ReplayTriggerMode == EReplayTriggerMode.Both;
+	}
+
+	private void BeginGoalReplay(bool useBestGoal)
+	{
+		EnsureReplayComponents();
+		m_ReplaySequence++;
+		m_PendingReplayClients.Clear();
+		CollectActiveDisplayClients(m_PendingReplayClients);
+
+		float timeout = m_ReplayTimeoutSeconds > 1.0f ? m_ReplayTimeoutSeconds : 10.0f;
+		m_ReplayDeadlineTime = NetworkManager.ServerTime.Time + timeout;
+		m_MatchState.Value = EMatchState.GoalReplay;
+
+		PlayGoalReplayRpc(useBestGoal, m_ReplaySequence);
+	}
+
+	[Rpc(SendTo.ClientsAndHost)]
+	private void PlayGoalReplayRpc(bool useBestGoal, uint replaySequence, RpcParams rpcParams = default)
+	{
+		if (rpcParams.Receive.SenderClientId != Unity.Netcode.NetworkManager.ServerClientId) return;
+		EnsureReplayComponents();
+		m_ActiveLocalReplaySequence = replaySequence;
+		m_ReplayRecorder?.ForceFinalizePendingClip();
+
+		ReplayClipData clip = useBestGoal
+			? m_ReplayRecorder?.BestGoalClip
+			: m_ReplayRecorder?.LatestGoalClip;
+
+		if (clip != null && clip.IsValid && m_ReplayPlayer != null &&
+			m_ReplayPlayer.Play(clip, OnLocalReplayPlaybackFinished))
+		{
+			return;
+		}
+
+		CompleteGoalReplayServerRpc(replaySequence);
+	}
+
+	private void OnLocalReplayPlaybackFinished()
+	{
+		if (IsSpawned)
+		{
+			CompleteGoalReplayServerRpc(m_ActiveLocalReplaySequence);
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void CompleteGoalReplayServerRpc(uint replaySequence, RpcParams rpcParams = default)
+	{
+		if (m_MatchState.Value == EMatchState.GoalReplay && replaySequence == m_ReplaySequence)
+		{
+			m_PendingReplayClients.Remove(rpcParams.Receive.SenderClientId);
+		}
+	}
+
+	private void CompleteGoalReplayPhase()
+	{
+		m_PendingReplayClients.Clear();
+		if (m_IsPostMatchReplay)
+		{
+			m_IsPostMatchReplay = false;
+			FinalizeMatchAndTransition();
+		}
+		else
+		{
+			BeginRestartPreparation();
+		}
+	}
+
+	private void CollectActiveDisplayClients(HashSet<ulong> targetSet)
+	{
+		targetSet.Clear();
 		foreach (var client in NetworkManager.ConnectedClientsList)
 		{
 			if (client.ClientId != Unity.Netcode.NetworkManager.ServerClientId || IsHost)
 			{
-				m_PendingGoalEffectClients.Add(client.ClientId);
+				targetSet.Add(client.ClientId);
 			}
 		}
-		NotifyGoalScoredRpc(team, m_GoalEffectSequence);
-	}
-
-	[Rpc(SendTo.ClientsAndHost)]
-	private void NotifyGoalScoredRpc(ETeamType team, uint sequence, RpcParams rpcParams = default)
-	{
-		if (rpcParams.Receive.SenderClientId != Unity.Netcode.NetworkManager.ServerClientId) return;
-		m_LocalGoalEffectSequence = sequence;
-		m_LocalGoalEffectCount = 0;
-		m_IsLocalGoalEffectPending = true;
-		GoalScored?.Invoke(team);
 	}
 
 	/// <summary>
@@ -438,10 +667,11 @@ public class MatchManager : NetworkBehaviour
 	private void HandleGoalEffectClientDisconnected(ulong clientId)
 	{
 		m_PendingGoalEffectClients.Remove(clientId);
+		m_PendingReplayClients.Remove(clientId);
 	}
 
 	/// <summary>
-	/// 現在の得点を保持したまま試合を終了し、演出待機後にリザルトシーンへ遷移します。
+	/// 現在の得点を保持したまま試合を終了し、必要に応じてベストゴールリプレイ後にリザルトシーンへ遷移します。
 	/// </summary>
 	public void FinishMatch()
 	{
@@ -455,7 +685,6 @@ public class MatchManager : NetworkBehaviour
 		m_PendingGoalEffectClients.Clear();
 		m_IsLocalGoalEffectPending = false;
 		m_IsStartRequested = false;
-		m_MatchState.Value = EMatchState.Finished;
 		m_PlayerSpawner?.SetMatchActionsEnabled(false);
 		m_Ball?.SetMatchPaused(true);
 
@@ -465,6 +694,19 @@ public class MatchManager : NetworkBehaviour
 			SessionPlayerDataStore.Instance.SetMatchResult(m_RedScore.Value, m_BlueScore.Value, WinnerTeam);
 		}
 
+		if (ShouldPlayReplayAfterMatch() && m_HasBestGoal)
+		{
+			m_IsPostMatchReplay = true;
+			BeginGoalReplay(useBestGoal: true);
+			return;
+		}
+
+		FinalizeMatchAndTransition();
+	}
+
+	private void FinalizeMatchAndTransition()
+	{
+		m_MatchState.Value = EMatchState.Finished;
 		StartCoroutine(TransitionToResultSceneCoroutine());
 	}
 
@@ -518,6 +760,17 @@ public class MatchManager : NetworkBehaviour
 		{
 			m_IsLocalGoalEffectPending = false;
 			m_LocalGoalEffectCount = 0;
+		}
+
+		if (previousValue == EMatchState.GoalReplay && newValue != EMatchState.GoalReplay)
+		{
+			m_ReplayPlayer?.Stop();
+		}
+
+		if (newValue == EMatchState.Waiting)
+		{
+			m_ReplayPlayer?.Stop();
+			m_ReplayRecorder?.ResetForNewMatch();
 		}
 
 		if (newValue == EMatchState.Finished && SessionPlayerDataStore.Instance != null)

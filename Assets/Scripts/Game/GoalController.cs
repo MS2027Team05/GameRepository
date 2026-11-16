@@ -72,7 +72,7 @@ public class GoalController : MonoBehaviour
 			return;
 		}
 
-		m_MatchManager.TryAddGoalScore(m_ScoringTeam);
+		m_MatchManager.TryAddGoalScore(m_ScoringTeam, transform.position);
 	}
 
 	private void HandleGoalScored(ETeamType scoringTeam)

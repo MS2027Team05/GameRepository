@@ -10,6 +10,7 @@
 ゴール演出は`MatchManager.TryAddGoalScore`で得点確定後にRPCで通知し、各端末の`GoalController`が得点先チームに対応する配置済みParticleSystemを再生します。ゴールごとのNetworkObjectやエフェクトの都度生成は使用しません。
 得点後は`GoalCelebration`で全プレイヤーとボールをその場に停止します。各端末の`GoalController`が子を含めた粒子の消滅を確認し、`MatchManager`が接続中の対象端末すべての完了を受信してから再配置へ進めます。`MatchHudController`は同じ状態に連動してInspector指定の得点メッセージを表示します。
 得点メッセージの文言はHUDのInspectorでチームごとに設定し、`MatchManager.GoalScoringTeam`が同期する得点先から選択します。
+ゴールリプレイは`Game/Replay/ReplayRecorder`がクライアント側リングバッファへプレイヤーとボールの座標・状態を記録し、`MatchManager`の再生設定(`AfterEveryGoal` / `AfterMatchBestGoal` / `Both`)に応じて`GoalCelebration`後または試合終了後に`GoalReplay`へ遷移して再生する。ベストゴール判定は`IGoalHighlightEvaluator`に分離し、将来の貢献度システム連携に対応する。
 
 ```text
 GameRepository/
@@ -62,6 +63,11 @@ GameRepository/
 │   │   │   ├── MatchManager.cs          # [EntryPoint] 試合状態・制限時間・チーム得点のサーバー権限管理・リザルト遷移演出制御
 │   │   │   ├── GoalController.cs        # ゴール構造管理・得点判定委譲・ゴール演出Particle再生制御
 │   │   │   ├── GoalArea.cs              # ゴール判定コライダー検知・GoalControllerへの通知制御
+│   │   │   ├── Replay/                  # ゴールリプレイ記録・ベストゴール評価・表示専用再生制御
+│   │   │   │   ├── GoalHighlightEvaluation.cs # ゴールハイライト評価コンテキスト・IGoalHighlightEvaluator定義
+│   │   │   │   ├── ReplayFrameData.cs   # リプレイフレーム記録構造体・クリップデータ定義
+│   │   │   │   ├── ReplayRecorder.cs    # [EntryPoint] クライアント側リングバッファ記録・クリップ切り出し
+│   │   │   │   └── ReplayPlayer.cs      # [EntryPoint] 表示専用アクター制御・ゴールカメラ視点再生・復帰
 │   │   │   └── Spectator/               # 観戦カメラ演出・自動スイッチング制御
 │   │   │       ├── SpectatorCameraDirector.cs # [EntryPoint] 定点・天地固定追従・ゴール前カメラの自動スイッチング制御
 │   │   │       └── SpectatorOverlayUIController.cs # 観戦中継テロップ(カメラ名・ボール保持チーム)表示制御

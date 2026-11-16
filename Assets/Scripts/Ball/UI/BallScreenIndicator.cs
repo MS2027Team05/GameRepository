@@ -103,6 +103,13 @@ public class BallScreenIndicator : MonoBehaviour
 	/// </summary>
 	private void LateUpdate()
 	{
+		if (ReplayPlayer.IsReplayActive ||
+			(MatchManager.Instance != null && MatchManager.Instance.MatchState == MatchManager.EMatchState.GoalReplay))
+		{
+			HideAllIndicators();
+			return;
+		}
+
 		if (m_BallController == null ||
 			m_Canvas == null ||
 			m_CanvasRectTransform == null)

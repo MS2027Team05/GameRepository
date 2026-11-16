@@ -3203,7 +3203,7 @@ Transform:
   m_GameObject: {fileID: 370434209}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 100, z: -110}
+  m_LocalPosition: {x: 0, y: 110, z: -105}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -9095,6 +9095,8 @@ MonoBehaviour:
   m_GoalMessageText: {fileID: 369466386}
   m_RedGoalMessage: "\u8D64\u30C1\u30FC\u30E0\u306E\u5F97\u70B9\uFF01\n\u8A66\u5408\u518D\u958B\u307E\u3067\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002"
   m_BlueGoalMessage: "\u9752\u30C1\u30FC\u30E0\u306E\u5F97\u70B9\uFF01\n\u8A66\u5408\u518D\u958B\u307E\u3067\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002"
+  m_ReplayMessageText: {fileID: 0}
+  m_ReplayMessage: 
 --- !u!1001 &1066730928
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -9844,7 +9846,7 @@ Transform:
   m_GameObject: {fileID: 1164171297}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 1, z: -0, w: 0}
-  m_LocalPosition: {x: 0, y: 100, z: 110}
+  m_LocalPosition: {x: 0, y: 110, z: 105}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -15952,6 +15954,8 @@ GameObject:
   - component: {fileID: 1908607706}
   - component: {fileID: 1908607704}
   - component: {fileID: 1908607705}
+  - component: {fileID: 1908607708}
+  - component: {fileID: 1908607707}
   m_Layer: 0
   m_Name: MatchManager
   m_TagString: Untagged
@@ -16006,6 +16010,10 @@ MonoBehaviour:
   m_Ball: {fileID: 146070833806134462}
   m_FinishMatchTransitionDelay: 0
   m_ResultSceneName: 
+  m_ReplayTriggerMode: 0
+  m_ReplayRecorder: {fileID: 1908607708}
+  m_ReplayPlayer: {fileID: 1908607707}
+  m_ReplayTimeoutSeconds: 0
   m_LimitGoalScore: 1
 --- !u!4 &1908607706
 Transform:
@@ -16022,6 +16030,43 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1908607707
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1908607703}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1571fda6246746e45aa39535f69d617b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ReplayPlayer
+  m_PlayerActorPrefab: {fileID: 7006392927258131952, guid: e69881fcb9f4faf4ab6bd737d08d390a, type: 3}
+  m_BallActorPrefab: {fileID: 0}
+  m_ReplayCamera: {fileID: 0}
+  m_RedGoalAnchorOverride: {fileID: 1164171298}
+  m_BlueGoalAnchorOverride: {fileID: 370434210}
+  m_GoalCameraFov: 55
+  m_CameraPositionSmoothTime: 0.15
+  m_CameraLookAtSmoothTime: 0.12
+  m_PlaybackSpeed: 1
+--- !u!114 &1908607708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1908607703}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e1bb94da0101f645bc1f771800bfcfc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ReplayRecorder
+  m_PreGoalDuration: 4
+  m_PostGoalDuration: 1.5
+  m_RecordInterval: 0.02
+  m_Ball: {fileID: 0}
 --- !u!1001 &1916501480
 PrefabInstance:
   m_ObjectHideFlags: 0
