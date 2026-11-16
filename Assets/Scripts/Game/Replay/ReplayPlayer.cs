@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -67,6 +67,7 @@ public sealed class ReplayPlayer : MonoBehaviour
 	private Action m_OnCompletedCallback;
 	private Transform m_ActiveGoalAnchor;
 	private bool m_IsPlaying;
+	private bool m_HasTriggeredGoalEffect;
 	private float m_PlaybackTime;
 	private int m_FrameCursor;
 	private Vector3 m_CameraVelocity;
@@ -121,6 +122,7 @@ public sealed class ReplayPlayer : MonoBehaviour
 		m_PlaybackTime = 0f;
 		m_FrameCursor = 0;
 		m_IsPlaying = true;
+		m_HasTriggeredGoalEffect = false;
 		IsReplayActive = true;
 
 		HideRealWorldVisuals();
@@ -142,10 +144,12 @@ public sealed class ReplayPlayer : MonoBehaviour
 		}
 
 		m_IsPlaying = false;
+		m_HasTriggeredGoalEffect = false;
 		IsReplayActive = false;
 		m_CurrentClip = null;
 		m_OnCompletedCallback = null;
 
+		StopReplayGoalEffects();
 		RestoreCameras();
 		DeactivateActors();
 		RestoreRealWorldVisuals();
@@ -180,6 +184,12 @@ public sealed class ReplayPlayer : MonoBehaviour
 
 		ApplyInterpolatedFrame(frameA, frameB, t);
 		UpdateReplayCamera();
+
+		if (!m_HasTriggeredGoalEffect && m_PlaybackTime >= m_CurrentClip.GoalTime)
+		{
+			m_HasTriggeredGoalEffect = true;
+			TriggerReplayGoalEffect(m_CurrentClip.ScoringTeam);
+		}
 	}
 
 	private void CompletePlayback()
@@ -534,30 +544,52 @@ public sealed class ReplayPlayer : MonoBehaviour
 		if (m_CachedRealBall != null)
 		{
 			HideHierarchyVisuals(m_CachedRealBall.transform);
-
-			ALightningBolt[] bolts = m_CachedRealBall.GetComponentsInChildren<ALightningBolt>(true);
-			for (int i = 0; i < bolts.Length; i++)
-			{
-				if (bolts[i] != null && bolts[i].enabled)
-				{
-					bolts[i].enabled = false;
-					m_HiddenVisualBehaviours.Add(bolts[i]);
-				}
-			}
 		}
 	}
 
 	private void HideHierarchyVisuals(Transform root)
 	{
+		// 独自にLineRendererやParticleを出し入れするエフェクト制御は、コンポーネント単位で停止・復元します。
+		PlayerRecoveryEffectController[] recoveryEffects = root.GetComponentsInChildren<PlayerRecoveryEffectController>(true);
+		for (int i = 0; i < recoveryEffects.Length; i++)
+		{
+			PlayerRecoveryEffectController effect = recoveryEffects[i];
+			if (effect != null && effect.enabled)
+			{
+				effect.StopAll();
+				effect.enabled = false;
+				m_HiddenVisualBehaviours.Add(effect);
+			}
+		}
+
+		ALightningBolt[] bolts = root.GetComponentsInChildren<ALightningBolt>(true);
+		for (int i = 0; i < bolts.Length; i++)
+		{
+			ALightningBolt bolt = bolts[i];
+			if (bolt != null && bolt.enabled)
+			{
+				bolt.enabled = false;
+				m_HiddenVisualBehaviours.Add(bolt);
+			}
+		}
+
 		Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
 		for (int i = 0; i < renderers.Length; i++)
 		{
 			Renderer renderer = renderers[i];
-			if (renderer != null && renderer.enabled)
+			if (renderer == null || !renderer.enabled)
 			{
-				renderer.enabled = false;
-				m_HiddenRenderers.Add(renderer);
+				continue;
 			}
+
+			if (renderer.GetComponentInParent<PlayerRecoveryEffectController>(true) != null ||
+				renderer.GetComponentInParent<ALightningBolt>(true) != null)
+			{
+				continue;
+			}
+
+			renderer.enabled = false;
+			m_HiddenRenderers.Add(renderer);
 		}
 
 		Canvas[] canvases = root.GetComponentsInChildren<Canvas>(true);
@@ -569,6 +601,48 @@ public sealed class ReplayPlayer : MonoBehaviour
 				canvas.enabled = false;
 				m_HiddenCanvases.Add(canvas);
 			}
+		}
+	}
+
+	private void TriggerReplayGoalEffect(ETeamType scoringTeam)
+	{
+		if (scoringTeam != ETeamType.Red && scoringTeam != ETeamType.Blue)
+		{
+			return;
+		}
+
+		EnsureGoalControllersCached();
+		for (int i = 0; i < m_CachedGoalControllers.Length; i++)
+		{
+			GoalController goal = m_CachedGoalControllers[i];
+			if (goal != null && goal.ScoringTeam == scoringTeam)
+			{
+				goal.PlayReplayGoalEffect();
+			}
+		}
+	}
+
+	private void StopReplayGoalEffects()
+	{
+		if (m_CachedGoalControllers == null)
+		{
+			return;
+		}
+
+		for (int i = 0; i < m_CachedGoalControllers.Length; i++)
+		{
+			if (m_CachedGoalControllers[i] != null)
+			{
+				m_CachedGoalControllers[i].StopReplayGoalEffect();
+			}
+		}
+	}
+
+	private void EnsureGoalControllersCached()
+	{
+		if (m_CachedGoalControllers == null || m_CachedGoalControllers.Length == 0)
+		{
+			m_CachedGoalControllers = FindObjectsByType<GoalController>(FindObjectsSortMode.None);
 		}
 	}
 
@@ -774,10 +848,7 @@ public sealed class ReplayPlayer : MonoBehaviour
 			}
 		}
 
-		if (m_CachedGoalControllers == null || m_CachedGoalControllers.Length == 0)
-		{
-			m_CachedGoalControllers = FindObjectsByType<GoalController>(FindObjectsSortMode.None);
-		}
+		EnsureGoalControllersCached();
 
 		for (int i = 0; i < m_CachedGoalControllers.Length; i++)
 		{

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// Inspectorで指定されたゴール範囲と得点先を試合管理へ接続します。
@@ -17,6 +17,7 @@ public class GoalController : MonoBehaviour
 	[SerializeField] private ParticleSystem m_GoalEffect;
 	private ParticleSystem[] m_EffectSystems;
 	private bool m_IsPlayingGoalEffect;
+	private bool m_IsPlayingReplayEffect;
 	private uint m_GoalEffectSequence;
 
 	/// <summary>
@@ -53,6 +54,7 @@ public class GoalController : MonoBehaviour
 	private void OnDisable()
 	{
 		StopGoalEffect();
+		StopReplayGoalEffect();
 		if (m_GoalArea != null)
 		{
 			m_GoalArea.BallEntered -= HandleBallEntered;
@@ -79,19 +81,8 @@ public class GoalController : MonoBehaviour
 	{
 		if (!isActiveAndEnabled || scoringTeam != m_ScoringTeam || m_GoalEffect == null) return;
 		StopGoalEffect();
-		if (!m_GoalEffect.gameObject.activeInHierarchy || m_EffectSystems == null) return;
-		foreach (ParticleSystem effect in m_EffectSystems)
-		{
-			if (effect == null) continue;
-			var main = effect.main;
-			if (main.loop)
-			{
-				Debug.LogError("[GoalController] 終了を待つGoalEffectと子のParticleSystemはLoopingをオフにしてください。演出を省略します。", this);
-				return;
-			}
-			// 画面外でも終了判定が進むよう、粒子のシミュレーションを継続します。
-			main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
-		}
+		StopReplayGoalEffect();
+		if (!TryPrepareGoalEffectSystems()) return;
 		// 配置済みの同じエフェクトを使い回し、前回の粒子を残さず再生します。
 		m_GoalEffect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 		m_GoalEffect.Play(true);
@@ -99,11 +90,66 @@ public class GoalController : MonoBehaviour
 		m_IsPlayingGoalEffect = true;
 	}
 
+	/// <summary>
+	/// リプレイ内のゴール到達タイミングに合わせてゴールエフェクトを再生します。
+	/// </summary>
+	public void PlayReplayGoalEffect()
+	{
+		if (!isActiveAndEnabled || m_GoalEffect == null) return;
+		StopGoalEffect();
+		StopReplayGoalEffect();
+		if (!TryPrepareGoalEffectSystems()) return;
+		m_GoalEffect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		m_GoalEffect.Play(true);
+		m_IsPlayingReplayEffect = true;
+	}
+
+	/// <summary>
+	/// リプレイ再生中に開始したゴールエフェクトを停止・消去します。
+	/// </summary>
+	public void StopReplayGoalEffect()
+	{
+		if (!m_IsPlayingReplayEffect) return;
+		m_IsPlayingReplayEffect = false;
+		if (m_GoalEffect != null)
+		{
+			m_GoalEffect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		}
+	}
+
+	private bool TryPrepareGoalEffectSystems()
+	{
+		if (m_GoalEffect == null || !m_GoalEffect.gameObject.activeInHierarchy || m_EffectSystems == null)
+		{
+			return false;
+		}
+
+		foreach (ParticleSystem effect in m_EffectSystems)
+		{
+			if (effect == null) continue;
+			var main = effect.main;
+			if (main.loop)
+			{
+				Debug.LogError("[GoalController] 終了を待つGoalEffectと子のParticleSystemはLoopingをオフにしてください。演出を省略します。", this);
+				return false;
+			}
+			// 画面外でも終了判定が進むよう、粒子のシミュレーションを継続します。
+			main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+		}
+
+		return true;
+	}
+
 	private void Update()
 	{
 		if (m_IsPlayingGoalEffect && (m_GoalEffect == null || !m_GoalEffect.gameObject.activeInHierarchy || !m_GoalEffect.IsAlive(true)))
 		{
 			StopGoalEffect();
+		}
+
+		if (m_IsPlayingReplayEffect && (m_GoalEffect == null || !m_GoalEffect.gameObject.activeInHierarchy || !m_GoalEffect.IsAlive(true)))
+		{
+			StopReplayGoalEffect();
 		}
 	}
 

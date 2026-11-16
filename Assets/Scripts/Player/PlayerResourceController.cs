@@ -126,6 +126,13 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 			return;
 		}
 
+		// 試合進行による行動制限中(得点演出・リプレイ・カウントダウン等)は回復と待機時間を進めない。
+		if (m_PlayerController != null && !m_PlayerController.IsMatchActionEnabled)
+		{
+			SetDebugRegenerating(false);
+			return;
+		}
+
 		// スタン中は自然回復せず、待機時間も進めません。
 		// スタン直前の経過時間を維持し、解除後に残り時間から再開します。
 		if (m_PlayerController != null &&

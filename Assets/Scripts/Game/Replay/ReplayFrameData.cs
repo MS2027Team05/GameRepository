@@ -1,4 +1,4 @@
-﻿using Unity.Collections;
+using Unity.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -90,6 +90,7 @@ public sealed class ReplayClipData
 
 	public int FrameCount { get; private set; }
 	public float Duration { get; private set; }
+	public float GoalTime { get; private set; }
 	public ETeamType ScoringTeam { get; private set; }
 	public uint GoalSequence { get; private set; }
 	public int PlayerMetaCount { get; private set; }
@@ -112,9 +113,15 @@ public sealed class ReplayClipData
 	{
 		FrameCount = 0;
 		Duration = 0f;
+		GoalTime = 0f;
 		ScoringTeam = ETeamType.None;
 		GoalSequence = 0;
 		PlayerMetaCount = 0;
+	}
+
+	public void SetGoalTime(float goalTime)
+	{
+		GoalTime = Mathf.Max(0f, goalTime);
 	}
 
 	public void BeginBuild(ETeamType scoringTeam, uint goalSequence, ReplayPlayerMeta[] metas, int metaCount)
@@ -165,6 +172,7 @@ public sealed class ReplayClipData
 		ScoringTeam = source.ScoringTeam;
 		GoalSequence = source.GoalSequence;
 		Duration = source.Duration;
+		GoalTime = source.GoalTime;
 		PlayerMetaCount = Mathf.Min(source.PlayerMetaCount, m_PlayerMetas.Length);
 		for (int i = 0; i < PlayerMetaCount; i++)
 		{

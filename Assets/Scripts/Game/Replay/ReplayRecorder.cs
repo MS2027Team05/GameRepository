@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -396,6 +396,11 @@ public sealed class ReplayRecorder : MonoBehaviour
 
 			m_LatestGoalClip.AppendFrame(slot, slot.m_Time - clipStartTime);
 		}
+
+		float goalTime = hasStartTime
+			? Mathf.Clamp(m_PendingGoalTime - clipStartTime, 0f, m_LatestGoalClip.Duration)
+			: 0f;
+		m_LatestGoalClip.SetGoalTime(goalTime);
 
 		if (m_PendingIsNewBestGoal && m_LatestGoalClip.IsValid)
 		{
