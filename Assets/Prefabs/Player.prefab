@@ -472,8 +472,6 @@ MonoBehaviour:
   m_MaxActiveBoltCount: 5
   m_SegmentCount: 5
   m_Displacement: 0.5
-  m_CoreMaterial: {fileID: 2100000, guid: 4a1b1b60ed625a94cb60ef678d192fb5, type: 2}
-  m_GlowMaterial: {fileID: 2100000, guid: 602ee0b63f2c1da4f8428fe746db83ce, type: 2}
   m_CoreWidth: 0.015
   m_GlowWidth: 0.06
   m_EndWidthRatio: 0.05

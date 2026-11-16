@@ -150,3 +150,8 @@ GameRepository/
 - PlayerBallCarrierは男女別の所持ジョイントを保持し、PlayerAppearanceが実際に表示しているキャラクター種別に応じてBallHoldPointを返す。外見の初期反映前はPlayerNetworkProfileの種別を参照する。
 - モデル切り替え後は既存のBallController.LateUpdateとBallHoldAttachment.Attachが新しいジョイントへ描画を付け替え、サーバー上の本体も追従する。追加の通信状態は持たない。
 - InspectorではMan Ball Hold PointとWoman Ball Hold Pointに各モデルのジョイントを登録する。従来のBall Hold Point参照は男性用へ引き継ぐ。
+
+## 電流の外見管理
+- `Assets/VFX/Lightning/VFXScripts/`: 継承元の `ALightningBolt` が共通マテリアルの読込、所有者の色取得、変更通知の購読と表示色の反映を担当する。継承先は形状と発生方法を担当する。
+- `Assets/VFX/Lightning/Resources/Lightning/`: 全種類の電流で使う芯用・発光用マテリアルを保持する。色は電流ごとの `MaterialPropertyBlock` で上書きする。
+- `PlayerAppearance.TryGetEffectColor` / `EffectColorChanged`: プレイヤーの選択色を演出へ提供する取得口と変更通知。プレイヤーの子以外へ生成する電流は `ALightningBolt.SetOwner` で所有者を渡す。

@@ -29,6 +29,12 @@ public sealed class PlayerAppearance : MonoBehaviour
 	private ETeamType m_CurrentTeam;
 	private Material m_CurrentMaterial;
 	private Material m_CurrentTeamMaterial;
+	private bool m_HasSelectedEffectColor;
+
+	/// <summary>
+	/// 選択色の反映後に演出側へ変更を通知します。
+	/// </summary>
+	public event System.Action EffectColorChanged;
 
 	public PlayerAppearanceCatalog AppearanceCatalog { get => m_AppearanceCatalog; }
 	public bool HasAppliedCharacterType { get => m_HasAppliedCharacterType; }
@@ -159,6 +165,18 @@ public sealed class PlayerAppearance : MonoBehaviour
 		m_CurrentColor = colorType;
 		m_CurrentMaterial = activeCharacterType == ECharacterType.Woman ? womanMaterial : manMaterial;
 		m_HasAppliedColor = m_CurrentMaterial != null;
+		m_HasSelectedEffectColor = true;
+		EffectColorChanged?.Invoke();
+	}
+
+	/// <summary>
+	/// 現在の選択色に対応する演出用カラーを取得します。
+	/// </summary>
+	public bool TryGetEffectColor(out Color color)
+	{
+		color = default;
+		return m_HasSelectedEffectColor && m_AppearanceCatalog != null &&
+			m_AppearanceCatalog.TryGetPreviewColor(m_CurrentColor, out color);
 	}
 
 	/// <summary>

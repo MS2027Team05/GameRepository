@@ -11,8 +11,6 @@ public abstract class ALightningBolt : MonoBehaviour
     [SerializeField] private float m_Displacement;
 
     [Header("電撃の見た目設定")]
-    [SerializeField] private Material m_CoreMaterial;
-    [SerializeField] private Material m_GlowMaterial;
     [SerializeField] private float m_CoreWidth;
     [SerializeField] private float m_GlowWidth;
 
@@ -31,6 +29,18 @@ public abstract class ALightningBolt : MonoBehaviour
     private int m_SpawnCycle;
     private bool m_HasFinishedSpawning;
 
+    private static readonly int m_BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int m_EmissionColorId = Shader.PropertyToID("_EmissionColor");
+    private Material m_CoreMaterial;
+    private Material m_GlowMaterial;
+    private MaterialPropertyBlock m_CoreProperties;
+    private MaterialPropertyBlock m_GlowProperties;
+    private PlayerAppearance m_Owner;
+    private bool m_HasExplicitOwner;
+    private bool m_IsOwnerSubscribed;
+    private bool m_HasColor;
+    private Color m_Color;
+
     protected sealed class BoltData
     {
         public LineRenderer m_CoreLineRenderer;
@@ -47,8 +57,165 @@ public abstract class ALightningBolt : MonoBehaviour
 
     private void Awake()
     {
+        SetMaterials();
+        m_CoreProperties = new MaterialPropertyBlock();
+        m_GlowProperties = new MaterialPropertyBlock();
         CreateBoltContainer();
         CreateBoltPool();
+    }
+
+    protected virtual void OnEnable()
+    {
+        if (!m_HasExplicitOwner)
+        {
+            ChangeOwner(GetComponentInParent<PlayerAppearance>());
+        }
+        else
+        {
+            SubscribeOwner();
+            RefreshOwnerColor();
+        }
+    }
+
+    protected virtual void OnDisable()
+    {
+        UnsubscribeOwner();
+    }
+
+    private void OnTransformParentChanged()
+    {
+        if (!m_HasExplicitOwner)
+        {
+            ChangeOwner(GetComponentInParent<PlayerAppearance>());
+        }
+    }
+
+    /// <summary>
+    /// 独立して生成した電流やプールから再利用する電流の所有者を指定します。
+    /// nullを指定すると所有者と色の上書きを解除します。
+    /// </summary>
+    public void SetOwner(PlayerAppearance owner)
+    {
+        m_HasExplicitOwner = true;
+        m_HasColor = false;
+        ClearColor();
+        ChangeOwner(owner);
+    }
+
+    /// <summary>
+    /// この電流の芯と発光の色を変更します。所有者の色変更時には再取得します。
+    /// </summary>
+    public void SetColor(Color color)
+    {
+        m_Color = color;
+        m_HasColor = true;
+
+        if (m_Bolts == null)
+        {
+            return;
+        }
+
+        SetMaterialColor(m_CoreProperties, m_CoreMaterial, color);
+        SetMaterialColor(m_GlowProperties, m_GlowMaterial, color);
+
+        foreach (BoltData bolt in m_Bolts)
+        {
+            bolt.m_CoreLineRenderer.SetPropertyBlock(m_CoreProperties);
+            bolt.m_GlowLineRenderer.SetPropertyBlock(m_GlowProperties);
+        }
+    }
+
+    private void SetMaterials()
+    {
+        // 共通アセットを読み込み、色は各電流のPropertyBlockで上書きします。
+        m_CoreMaterial = Resources.Load<Material>("Lightning/M_Lightning_Core");
+        m_GlowMaterial = Resources.Load<Material>("Lightning/M_Lightning_Glow");
+
+        if (m_CoreMaterial == null || m_GlowMaterial == null)
+        {
+            Debug.LogError("電流の共通マテリアルをResources/Lightningから読み込めませんでした。", this);
+            enabled = false;
+        }
+    }
+
+    private void ChangeOwner(PlayerAppearance owner)
+    {
+        if (m_Owner != owner)
+        {
+            UnsubscribeOwner();
+            m_Owner = owner;
+            m_HasColor = false;
+            ClearColor();
+        }
+
+        SubscribeOwner();
+        RefreshOwnerColor();
+    }
+
+    private void SubscribeOwner()
+    {
+        if (!isActiveAndEnabled || m_IsOwnerSubscribed || m_Owner == null)
+        {
+            return;
+        }
+
+        m_Owner.EffectColorChanged += RefreshOwnerColor;
+        m_IsOwnerSubscribed = true;
+    }
+
+    private void UnsubscribeOwner()
+    {
+        if (m_IsOwnerSubscribed && m_Owner != null)
+        {
+            m_Owner.EffectColorChanged -= RefreshOwnerColor;
+        }
+
+        m_IsOwnerSubscribed = false;
+    }
+
+    private void RefreshOwnerColor()
+    {
+        if (m_Owner != null && m_Owner.TryGetEffectColor(out Color color))
+        {
+            SetColor(color);
+        }
+        else if (m_HasColor)
+        {
+            SetColor(m_Color);
+        }
+    }
+
+    private void ClearColor()
+    {
+        if (m_Bolts == null)
+        {
+            return;
+        }
+
+        foreach (BoltData bolt in m_Bolts)
+        {
+            bolt.m_CoreLineRenderer.SetPropertyBlock(null);
+            bolt.m_GlowLineRenderer.SetPropertyBlock(null);
+        }
+    }
+
+    private static void SetMaterialColor(MaterialPropertyBlock properties, Material material, Color color)
+    {
+        properties.Clear();
+
+        if (material == null)
+        {
+            return;
+        }
+
+        Color baseColor = material.GetColor(m_BaseColorId);
+        Color emissionColor = material.GetColor(m_EmissionColorId);
+        float emissionIntensity = Mathf.Max(emissionColor.r, Mathf.Max(emissionColor.g, emissionColor.b));
+        Color tint = new Color(color.r, color.g, color.b, baseColor.a);
+        properties.SetColor(m_BaseColorId, tint);
+        properties.SetColor(m_EmissionColorId,
+            new Color(color.r * emissionIntensity, color.g * emissionIntensity,
+                color.b * emissionIntensity, emissionColor.a));
     }
 
     private void Update()

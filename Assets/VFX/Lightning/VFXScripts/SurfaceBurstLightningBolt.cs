@@ -77,8 +77,9 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
     {
     }
 
-    private void OnEnable()
+    protected override void OnEnable()
     {
+        base.OnEnable();
         if (m_ContactDetector != null)
         {
             m_ContactDetector.ContactEntered += Play;
@@ -86,8 +87,9 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
         }
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         if (m_ContactDetector != null)
         {
             m_ContactDetector.ContactEntered -= Play;
