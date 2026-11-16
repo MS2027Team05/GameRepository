@@ -391,6 +391,14 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 				continue;
 			}
 
+			// パス対象として味方を検索する際は、既にボールを所持している味方を除外します。
+			if (allies &&
+				profile.TryGetComponent(out PlayerBallCarrier allyCarrier) &&
+				allyCarrier.HasBall)
+			{
+				continue;
+			}
+
 			ConsiderCandidate(
 				profile.gameObject,
 				allies
@@ -415,6 +423,16 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 			return;
 		}
 
+		ETeamType myTeam =
+			m_PlayerProfile != null
+			? m_PlayerProfile.Team
+			: ETeamType.None;
+
+		if (myTeam == ETeamType.None)
+		{
+			return;
+		}
+
 		GameObject[] goals;
 
 		try
@@ -430,6 +448,17 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		foreach (GameObject goal in goals)
 		{
 			if (goal == null)
+			{
+				continue;
+			}
+
+			// 自チームが得点できる相手側ゴールのみを対象にし、自陣ゴールを除外します。
+			GoalController goalController =
+				goal.GetComponentInParent<GoalController>() ??
+				goal.GetComponentInChildren<GoalController>();
+
+			if (goalController != null &&
+				goalController.ScoringTeam != myTeam)
 			{
 				continue;
 			}

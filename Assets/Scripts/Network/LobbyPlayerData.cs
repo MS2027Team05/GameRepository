@@ -10,6 +10,7 @@ public enum ETeamType : byte
 	None = 0,
 	Red = 1,
 	Blue = 2,
+	Spectator = 3,
 }
 
 /// <summary>

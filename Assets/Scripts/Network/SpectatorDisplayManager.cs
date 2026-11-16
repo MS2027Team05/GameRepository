@@ -3,8 +3,8 @@ using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// ホストPC専用の観戦カメラおよびマルチディスプレイ(Display 2への全画面投影)を管理するクラス。
-/// 複数モニター接続時はプロジェクター等の外部スクリーン(Display 2)へ出力し、単一モニター時は自動フォールバックします。
+/// ホストPC(Display 2への全画面投影)および観戦者クライアント(Display 1出力)の
+/// 観戦カメラとUI表示を統括管理するクラス。
 /// </summary>
 public class SpectatorDisplayManager : MonoBehaviour
 {
@@ -18,52 +18,175 @@ public class SpectatorDisplayManager : MonoBehaviour
 	[FormerlySerializedAs("forceEnableInEditor")]
 	[SerializeField] private bool m_ForceEnableInEditor;
 
+	private static SpectatorDisplayManager m_Instance;
+
+	/// <summary>
+	/// シーン内で稼働しているSpectatorDisplayManagerのインスタンス。
+	/// </summary>
+	public static SpectatorDisplayManager Instance => m_Instance;
+
+	/// <summary>
+	/// 現在アクティブな観戦カメラを取得します。
+	/// </summary>
+	public static Camera ActiveSpectatorCamera
+	{
+		get
+		{
+			if (m_Instance != null && m_Instance.m_SpectatorCamera != null && m_Instance.m_SpectatorCamera.gameObject.activeInHierarchy)
+			{
+				return m_Instance.m_SpectatorCamera;
+			}
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// 自端末が観戦モード(観戦専用ホスト、または観戦者クライアント)であるかを取得します。
+	/// </summary>
+	public static bool IsLocalSpectator
+	{
+		get
+		{
+			// 1. エディタ強制有効化時
+			if (m_Instance != null && Application.isEditor && m_Instance.m_ForceEnableInEditor)
+			{
+				return true;
+			}
+
+			// 2. 観戦専用ホスト(非プレイヤーホスト)
+			if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && !NetworkConnectManager.IsPlayerHost)
+			{
+				return true;
+			}
+
+			// 3. 観戦クライアント判定
+			if (NetworkConnectManager.IsSpectatorClient)
+			{
+				return true;
+			}
+
+			// 4. ローカルプロファイル/セッションデータでの観戦チーム判定
+			if (LocalPlayerProfilePreferences.GetAssignedTeam() == ETeamType.Spectator)
+			{
+				return true;
+			}
+
+			if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null)
+			{
+				ulong localClientId = NetworkManager.Singleton.LocalClientId;
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					var data = SessionPlayerDataStore.Instance.GetOrCreatePlayerData(localClientId);
+					if (data.Team == ETeamType.Spectator)
+					{
+						return true;
+					}
+				}
+			}
+
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// 自端末のメイン画面(Display 1)が観戦専用映像を出力しているかを取得します。
+	/// プレイヤー兼任ホスト(Display 1でプレイ、Display 2で観戦出力)の場合はfalseを返します。
+	/// </summary>
+	public static bool IsDisplay1Spectator
+	{
+		get
+		{
+			Camera activeCam = ActiveSpectatorCamera;
+			if (activeCam != null)
+			{
+				return activeCam.targetDisplay == 0;
+			}
+
+			return IsLocalSpectator && !NetworkConnectManager.IsPlayerHost;
+		}
+	}
+
+	private void Awake()
+	{
+		m_Instance = this;
+	}
+
+	private void OnDestroy()
+	{
+		if (m_Instance == this)
+		{
+			m_Instance = null;
+		}
+	}
+
 	private void Start()
 	{
 		InitializeSpectatorDisplay();
 	}
 
-	private void InitializeSpectatorDisplay()
+	/// <summary>
+	/// 観戦カメラおよび観戦用UIの表示先ディスプレイを初期化・更新します。
+	/// </summary>
+	public void InitializeSpectatorDisplay()
 	{
 		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
-		bool isSpectatorMode = !NetworkConnectManager.IsPlayerHost;
+		bool isSpectatorMode = IsLocalSpectator;
 
-		// エディタデバッグ強制有効化フラグ、または「ホストかつ観戦専用モード」の場合に観戦機能を有効化
-		bool shouldActivateSpectator = (isServer && isSpectatorMode) || (Application.isEditor && m_ForceEnableInEditor);
+		// ホスト(本番観戦ホスト・デバッグホスト問わず)または観戦クライアント、またはエディタ強制有効化時に稼働
+		bool shouldActivate = isServer || isSpectatorMode || (Application.isEditor && m_ForceEnableInEditor);
 
-		if (!shouldActivateSpectator)
+		if (!shouldActivate)
 		{
-			// クライアントまたはプレイヤー兼任ホストの場合は観戦カメラを無効化
 			if (m_SpectatorCamera != null) m_SpectatorCamera.gameObject.SetActive(false);
 			if (m_SpectatorUIRoot != null) m_SpectatorUIRoot.SetActive(false);
 			return;
 		}
 
-		// マルチディスプレイの検出と有効化
-		if (Display.displays.Length > 1)
-		{
-			// 2枚目のディスプレイ(Display 2)をアクティブ化
-			Display.displays[1].Activate();
+		int targetDisplayIndex = 0; // デフォルトはDisplay 1(メイン画面)
 
-			if (m_SpectatorCamera != null)
+		if (isServer)
+		{
+			// ホスト端末(本番環境・デバッグホスト共通)は、Display 2へ出力
+			targetDisplayIndex = 1;
+			if (Display.displays.Length > 1)
 			{
-				m_SpectatorCamera.targetDisplay = 1; // Display 2へ出力
-				m_SpectatorCamera.gameObject.SetActive(true);
+				Display.displays[1].Activate();
+			}
+			else
+			{
+				// セカンドモニター未接続時のフォールバック(単一モニターホスト用)
+				if (!NetworkConnectManager.IsPlayerHost)
+				{
+					// 観戦専用ホストで1画面しかない場合はDisplay 1へフォールバック
+					targetDisplayIndex = 0;
+				}
 			}
 		}
 		else
 		{
-			// 外部モニターがない環境(ノートPC単体やデバッグ環境)へのフォールバック
-			if (m_SpectatorCamera != null)
-			{
-				m_SpectatorCamera.targetDisplay = 0; // Display 1(メイン画面)へ出力
-				m_SpectatorCamera.gameObject.SetActive(true);
-			}
+			// 観戦者ボタンで入ったクライアント端末は、自身のDisplay 1(メイン画面)へ出力
+			targetDisplayIndex = 0;
+		}
+
+		if (m_SpectatorCamera != null)
+		{
+			m_SpectatorCamera.targetDisplay = targetDisplayIndex;
+			m_SpectatorCamera.gameObject.SetActive(true);
 		}
 
 		if (m_SpectatorUIRoot != null)
 		{
 			m_SpectatorUIRoot.SetActive(true);
+
+			// 観戦UIルート配下の全CanvasのTargetDisplayもカメラに合わせて同期
+			Canvas[] canvases = m_SpectatorUIRoot.GetComponentsInChildren<Canvas>(true);
+			for (int i = 0; i < canvases.Length; i++)
+			{
+				if (canvases[i] != null)
+				{
+					canvases[i].targetDisplay = targetDisplayIndex;
+				}
+			}
 		}
 	}
 }

@@ -72,7 +72,12 @@ public partial class BallPhysicsController : NetworkBehaviour
 		/// AttachSurfaceへ吸着して
 		/// 完全停止している状態です。
 		/// </summary>
-		StuckToSurface
+		StuckToSurface,
+
+		/// <summary>
+		/// 味方プレイヤーまたはゴールを追尾している状態です。
+		/// </summary>
+		Homing
 	}
 
 	[Header("シュート後の移動")]
@@ -274,6 +279,30 @@ public partial class BallPhysicsController : NetworkBehaviour
 	private EBallMotionState m_MotionState;
 
 	/// <summary>
+	/// RigidbodyまたはSurface Physicsで、停止しきい値を超えて移動中か取得します。
+	/// </summary>
+	public bool IsMoving
+	{
+		get
+		{
+			if (m_Rigidbody == null)
+			{
+				return false;
+			}
+
+			float speedSquared = m_Rigidbody.linearVelocity.sqrMagnitude;
+			if (m_MotionState == EBallMotionState.Surface && m_SurfaceSimulation != null)
+			{
+				float verticalSpeed = m_SurfaceSimulation.VerticalVelocity;
+				speedSquared = m_SurfaceSimulation.SurfaceVelocity.sqrMagnitude + verticalSpeed * verticalSpeed;
+			}
+
+			float stopSpeed = Mathf.Max(0.0f, m_StopSpeedThreshold);
+			return speedSquared > stopSpeed * stopSpeed;
+		}
+	}
+
+	/// <summary>
 	/// 通常飛行中に維持する進行方向です。
 	/// </summary>
 	private Vector3 m_FlightDirection;
@@ -434,6 +463,10 @@ public partial class BallPhysicsController : NetworkBehaviour
 				UpdateSurfaceSimulation();
 				break;
 
+			case EBallMotionState.Homing:
+				UpdateHoming();
+				break;
+
 			case EBallMotionState.Idle:
 			case EBallMotionState.StuckToSurface:
 				break;
@@ -473,6 +506,8 @@ public partial class BallPhysicsController : NetworkBehaviour
 	/// </summary>
 	private void ResetInternalState()
 	{
+		ClearHomingState();
+
 		ChangeMotionState(
 			EBallMotionState.Idle);
 
@@ -494,6 +529,8 @@ public partial class BallPhysicsController : NetworkBehaviour
 	/// </summary>
 	public void ResetMotionState()
 	{
+		ClearHomingState();
+
 		if (!IsServer)
 		{
 			return;
