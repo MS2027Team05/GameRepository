@@ -16010,6 +16010,7 @@ MonoBehaviour:
   m_Ball: {fileID: 146070833806134462}
   m_FinishMatchTransitionDelay: 0
   m_ResultSceneName: 
+  m_StatsTracker: {fileID: 0}
   m_ReplayTriggerMode: 0
   m_ReplayRecorder: {fileID: 1908607708}
   m_ReplayPlayer: {fileID: 1908607707}

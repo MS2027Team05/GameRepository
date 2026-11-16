@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -13,9 +13,29 @@ public class SessionPlayerDataStore : MonoBehaviour
 
 	// サーバー上で各ClientIdの設定データを保持するキャッシュ
 	private readonly Dictionary<ulong, LobbyPlayerData> m_PlayerDataCache = new Dictionary<ulong, LobbyPlayerData>();
+	private readonly List<PlayerMatchSummary> m_LatestMatchSummaries = new List<PlayerMatchSummary>();
 	private MatchResultData m_LatestMatchResult;
+	private ExhibitionStatsSnapshot m_LatestExhibitionStats;
+	private bool m_HasExhibitionStats;
 
 	public MatchResultData LatestMatchResult => m_LatestMatchResult;
+	public ExhibitionStatsSnapshot LatestExhibitionStats => m_LatestExhibitionStats;
+	public bool HasExhibitionStats => m_HasExhibitionStats;
+	public IReadOnlyList<PlayerMatchSummary> LatestMatchSummaries => m_LatestMatchSummaries;
+
+	/// <summary>
+	/// 必要に応じてクライアント側にも永続ストアのインスタンスを確保します。
+	/// </summary>
+	public static SessionPlayerDataStore EnsureInstance()
+	{
+		if (Instance != null)
+		{
+			return Instance;
+		}
+
+		var storeObj = new GameObject("SessionPlayerDataStore");
+		return storeObj.AddComponent<SessionPlayerDataStore>();
+	}
 
 	private bool IsServer { get => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer; }
 
@@ -163,12 +183,68 @@ public class SessionPlayerDataStore : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 試合終了時にサーバーから同期されたプレイヤーサマリー(称号含む)および展示統計を保存します。
+	/// </summary>
+	public void SetMatchAwardsAndStats(
+		IReadOnlyList<PlayerMatchSummary> summaries,
+		in ExhibitionStatsSnapshot exhibitionStats)
+	{
+		m_LatestMatchSummaries.Clear();
+		if (summaries != null)
+		{
+			for (int i = 0; i < summaries.Count; i++)
+			{
+				PlayerMatchSummary summary = summaries[i];
+				if (summary == null)
+				{
+					continue;
+				}
+
+				m_LatestMatchSummaries.Add(summary);
+				m_PlayerDataCache[summary.m_PlayerData.ClientId] = summary.m_PlayerData;
+			}
+		}
+
+		m_LatestExhibitionStats = exhibitionStats;
+		m_HasExhibitionStats = true;
+	}
+
+	/// <summary>
+	/// 指定ClientIdの確定サマリー(個人表彰含む)を取得します。
+	/// </summary>
+	public bool TryGetPlayerSummary(ulong clientId, out PlayerMatchSummary summary)
+	{
+		for (int i = 0; i < m_LatestMatchSummaries.Count; i++)
+		{
+			if (m_LatestMatchSummaries[i] != null && m_LatestMatchSummaries[i].m_PlayerData.ClientId == clientId)
+			{
+				summary = m_LatestMatchSummaries[i];
+				return true;
+			}
+		}
+
+		summary = null;
+		return false;
+	}
+
+	/// <summary>
+	/// 新規試合開始時に前回試合の表彰キャッシュのみをクリアします。
+	/// </summary>
+	public void ClearLatestMatchAwards()
+	{
+		m_LatestMatchSummaries.Clear();
+	}
+
+	/// <summary>
 	/// セッション終了時やロビー解散時に全キャッシュをクリアします。
 	/// </summary>
 	public void ClearAll()
 	{
 		m_PlayerDataCache.Clear();
+		m_LatestMatchSummaries.Clear();
 		m_LatestMatchResult = default;
+		m_LatestExhibitionStats = default;
+		m_HasExhibitionStats = false;
 	}
 }
 

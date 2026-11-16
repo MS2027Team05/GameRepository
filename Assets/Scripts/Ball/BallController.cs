@@ -1,4 +1,4 @@
-﻿// BallController.cs
+// BallController.cs
 using System;
 using Unity.Netcode;
 using Unity.Netcode.Components;
@@ -67,6 +67,10 @@ public class BallController : NetworkBehaviour
 	// Host側で、最後の正常なシュートが味方パスとして受取可能か記録します。
 	private bool m_IsPassInFlight;
 	private ETeamType m_LastPasserTeam;
+	private ulong m_LastPasserClientId;
+	private ulong m_LastAssistClientId;
+	private int m_CurrentPassChainCount;
+	private bool m_IsGoalHomingInFlight;
 	private Vector3 m_LastReleaseOrigin;
 	private bool m_WasFriendlyPassAssisted;
 
@@ -80,6 +84,21 @@ public class BallController : NetworkBehaviour
 	/// Host側で通知します。
 	/// </summary>
 	public event Action OnReleased;
+
+	/// <summary>
+	/// Host側で味方へのパスが成立したときに通知します(送り手ClientId, 受け手ClientId, パス距離)。
+	/// </summary>
+	public event Action<ulong, ulong, float> FriendlyPassCompleted;
+
+	/// <summary>
+	/// Host側で相手チームの飛翔中ボールをキャッチしてカット/セーブしたときに通知します(取得者ClientId, 取得者チーム, 取得座標, ゴール追尾シュートだったか)。
+	/// </summary>
+	public event Action<ulong, ETeamType, Vector3, bool> EnemyShotIntercepted;
+
+	/// <summary>
+	/// Host側で相手保持者からボールを直接奪取したときに通知します(奪取者ClientId, 奪取者チーム, 奪取座標)。
+	/// </summary>
+	public event Action<ulong, ETeamType, Vector3> BallStolenFromEnemy;
 
 	/// <summary>
 	/// 現在ボールを所持しているプレイヤーのClientIdを取得します。
@@ -122,6 +141,16 @@ public class BallController : NetworkBehaviour
 	/// サーバー側で直近のプレーが味方パスを経由していたか取得します。
 	/// </summary>
 	public bool WasFriendlyPassAssisted => m_WasFriendlyPassAssisted || m_IsPassInFlight;
+
+	/// <summary>
+	/// サーバー側で直前に味方パスを出したプレイヤー(アシスト候補)のClientIdを取得します。
+	/// </summary>
+	public ulong LastAssistClientId => m_LastAssistClientId;
+
+	/// <summary>
+	/// サーバー側で現在の攻撃ポゼッションにおける連続パス成功回数を取得します。
+	/// </summary>
+	public int CurrentPassChainCount => m_CurrentPassChainCount;
 
 	/// <summary>
 	/// Rigidbodyの参照を取得します。
@@ -331,23 +360,48 @@ public class BallController : NetworkBehaviour
 		m_IsShotInFlight.Value = false;
 
 		// 所持確定時に一度だけ判定し、強制ドロップや敵からの取得では付与しません。
-		bool isFriendlyPass = m_IsPassInFlight &&
-			holderClientId != m_LastHolderClientId &&
-			m_LastPasserTeam != ETeamType.None;
+		bool wasPassInFlight = m_IsPassInFlight;
+		ETeamType previousPasserTeam = m_LastPasserTeam;
+		ulong previousPasserClientId = m_LastPasserClientId;
+		bool wasGoalHoming = m_IsGoalHomingInFlight;
 
-		if (isFriendlyPass)
-		{
-			PlayerNetworkProfile receiverProfile = holderNetworkObject.GetComponent<PlayerNetworkProfile>();
-			isFriendlyPass = receiverProfile != null && receiverProfile.Team == m_LastPasserTeam;
-		}
+		PlayerNetworkProfile receiverProfile = holderNetworkObject.GetComponent<PlayerNetworkProfile>();
+		bool isFriendlyPass = wasPassInFlight &&
+			holderClientId != previousPasserClientId &&
+			previousPasserTeam != ETeamType.None &&
+			receiverProfile != null &&
+			receiverProfile.Team == previousPasserTeam;
 
 		m_IsPassInFlight = false;
 		m_LastPasserTeam = ETeamType.None;
+		m_IsGoalHomingInFlight = false;
 		m_WasFriendlyPassAssisted = isFriendlyPass;
 
 		if (isFriendlyPass)
 		{
+			m_LastAssistClientId = previousPasserClientId;
+			m_CurrentPassChainCount++;
+			float passDistance = Vector3.Distance(m_LastReleaseOrigin, holderNetworkObject.transform.position);
+			FriendlyPassCompleted?.Invoke(previousPasserClientId, holderClientId, passDistance);
 			holder.NotifyFriendlyPassReceivedServer();
+		}
+		else
+		{
+			m_LastAssistClientId = 0;
+			m_CurrentPassChainCount = 0;
+
+			if (wasPassInFlight &&
+				previousPasserTeam != ETeamType.None &&
+				receiverProfile != null &&
+				receiverProfile.Team != ETeamType.None &&
+				receiverProfile.Team != previousPasserTeam)
+			{
+				EnemyShotIntercepted?.Invoke(
+					holderClientId,
+					receiverProfile.Team,
+					holderNetworkObject.transform.position,
+					wasGoalHoming);
+			}
 		}
 
 		return true;
@@ -437,6 +491,19 @@ public class BallController : NetworkBehaviour
 		// 新しい所持者の状態を設定
 		newHolder.SetBallState(true);
 		m_WasFriendlyPassAssisted = false;
+		m_LastAssistClientId = 0;
+		m_CurrentPassChainCount = 0;
+		m_IsGoalHomingInFlight = false;
+
+		PlayerNetworkProfile oldProfile = oldHolderNetworkObject.GetComponent<PlayerNetworkProfile>();
+		PlayerNetworkProfile newProfile = newHolderNetworkObject.GetComponent<PlayerNetworkProfile>();
+		if (oldProfile != null && newProfile != null &&
+			oldProfile.Team != ETeamType.None &&
+			newProfile.Team != ETeamType.None &&
+			oldProfile.Team != newProfile.Team)
+		{
+			BallStolenFromEnemy?.Invoke(newHolderClientId, newProfile.Team, newHolderNetworkObject.transform.position);
+		}
 
 		return true;
 	}
@@ -527,8 +594,10 @@ public class BallController : NetworkBehaviour
 		m_CurrentHolderId.Value = 0;
 
 		m_LastPasserTeam = passerTeam;
+		m_LastPasserClientId = previousHolderClientId;
 		m_IsPassInFlight = true;
 		m_IsShotInFlight.Value = true;
+		m_IsGoalHomingInFlight = !useTransform;
 		m_LastReleaseOrigin = transform.position;
 
 		// 対象の種類によって追尾方法を切り替える
@@ -609,8 +678,10 @@ public class BallController : NetworkBehaviour
 			m_ShootPower;
 
 		m_LastPasserTeam = passerTeam;
+		m_LastPasserClientId = previousHolderClientId;
 		m_IsPassInFlight = true;
 		m_IsShotInFlight.Value = true;
+		m_IsGoalHomingInFlight = false;
 		m_LastReleaseOrigin = transform.position;
 
 		// BallPhysicsControllerへ、
@@ -659,6 +730,10 @@ public class BallController : NetworkBehaviour
 		m_IsPassInFlight = false;
 		m_IsShotInFlight.Value = false;
 		m_LastPasserTeam = ETeamType.None;
+		m_LastPasserClientId = 0;
+		m_LastAssistClientId = 0;
+		m_CurrentPassChainCount = 0;
+		m_IsGoalHomingInFlight = false;
 		m_LastReleaseOrigin = transform.position;
 		m_WasFriendlyPassAssisted = false;
 
@@ -726,6 +801,10 @@ public class BallController : NetworkBehaviour
 
 		m_HasRepickupLock = false;
 		m_LastHolderClientId = 0;
+		m_LastPasserClientId = 0;
+		m_LastAssistClientId = 0;
+		m_CurrentPassChainCount = 0;
+		m_IsGoalHomingInFlight = false;
 		m_RepickupUnlockTime = 0f;
 		m_CurrentHolderId.Value = 0;
 		m_CurrentHolderCarrier = null;

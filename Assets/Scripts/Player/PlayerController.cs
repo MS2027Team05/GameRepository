@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
@@ -57,6 +58,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	public EPlayerState CurrentState { get; private set; } = EPlayerState.Idle;
 	public bool IsMatchActionEnabled => m_IsMatchActionEnabled;
+
+	/// <summary>
+	/// Owner端末で空中移動(離陸または空中追加移動)が開始された際にClientIdを通知します。
+	/// </summary>
+	public static event Action<ulong> OnLocalPlayerAirMoveStarted;
 
 	private Coroutine m_StunCoroutine;
 
@@ -590,6 +596,10 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		ActivateMovingEffect(targetPoint);
 		m_AimGuide?.BeginLandingTracking(targetPoint, targetNormal);
 		m_CameraEffect?.PlayFallEffect();
+		if (IsOwner)
+		{
+			OnLocalPlayerAirMoveStarted?.Invoke(OwnerClientId);
+		}
 	}
 
 	private void ActivateMovingEffect(Vector3 targetPoint)

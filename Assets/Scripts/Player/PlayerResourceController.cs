@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -56,6 +56,11 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	public float CurrentResource => m_CurrentResource;
 	public float MaxResource => Mathf.Max(0.0f, m_MaxResource);
 	public event Action<float, float> OnResourceChanged;
+
+	/// <summary>
+	/// Owner端末でリソースを消費した際に(ClientId, 消費量)を通知します。
+	/// </summary>
+	public static event Action<ulong, float> OnLocalResourceConsumed;
 
 	/// <summary>
 	/// スタッフメニュー等から設定可能な、デバッグ用のエネルギー消費無制限フラグ。
@@ -216,6 +221,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 		{
 			m_CurrentResource = Mathf.Max(0.0f, m_CurrentResource - cost);
 			NotifyResourceChanged();
+			OnLocalResourceConsumed?.Invoke(OwnerClientId, cost);
 		}
 
 		NotifyActionPerformed();

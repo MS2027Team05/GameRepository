@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
@@ -47,6 +47,10 @@ public class MatchManager : NetworkBehaviour
 	[SerializeField] private float m_FinishMatchTransitionDelay;
 	[Tooltip("遷移先のリザルトシーン名です。空欄の場合はResultSceneが使用されます。")]
 	[SerializeField] private string m_ResultSceneName;
+
+	[Header("試合統計・称号設定")]
+	[Tooltip("プレイヤー行動統計・個人表彰計測コンポーネントです(未設定時は同一オブジェクトまたはシーン内から自動取得・生成)。")]
+	[SerializeField] private MatchStatsTracker m_StatsTracker;
 
 	[Header("ゴールリプレイ設定")]
 	[Tooltip("リプレイを再生するタイミングです(AfterEveryGoal: 検証用・毎ゴール後 / AfterMatchBestGoal: 実運用・試合終了後にベストゴールのみ)。")]
@@ -172,6 +176,7 @@ public class MatchManager : NetworkBehaviour
 
 		Instance = this;
 		EnsureReplayComponents();
+		EnsureStatsTracker();
 		if (m_GoalHighlightEvaluator == null)
 		{
 			m_GoalHighlightEvaluator = new DefaultGoalHighlightEvaluator();
@@ -249,6 +254,49 @@ public class MatchManager : NetworkBehaviour
 				m_ReplayPlayer = gameObject.AddComponent<ReplayPlayer>();
 			}
 		}
+	}
+
+	private void EnsureStatsTracker()
+	{
+		if (m_StatsTracker == null)
+		{
+			m_StatsTracker = GetComponent<MatchStatsTracker>();
+			if (m_StatsTracker == null)
+			{
+				m_StatsTracker = FindFirstObjectByType<MatchStatsTracker>();
+			}
+			if (m_StatsTracker == null)
+			{
+				m_StatsTracker = gameObject.AddComponent<MatchStatsTracker>();
+			}
+		}
+	}
+
+	/// <summary>
+	/// クライアント側で計測した行動統計スナップショットをサーバーへ送信します。
+	/// </summary>
+	public void SubmitClientStats(in ClientStatsSyncPayload payload)
+	{
+		if (!IsSpawned)
+		{
+			return;
+		}
+
+		EnsureStatsTracker();
+		if (IsServer)
+		{
+			m_StatsTracker?.ApplyClientStats(payload.m_SenderClientId, in payload);
+			return;
+		}
+
+		SubmitClientStatsServerRpc(payload);
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void SubmitClientStatsServerRpc(ClientStatsSyncPayload payload, RpcParams rpcParams = default)
+	{
+		EnsureStatsTracker();
+		m_StatsTracker?.ApplyClientStats(rpcParams.Receive.SenderClientId, in payload);
 	}
 
 	private void Update()
@@ -347,6 +395,8 @@ public class MatchManager : NetworkBehaviour
 		m_BestGoalScore = 0f;
 		m_ReplayPlayer?.Stop();
 		m_ReplayRecorder?.ResetForNewMatch();
+		m_StatsTracker?.ResetMatchStats();
+		SessionPlayerDataStore.Instance?.ClearLatestMatchAwards();
 		m_CountdownEndTime.Value = 0d;
 		m_PlayTimeRemaining = 0d;
 		m_RedScore.Value = 0;
@@ -480,17 +530,26 @@ public class MatchManager : NetworkBehaviour
 
 		m_PlayTimeRemaining = Math.Max(0d, m_MatchEndTime - NetworkManager.ServerTime.Time);
 		m_RemainingTimeSeconds.Value = Mathf.CeilToInt((float)m_PlayTimeRemaining);
-		bool isNewBestGoal = EvaluateGoalHighlight(team, goalPosition);
+
+		float shotDistance = (m_Ball != null && goalPosition != Vector3.zero)
+			? Vector3.Distance(m_Ball.LastReleaseOrigin, goalPosition)
+			: 0f;
+		ulong scorerClientId = m_Ball != null ? m_Ball.LastInteractingClientId : 0;
+		ulong assistClientId = (m_Ball != null && m_Ball.WasFriendlyPassAssisted) ? m_Ball.LastAssistClientId : 0;
+
+		EnsureStatsTracker();
+		m_StatsTracker?.RecordGoalScored(scorerClientId, assistClientId, shotDistance);
+
+		bool isNewBestGoal = EvaluateGoalHighlight(team, goalPosition, shotDistance, scorerClientId);
 		BeginGoalCelebration(team, isNewBestGoal);
 		m_IsGoalProcessing = false;
 		return true;
 	}
 
-	private bool EvaluateGoalHighlight(ETeamType team, Vector3 goalPosition)
+	private bool EvaluateGoalHighlight(ETeamType team, Vector3 goalPosition, float shotDistance, ulong scorerClientId)
 	{
-		float shotDistance = (m_Ball != null && goalPosition != Vector3.zero)
-			? Vector3.Distance(m_Ball.LastReleaseOrigin, goalPosition)
-			: 0f;
+		int passChainCount = m_Ball != null ? m_Ball.CurrentPassChainCount : 0;
+		float contributorScore = m_StatsTracker != null ? m_StatsTracker.GetPlayerContributorScore(scorerClientId) : 0f;
 
 		GoalHighlightContext context = new GoalHighlightContext
 		{
@@ -501,8 +560,10 @@ public class MatchManager : NetworkBehaviour
 			m_MatchDurationSeconds = m_MatchDurationSeconds,
 			m_WasFriendlyPassAssist = m_Ball != null && m_Ball.WasFriendlyPassAssisted,
 			m_ShotDistance = shotDistance,
-			m_LastTouchClientId = m_Ball != null ? m_Ball.LastInteractingClientId : 0,
-			m_GoalSequence = m_GoalEffectSequence + 1
+			m_LastTouchClientId = scorerClientId,
+			m_GoalSequence = m_GoalEffectSequence + 1,
+			m_PassChainCount = passChainCount,
+			m_ContributorActionScore = contributorScore
 		};
 
 		if (m_GoalHighlightEvaluator == null)
@@ -711,12 +772,72 @@ public class MatchManager : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 演出待機後、全クライアントを同期してリザルトシーンへ遷移させます。
+	/// 演出待機・統計確定・クライアント同期後、全クライアントを同期してリザルトシーンへ遷移させます。
 	/// </summary>
 	private IEnumerator TransitionToResultSceneCoroutine()
 	{
-		float delay = Mathf.Max(0.1f, m_FinishMatchTransitionDelay);
+		float delay = Mathf.Max(0.25f, m_FinishMatchTransitionDelay);
 		yield return new WaitForSeconds(delay);
+
+		EnsureStatsTracker();
+		if (m_StatsTracker != null)
+		{
+			List<PlayerMatchSummary> summaries = m_StatsTracker.FinalizeAndBuildSummaries(
+				m_RedScore.Value,
+				m_BlueScore.Value,
+				out ExhibitionStatsSnapshot exhibitionSnapshot);
+
+			var playerDatas = new LobbyPlayerData[summaries.Count];
+			var statsArray = new PlayerMatchStats[summaries.Count];
+			var awardCounts = new int[summaries.Count];
+			int totalAwards = 0;
+
+			for (int i = 0; i < summaries.Count; i++)
+			{
+				playerDatas[i] = summaries[i].m_PlayerData;
+				statsArray[i] = summaries[i].m_Stats;
+				int count = summaries[i].m_Awards != null ? summaries[i].m_Awards.Length : 0;
+				awardCounts[i] = count;
+				totalAwards += count;
+			}
+
+			var flatAwards = new PlayerAwardEntry[totalAwards];
+			int cursor = 0;
+			for (int i = 0; i < summaries.Count; i++)
+			{
+				PlayerAwardEntry[] awards = summaries[i].m_Awards;
+				if (awards == null)
+				{
+					continue;
+				}
+
+				for (int j = 0; j < awards.Length; j++)
+				{
+					flatAwards[cursor++] = awards[j];
+				}
+			}
+
+			SessionPlayerDataStore.EnsureInstance().SetMatchAwardsAndStats(summaries, exhibitionSnapshot);
+			SyncMatchAwardsClientRpc(
+				m_RedScore.Value,
+				m_BlueScore.Value,
+				(byte)WinnerTeam,
+				playerDatas,
+				statsArray,
+				awardCounts,
+				flatAwards,
+				exhibitionSnapshot);
+
+			// ClientRpcが全端末へ到達してからリザルトシーンをロードします。
+			yield return new WaitForSeconds(0.15f);
+		}
+
+		// 動的生成されたプレイヤーNetworkObjectが次シーンへ残存しないよう一括Despawnします。
+		PlayerSpawner spawner = FindFirstObjectByType<PlayerSpawner>();
+		if (spawner != null)
+		{
+			spawner.DespawnAllPlayers();
+		}
 
 		string targetScene = !string.IsNullOrEmpty(m_ResultSceneName) ? m_ResultSceneName : "ResultScene";
 
@@ -728,6 +849,57 @@ public class MatchManager : NetworkBehaviour
 		{
 			UnityEngine.SceneManagement.SceneManager.LoadScene(targetScene);
 		}
+	}
+
+	[Rpc(SendTo.ClientsAndHost)]
+	private void SyncMatchAwardsClientRpc(
+		int redScore,
+		int blueScore,
+		byte winnerTeamByte,
+		LobbyPlayerData[] playerDatas,
+		PlayerMatchStats[] statsArray,
+		int[] awardCounts,
+		PlayerAwardEntry[] flatAwards,
+		ExhibitionStatsSnapshot exhibitionStats,
+		RpcParams rpcParams = default)
+	{
+		if (rpcParams.Receive.SenderClientId != Unity.Netcode.NetworkManager.ServerClientId)
+		{
+			return;
+		}
+
+		if (IsServer)
+		{
+			return;
+		}
+
+		SessionPlayerDataStore store = SessionPlayerDataStore.EnsureInstance();
+		store.SetMatchResult(redScore, blueScore, (ETeamType)winnerTeamByte);
+
+		int playerCount = playerDatas != null ? playerDatas.Length : 0;
+		var summaries = new List<PlayerMatchSummary>(playerCount);
+		int cursor = 0;
+		for (int i = 0; i < playerCount; i++)
+		{
+			int count = (awardCounts != null && i < awardCounts.Length) ? Mathf.Max(0, awardCounts[i]) : 0;
+			var awards = new PlayerAwardEntry[count];
+			for (int j = 0; j < count; j++)
+			{
+				if (flatAwards != null && cursor < flatAwards.Length)
+				{
+					awards[j] = flatAwards[cursor++];
+				}
+			}
+
+			summaries.Add(new PlayerMatchSummary
+			{
+				m_PlayerData = playerDatas[i],
+				m_Stats = (statsArray != null && i < statsArray.Length) ? statsArray[i] : default,
+				m_Awards = awards
+			});
+		}
+
+		store.SetMatchAwardsAndStats(summaries, exhibitionStats);
 	}
 
 	private void SubscribeToNetworkVariables()

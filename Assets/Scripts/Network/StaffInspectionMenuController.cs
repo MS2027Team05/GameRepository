@@ -39,6 +39,12 @@ public class StaffInspectionMenuController : MonoBehaviour
 	[SerializeField] private TMP_Dropdown m_SceneTransitionDropdown;
 	[SerializeField] private Button m_LoadSelectedSceneButton;
 
+	[Header("展示統計メニュー(任意)")]
+	[Tooltip("展示用の累計統計を表示するテキスト(任意。未設定時はメンバー一覧末尾へ追記)")]
+	[SerializeField] private TextMeshProUGUI m_ExhibitionStatsText;
+	[Tooltip("展示用の累計統計をリセットするボタン(任意)")]
+	[SerializeField] private Button m_ResetExhibitionStatsButton;
+
 	[Header("共通緊急操作ボタンUI")]
 	[SerializeField] private Button m_ForceResetButton;
 	[SerializeField] private Button m_EmergencyDisconnectButton;
@@ -247,6 +253,11 @@ public class StaffInspectionMenuController : MonoBehaviour
 		if (m_LoadSelectedSceneButton != null)
 		{
 			m_LoadSelectedSceneButton.onClick.AddListener(TransitionToSelectedScene);
+		}
+
+		if (m_ResetExhibitionStatsButton != null)
+		{
+			m_ResetExhibitionStatsButton.onClick.AddListener(OnResetExhibitionStatsClicked);
 		}
 
 		// 共通操作
@@ -481,8 +492,26 @@ public class StaffInspectionMenuController : MonoBehaviour
 					m_InfoBuilder.Append($"#{p.ClientId} {p.PlayerName} [{p.Team}] ({p.CharacterType}/{p.HighlightColor})\n");
 				}
 			}
+			if (m_ExhibitionStatsText == null)
+			{
+				m_InfoBuilder.AppendLine();
+				ExhibitionStatsStore.AppendSummaryText(m_InfoBuilder, ExhibitionStatsStore.ToSnapshot());
+			}
 			m_MemberListText.text = m_InfoBuilder.ToString();
 		}
+
+		if (m_ExhibitionStatsText != null)
+		{
+			m_InfoBuilder.Clear();
+			ExhibitionStatsStore.AppendSummaryText(m_InfoBuilder, ExhibitionStatsStore.ToSnapshot());
+			m_ExhibitionStatsText.text = m_InfoBuilder.ToString();
+		}
+	}
+
+	private void OnResetExhibitionStatsClicked()
+	{
+		ExhibitionStatsStore.ResetStats();
+		RefreshDiagnostics();
 	}
 
 	private void EmergencyDisconnect()
