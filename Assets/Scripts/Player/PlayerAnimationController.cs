@@ -24,6 +24,12 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 		0,
 		NetworkVariableReadPermission.Everyone,
 		NetworkVariableWritePermission.Owner);
+	private bool m_LocalIsMoving;
+
+	/// <summary>
+	/// 現在の歩行アニメーション状態を取得します。
+	/// </summary>
+	public bool IsMoving => IsSpawned ? m_IsMoving.Value : m_LocalIsMoving;
 
 	private void Awake()
 	{
@@ -60,6 +66,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 		// NetworkObjectとしてスポーンしていない単体テスト時は、Animatorのみ直接更新する。
 		if (!IsSpawned)
 		{
+			m_LocalIsMoving = shouldMove;
 			ApplyMovingState(shouldMove);
 			return;
 		}

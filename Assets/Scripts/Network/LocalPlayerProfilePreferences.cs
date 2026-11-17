@@ -1,7 +1,8 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 /// <summary>
-/// 展示環境における各端末のプレイヤー設定(キャラ・カラー・固定チーム・接続先IP)を
+/// 展示環境における各端末のプレイヤー設定(キャラ・カラー・固定チーム・接続先IP・視点感度)を
 /// ローカル(PlayerPrefs)に永続化し、自動適用するためのストレージクラス。
 /// ※プレイヤーネームは来場者ごとに異なるためキャッシュ対象外とします。
 /// </summary>
@@ -11,6 +12,15 @@ public static class LocalPlayerProfilePreferences
 	private const string m_KeyHighlightColor = "Exhibition_HighlightColor";
 	private const string m_KeyAssignedTeam = "Exhibition_AssignedTeam";
 	private const string m_KeyTargetIp = "Exhibition_TargetIP";
+	private const string m_KeyLookSensitivity = "Exhibition_LookSensitivity";
+
+	private static bool m_HasCachedLookSensitivity;
+	private static float m_CachedLookSensitivity;
+
+	/// <summary>
+	/// 視点感度倍率が変更された際に通知します。
+	/// </summary>
+	public static event Action<float> OnLookSensitivityChanged;
 
 	/// <summary>
 	/// 保存されたキャラクターモデル種別を取得します。
@@ -91,6 +101,36 @@ public static class LocalPlayerProfilePreferences
 			PlayerPrefs.SetString(m_KeyTargetIp, ip.Trim());
 			PlayerPrefs.Save();
 		}
+	}
+
+	/// <summary>
+	/// 保存された視点感度倍率(マウス・ゲームパッド共通)を取得します。
+	/// </summary>
+	public static float GetLookSensitivity(float defaultValue = 1.0f)
+	{
+		if (m_HasCachedLookSensitivity)
+		{
+			return m_CachedLookSensitivity;
+		}
+
+		float clampedDefault = Mathf.Max(0.05f, defaultValue);
+		float saved = PlayerPrefs.GetFloat(m_KeyLookSensitivity, clampedDefault);
+		m_CachedLookSensitivity = saved >= 0.05f ? saved : clampedDefault;
+		m_HasCachedLookSensitivity = true;
+		return m_CachedLookSensitivity;
+	}
+
+	/// <summary>
+	/// 視点感度倍率(マウス・ゲームパッド共通)を保存し、変更を通知します。
+	/// </summary>
+	public static void SetLookSensitivity(float sensitivity)
+	{
+		float clamped = Mathf.Clamp(sensitivity, 0.05f, 10.0f);
+		m_CachedLookSensitivity = clamped;
+		m_HasCachedLookSensitivity = true;
+		PlayerPrefs.SetFloat(m_KeyLookSensitivity, clamped);
+		PlayerPrefs.Save();
+		OnLookSensitivityChanged?.Invoke(clamped);
 	}
 
 	/// <summary>

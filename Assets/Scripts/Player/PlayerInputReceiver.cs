@@ -38,6 +38,15 @@ public class PlayerInputReceiver : MonoBehaviour
 	[SerializeField] private InputActionReference m_MoveTriggerAction;
 	[SerializeField] private InputActionReference m_SubAction;
 
+	[Header("視点感度設定(マウス / ゲームパッド基準補正)")]
+	[Tooltip("マウス入力時の基準倍率(0以下時は既定値0.5)")]
+	[SerializeField] private float m_MouseBaseLookScale;
+	[Tooltip("ゲームパッド入力時の基準倍率(60fps換算、0以下時は既定値10.0)")]
+	[SerializeField] private float m_PadBaseLookScale;
+
+	private const float m_DefaultMouseBaseLookScale = 0.5f;
+	private const float m_DefaultPadBaseLookScale = 10.0f;
+
 	/// <summary>地上移動・空中着地点シフト入力ベクトル(WASD/左スティック)</summary>
 	public Vector2 MoveInput { get; private set; }
 
@@ -327,30 +336,47 @@ public class PlayerInputReceiver : MonoBehaviour
 	{
 		if (HasAction(m_LookAction))
 		{
-			LookInput = m_LookAction.action.ReadValue<Vector2>();
+			Vector2 raw = m_LookAction.action.ReadValue<Vector2>();
+			InputControl activeControl = m_LookAction.action.activeControl;
+			bool isGamepad = activeControl != null && activeControl.device is Gamepad;
+			LookInput = ApplyLookSensitivity(raw, isGamepad);
 			return;
 		}
 
 		// 未設定時のフォールバック(マウス移動デルタ / 右スティック)
-		Vector2 input = Vector2.zero;
-
+		Vector2 mouseInput = Vector2.zero;
 		if (Cursor.lockState == CursorLockMode.Locked &&
 			Mouse.current != null)
 		{
-			input = Mouse.current.delta.ReadValue();
+			mouseInput = ApplyLookSensitivity(Mouse.current.delta.ReadValue(), isGamepad: false);
 		}
 
+		Vector2 padInput = Vector2.zero;
 		if (Gamepad.current != null)
 		{
-			Vector2 stick = Gamepad.current.rightStick.ReadValue();
-
-			if (stick.sqrMagnitude > input.sqrMagnitude)
-			{
-				input = stick;
-			}
+			padInput = ApplyLookSensitivity(Gamepad.current.rightStick.ReadValue(), isGamepad: true);
 		}
 
-		LookInput = input;
+		LookInput = padInput.sqrMagnitude > mouseInput.sqrMagnitude ? padInput : mouseInput;
+	}
+
+	private Vector2 ApplyLookSensitivity(Vector2 rawInput, bool isGamepad)
+	{
+		if (rawInput.sqrMagnitude <= Mathf.Epsilon)
+		{
+			return Vector2.zero;
+		}
+
+		float userSensitivity = LocalPlayerProfilePreferences.GetLookSensitivity();
+		if (isGamepad)
+		{
+			float padScale = m_PadBaseLookScale > 0.0f ? m_PadBaseLookScale : m_DefaultPadBaseLookScale;
+			float frameScale = Time.deltaTime * 60.0f;
+			return rawInput * (padScale * frameScale * userSensitivity);
+		}
+
+		float mouseScale = m_MouseBaseLookScale > 0.0f ? m_MouseBaseLookScale : m_DefaultMouseBaseLookScale;
+		return rawInput * (mouseScale * userSensitivity);
 	}
 
 	private void BindAction(

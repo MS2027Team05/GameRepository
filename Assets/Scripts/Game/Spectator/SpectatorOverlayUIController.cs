@@ -63,6 +63,12 @@ public class SpectatorOverlayUIController : MonoBehaviour
 	{
 		if (m_PossessionText == null) return;
 
+		if (ReplayPlayer.IsReplayActive)
+		{
+			m_PossessionText.text = "<color=#FFCC44>GOAL REPLAY</color>";
+			return;
+		}
+
 		if (m_CachedBall == null)
 		{
 			m_CachedBall = FindFirstObjectByType<BallController>();

@@ -16,6 +16,26 @@ public sealed class BallHoldAttachment
 	private readonly ALightningBolt[] m_LightningEffects;
 	private Transform m_HoldPoint;
 
+	/// <summary>
+	/// 描画専用のVisualRootが有効に設定されているかを取得します。
+	/// </summary>
+	public bool HasVisualRoot => m_VisualRoot != null;
+
+	/// <summary>
+	/// 解放復元時の初期ローカル座標を取得します。
+	/// </summary>
+	public Vector3 OriginalLocalPosition => m_OriginalLocalPosition;
+
+	/// <summary>
+	/// 解放復元時の初期ローカル回転を取得します。
+	/// </summary>
+	public Quaternion OriginalLocalRotation => m_OriginalLocalRotation;
+
+	/// <summary>
+	/// 解放復元時の初期ローカルスケールを取得します。
+	/// </summary>
+	public Vector3 OriginalLocalScale => m_OriginalLocalScale;
+
 	public BallHoldAttachment(Transform ballRoot, Transform visualRoot)
 	{
 		if (visualRoot == null)

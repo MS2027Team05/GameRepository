@@ -25,14 +25,25 @@ public class ResultUIController : MonoBehaviour
 	[SerializeField] private PlayerAppearanceCatalog m_AppearanceCatalog;
 
 	[Header("参加プレイヤー表示(UIテキストリスト)")]
-	[Tooltip("各プレイヤーの所属チーム・名前・外見設定を表示するUIテキスト(任意)")]
+	[Tooltip("各プレイヤーの所属チーム・名前を表示するUIテキスト(任意)")]
 	[SerializeField] private TextMeshProUGUI m_PlayerListText;
 
-	[Header("タイトル復帰")]
+	[Header("ローカル個人表彰UI(任意)")]
+	[Tooltip("ローカルプレイヤーの個人表彰全体を覆うパネル(背景を含む親オブジェクト)")]
+	[SerializeField] private GameObject m_LocalAwardsRoot;
+	[Tooltip("ローカルプレイヤーの個人表彰を表示するスロット配列(最大3個)")]
+	[SerializeField] private ResultAwardItemUI[] m_LocalAwardItems;
+	[Tooltip("個人表彰が存在しない場合(観戦時等)に表示する代替テキスト(任意)")]
+	[SerializeField] private TextMeshProUGUI m_NoLocalAwardsText;
+
+	[Header("タイトル・ロビー復帰")]
 	[SerializeField] private Button m_ReturnToTitleButton;
 	[SerializeField] private string m_TitleSceneName;
+	[Tooltip("LobbySceneへの同期復帰を待つクライアント向け案内テキスト(任意)")]
+	[SerializeField] private TextMeshProUGUI m_ClientWaitNoticeText;
 
 	private readonly StringBuilder m_Builder = new StringBuilder();
+	private bool m_IsTransitioning;
 
 	private void Awake()
 	{
@@ -48,6 +59,7 @@ public class ResultUIController : MonoBehaviour
 		PlayerInputReceiver.SetAllPaused(false);
 		PlayerInputReceiver.SetCursorLocked(false);
 
+		ConfigureReturnControlForRole();
 		DisplayResult();
 	}
 
@@ -110,15 +122,14 @@ public class ResultUIController : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 参加全プレイヤーのモデル・カラー・名前を3D台座およびUIテキストに反映します。
+	/// 参加全プレイヤーのモデル・カラー・名前およびローカルプレイヤーの個人表彰をUIに反映します。
 	/// </summary>
 	private void DisplayPlayers()
 	{
-		IReadOnlyDictionary<ulong, LobbyPlayerData> allPlayers = null;
-		if (SessionPlayerDataStore.Instance != null)
-		{
-			allPlayers = SessionPlayerDataStore.Instance.GetAllPlayerData();
-		}
+		SessionPlayerDataStore store = SessionPlayerDataStore.Instance;
+		IReadOnlyDictionary<ulong, LobbyPlayerData> allPlayers = store != null
+			? store.GetAllPlayerData()
+			: null;
 
 		if (allPlayers == null || allPlayers.Count == 0)
 		{
@@ -126,16 +137,21 @@ public class ResultUIController : MonoBehaviour
 			{
 				m_PlayerListText.text = "プレイヤー情報なし(オフライン検証)";
 			}
+
+			DisplayLocalPlayerAwards(store);
 			return;
 		}
 
 		// 3D台座への反映
+		int displayIndex = 0;
 		if (m_PlayerDisplays != null && m_PlayerDisplays.Length > 0)
 		{
-			int displayIndex = 0;
 			foreach (var kvp in allPlayers)
 			{
-				if (displayIndex >= m_PlayerDisplays.Length) break;
+				if (displayIndex >= m_PlayerDisplays.Length)
+				{
+					break;
+				}
 
 				var playerData = kvp.Value;
 				var display = m_PlayerDisplays[displayIndex];
@@ -145,6 +161,7 @@ public class ResultUIController : MonoBehaviour
 					Color nameColor = GetTeamColor(playerData.Team);
 					display.ApplyPlayerData(playerData, nameColor);
 				}
+
 				displayIndex++;
 			}
 
@@ -158,6 +175,8 @@ public class ResultUIController : MonoBehaviour
 			}
 		}
 
+		DisplayLocalPlayerAwards(store);
+
 		// UIテキスト一覧への反映
 		if (m_PlayerListText != null)
 		{
@@ -167,9 +186,95 @@ public class ResultUIController : MonoBehaviour
 			{
 				var p = kvp.Value;
 				string teamTag = p.Team == ETeamType.Red ? "[RED]" : (p.Team == ETeamType.Blue ? "[BLUE]" : "[NONE]");
-				m_Builder.Append($"{teamTag} {p.PlayerName} (タイプ: {p.CharacterType}, カラー: {p.HighlightColor})\n");
+				m_Builder.Append($"{teamTag} {p.PlayerName}\n");
 			}
+
 			m_PlayerListText.text = m_Builder.ToString();
+		}
+	}
+
+	private void DisplayLocalPlayerAwards(SessionPlayerDataStore store)
+	{
+		if (m_LocalAwardItems == null || m_LocalAwardItems.Length == 0)
+		{
+			if (m_LocalAwardsRoot != null)
+			{
+				m_LocalAwardsRoot.SetActive(false);
+			}
+
+			return;
+		}
+
+		ulong localClientId = (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+			? NetworkManager.Singleton.LocalClientId
+			: 0;
+
+		PlayerMatchSummary summary = null;
+		bool hasAwards = store != null
+			&& store.TryGetPlayerSummary(localClientId, out summary)
+			&& summary.m_Awards != null
+			&& summary.m_Awards.Length > 0;
+
+		if (!hasAwards)
+		{
+			HideAllLocalAwardItems();
+			bool showEmptyNotice = m_NoLocalAwardsText != null;
+			if (m_LocalAwardsRoot != null)
+			{
+				m_LocalAwardsRoot.SetActive(showEmptyNotice);
+			}
+
+			if (m_NoLocalAwardsText != null)
+			{
+				m_NoLocalAwardsText.gameObject.SetActive(true);
+			}
+
+			return;
+		}
+
+		if (m_LocalAwardsRoot != null)
+		{
+			m_LocalAwardsRoot.SetActive(true);
+		}
+
+		if (m_NoLocalAwardsText != null)
+		{
+			m_NoLocalAwardsText.gameObject.SetActive(false);
+		}
+
+		PlayerAwardEntry[] awards = summary.m_Awards;
+		for (int i = 0; i < m_LocalAwardItems.Length; i++)
+		{
+			ResultAwardItemUI item = m_LocalAwardItems[i];
+			if (item == null)
+			{
+				continue;
+			}
+
+			if (i < awards.Length)
+			{
+				item.SetAward(awards[i]);
+			}
+			else
+			{
+				item.Hide();
+			}
+		}
+	}
+
+	private void HideAllLocalAwardItems()
+	{
+		if (m_LocalAwardItems == null)
+		{
+			return;
+		}
+
+		for (int i = 0; i < m_LocalAwardItems.Length; i++)
+		{
+			if (m_LocalAwardItems[i] != null)
+			{
+				m_LocalAwardItems[i].Hide();
+			}
 		}
 	}
 
@@ -188,17 +293,83 @@ public class ResultUIController : MonoBehaviour
 		};
 	}
 
+	private void ConfigureReturnControlForRole()
+	{
+		bool waitForHost = IsWaitingForHostLobbyTransition();
+
+		if (m_ReturnToTitleButton != null)
+		{
+			m_ReturnToTitleButton.gameObject.SetActive(!waitForHost);
+		}
+
+		if (m_ClientWaitNoticeText != null)
+		{
+			m_ClientWaitNoticeText.gameObject.SetActive(waitForHost);
+		}
+	}
+
+	private string GetTargetReturnSceneName()
+	{
+		return !string.IsNullOrEmpty(m_TitleSceneName) ? m_TitleSceneName : "TitleScene";
+	}
+
+	private bool ShouldPreserveConnectionForReturn(string targetScene)
+	{
+		return !string.Equals(targetScene, "TitleScene", System.StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool IsWaitingForHostLobbyTransition()
+	{
+		if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+		{
+			return false;
+		}
+
+		string targetScene = GetTargetReturnSceneName();
+		return ShouldPreserveConnectionForReturn(targetScene) && !NetworkManager.Singleton.IsServer;
+	}
+
 	/// <summary>
-	/// タイトル画面へ戻ります。ネットワーク接続中の場合は安全に切断します。
+	/// 遷移先設定および接続ロールに応じてロビーへ同期復帰、または切断してタイトル画面へ戻ります。
 	/// </summary>
 	private void OnReturnToTitleClicked()
 	{
-		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+		if (m_IsTransitioning)
+		{
+			return;
+		}
+
+		string targetScene = GetTargetReturnSceneName();
+		bool isConnected = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+
+		if (isConnected && ShouldPreserveConnectionForReturn(targetScene))
+		{
+			// 接続維持でのLobbyScene復帰はホスト(サーバー)のみから全員一括で実行します。
+			if (!NetworkManager.Singleton.IsServer)
+			{
+				return;
+			}
+
+			if (NetworkManager.Singleton.SceneManager == null)
+			{
+				Debug.LogWarning("[ResultUIController] NetworkSceneManagerが見つからないためロビー復帰を実行できません。");
+				return;
+			}
+
+			m_IsTransitioning = true;
+			SessionPlayerDataStore.Instance?.ResetAllReadyStates();
+			PlayerInputReceiver.SetAllPaused(false);
+			PlayerInputReceiver.SetCursorLocked(false);
+			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+			return;
+		}
+
+		m_IsTransitioning = true;
+		if (isConnected)
 		{
 			NetworkManager.Singleton.Shutdown();
 		}
 
-		string targetScene = !string.IsNullOrEmpty(m_TitleSceneName) ? m_TitleSceneName : "TitleScene";
 		SceneManager.LoadScene(targetScene);
 	}
 }

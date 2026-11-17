@@ -69,6 +69,7 @@ public class LobbyManager : NetworkBehaviour
 
 	// 参加者情報のネットワーク同期リスト
 	private readonly NetworkList<LobbyPlayerData> m_LobbyPlayers = new NetworkList<LobbyPlayerData>();
+	private readonly List<LobbyPlayerData> m_SelectionStatsBuffer = new List<LobbyPlayerData>(4);
 
 	public NetworkList<LobbyPlayerData> LobbyPlayers { get => m_LobbyPlayers; }
 	public int ConnectedPlayerCount { get => m_LobbyPlayers.Count; }
@@ -914,6 +915,13 @@ public class LobbyManager : NetworkBehaviour
 
 		if (!string.IsNullOrEmpty(targetScene))
 		{
+			m_SelectionStatsBuffer.Clear();
+			for (int i = 0; i < m_LobbyPlayers.Count; i++)
+			{
+				m_SelectionStatsBuffer.Add(m_LobbyPlayers[i]);
+			}
+			ExhibitionStatsStore.RecordLobbySelections(m_SelectionStatsBuffer);
+
 			// 全端末(ホストおよび全クライアント)へ即座にロード中UIの表示を通知
 			NotifyGameSceneLoadStartedRpc();
 			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);

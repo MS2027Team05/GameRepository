@@ -1,5 +1,6 @@
 ﻿// ElectricAction.cs
 
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -33,6 +34,11 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 
 
 	public bool IsCharging => m_IsCharging;
+
+	/// <summary>
+	/// サーバー側で敵プレイヤーへスタンを適用した際に通知します(攻撃者ClientId, 被弾者ClientId)。
+	/// </summary>
+	public static event Action<ulong, ulong> OnServerEnemyStunned;
 
 	public float ChargeRatio =>
 		m_ChargeDuration <= 0.0f
@@ -433,6 +439,7 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 
 			// ボール奪取の成否にかかわらず敵をスタンさせる
 			enemy.ApplyStunOwnerRpc(m_StunDuration);
+			OnServerEnemyStunned?.Invoke(OwnerClientId, enemy.OwnerClientId);
 
 			Debug.Log(
 				$"[Electric Debug] 敵をスタンさせました。Duration={m_StunDuration}");

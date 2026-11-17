@@ -16,6 +16,12 @@ public class StaffInspectionMenuController : MonoBehaviour
 	[Header("パネルルート参照")]
 	[SerializeField] private GameObject m_MenuRoot;
 
+	[Header("ページ切り替えUI(任意)")]
+	[SerializeField] private GameObject m_MainPageRoot;
+	[SerializeField] private GameObject m_StatsPageRoot;
+	[SerializeField] private Button m_ToggleStatsPageButton;
+	[SerializeField] private TextMeshProUGUI m_ToggleStatsPageButtonText;
+
 	[Header("診断情報テキストUI")]
 	[SerializeField] private TextMeshProUGUI m_ConnectionInfoText;
 	[SerializeField] private TextMeshProUGUI m_MemberListText;
@@ -39,6 +45,12 @@ public class StaffInspectionMenuController : MonoBehaviour
 	[SerializeField] private TMP_Dropdown m_SceneTransitionDropdown;
 	[SerializeField] private Button m_LoadSelectedSceneButton;
 
+	[Header("展示統計メニュー(任意)")]
+	[Tooltip("展示用の累計統計を表示するテキスト(任意。未設定時はメンバー一覧末尾へ追記)")]
+	[SerializeField] private TextMeshProUGUI m_ExhibitionStatsText;
+	[Tooltip("展示用の累計統計をリセットするボタン(任意)")]
+	[SerializeField] private Button m_ResetExhibitionStatsButton;
+
 	[Header("共通緊急操作ボタンUI")]
 	[SerializeField] private Button m_ForceResetButton;
 	[SerializeField] private Button m_EmergencyDisconnectButton;
@@ -51,6 +63,7 @@ public class StaffInspectionMenuController : MonoBehaviour
 
 	private readonly StringBuilder m_InfoBuilder = new StringBuilder();
 	private LobbyManager m_CachedLobbyManager;
+	private bool m_IsStatsPageActive;
 
 	private void Awake()
 	{
@@ -100,6 +113,7 @@ public class StaffInspectionMenuController : MonoBehaviour
 
 		if (nextState)
 		{
+			SetStatsPageVisible(false);
 			UpdateContextVisibility();
 			RefreshDiagnostics();
 
@@ -167,6 +181,11 @@ public class StaffInspectionMenuController : MonoBehaviour
 		if (m_CloseButton != null)
 		{
 			m_CloseButton.onClick.AddListener(ToggleMenu);
+		}
+
+		if (m_ToggleStatsPageButton != null)
+		{
+			m_ToggleStatsPageButton.onClick.AddListener(ToggleStatsPage);
 		}
 
 		// ロビー操作
@@ -247,6 +266,11 @@ public class StaffInspectionMenuController : MonoBehaviour
 		if (m_LoadSelectedSceneButton != null)
 		{
 			m_LoadSelectedSceneButton.onClick.AddListener(TransitionToSelectedScene);
+		}
+
+		if (m_ResetExhibitionStatsButton != null)
+		{
+			m_ResetExhibitionStatsButton.onClick.AddListener(OnResetExhibitionStatsClicked);
 		}
 
 		// 共通操作
@@ -421,8 +445,50 @@ public class StaffInspectionMenuController : MonoBehaviour
 		return m_CachedLobbyManager;
 	}
 
+	private void ToggleStatsPage()
+	{
+		SetStatsPageVisible(!m_IsStatsPageActive);
+	}
+
+	private void SetStatsPageVisible(bool isVisible)
+	{
+		m_IsStatsPageActive = isVisible;
+
+		if (m_MainPageRoot != null)
+		{
+			m_MainPageRoot.SetActive(!isVisible);
+		}
+
+		if (m_StatsPageRoot != null)
+		{
+			m_StatsPageRoot.SetActive(isVisible);
+		}
+
+		if (m_ToggleStatsPageButtonText != null)
+		{
+			m_ToggleStatsPageButtonText.text = isVisible ? "管理画面へ戻る" : "累計統計へ";
+		}
+
+		if (m_MenuRoot != null && m_MenuRoot.activeSelf)
+		{
+			RefreshDiagnostics();
+		}
+	}
+
 	private void RefreshDiagnostics()
 	{
+		bool hasSeparatePages = m_MainPageRoot != null && m_StatsPageRoot != null;
+
+		if (!hasSeparatePages || m_IsStatsPageActive)
+		{
+			RefreshExhibitionStatsText();
+		}
+
+		if (hasSeparatePages && m_IsStatsPageActive)
+		{
+			return;
+		}
+
 		if (NetworkManager.Singleton == null)
 		{
 			if (m_ConnectionInfoText != null) m_ConnectionInfoText.text = "NetworkManager: 未起動";
@@ -481,8 +547,31 @@ public class StaffInspectionMenuController : MonoBehaviour
 					m_InfoBuilder.Append($"#{p.ClientId} {p.PlayerName} [{p.Team}] ({p.CharacterType}/{p.HighlightColor})\n");
 				}
 			}
+			if (m_ExhibitionStatsText == null)
+			{
+				m_InfoBuilder.AppendLine();
+				ExhibitionStatsStore.AppendSummaryText(m_InfoBuilder, ExhibitionStatsStore.ToSnapshot());
+			}
 			m_MemberListText.text = m_InfoBuilder.ToString();
 		}
+	}
+
+	private void RefreshExhibitionStatsText()
+	{
+		if (m_ExhibitionStatsText == null)
+		{
+			return;
+		}
+
+		m_InfoBuilder.Clear();
+		ExhibitionStatsStore.AppendSummaryText(m_InfoBuilder, ExhibitionStatsStore.ToSnapshot());
+		m_ExhibitionStatsText.text = m_InfoBuilder.ToString();
+	}
+
+	private void OnResetExhibitionStatsClicked()
+	{
+		ExhibitionStatsStore.ResetStats();
+		RefreshDiagnostics();
 	}
 
 	private void EmergencyDisconnect()

@@ -58,6 +58,11 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	public event Action<float, float> OnResourceChanged;
 
 	/// <summary>
+	/// Owner端末でリソースを消費した際に(ClientId, 消費量)を通知します。
+	/// </summary>
+	public static event Action<ulong, float> OnLocalResourceConsumed;
+
+	/// <summary>
 	/// スタッフメニュー等から設定可能な、デバッグ用のエネルギー消費無制限フラグ。
 	/// trueの場合、移動やアクションでリソースが消費されず、残量に関係なく行動可能になります。
 	/// </summary>
@@ -123,6 +128,13 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 				m_CurrentResource = MaxResource;
 				NotifyResourceChanged();
 			}
+			return;
+		}
+
+		// 試合進行による行動制限中(得点演出・リプレイ・カウントダウン等)は回復と待機時間を進めない。
+		if (m_PlayerController != null && !m_PlayerController.IsMatchActionEnabled)
+		{
+			SetDebugRegenerating(false);
 			return;
 		}
 
@@ -209,6 +221,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 		{
 			m_CurrentResource = Mathf.Max(0.0f, m_CurrentResource - cost);
 			NotifyResourceChanged();
+			OnLocalResourceConsumed?.Invoke(OwnerClientId, cost);
 		}
 
 		NotifyActionPerformed();
@@ -240,6 +253,27 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 		}
 
 		m_IdleElapsedTime = 0.0f;
+	}
+
+	/// <summary>試合開始・得点後リスタート時にリソースを最大値(100%)へ初期化します。</summary>
+	public void ResetToFull()
+	{
+		if (!IsSpawned || !IsOwner)
+		{
+			return;
+		}
+
+		m_IdleElapsedTime = 0.0f;
+		SetDebugRegenerating(false);
+
+		float maxResource = MaxResource;
+		if (m_CurrentResource == maxResource)
+		{
+			return;
+		}
+
+		m_CurrentResource = maxResource;
+		NotifyResourceChanged();
 	}
 
 	/// <summary>Hostがパス成立を認めた場合のみOwner側から呼び出されます。</summary>
