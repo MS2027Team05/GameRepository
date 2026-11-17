@@ -150,6 +150,21 @@ GameRepository/
 └── STRUCTURE.md                 # 本ドキュメント
 ```
 
+## ボール所持ジョイントへの追従
+- BallControllerは所持者の有無と所持者NetworkObjectIdの変更を各端末へ反映し、サーバー上の物理・通信用本体をLateUpdateで所持ジョイントへ合わせる。
+- BallHoldAttachmentは描画専用階層の付け替えと復元を担当する。所持時はジョイント直下のローカル位置・回転をゼロにし、解放・Despawn時は元の階層とローカルTransformへ戻す。
+- 設定の入口はPlayerBallCarrierのBall Hold Point(所持ジョイント)とBallControllerのVisual Root(ボール直下の描画専用階層)。物理・通信コンポーネントはVisual Rootに含めない。
+
+## 男女モデル別のボール所持ジョイント
+- PlayerBallCarrierは男女別の所持ジョイントを保持し、PlayerAppearanceが実際に表示しているキャラクター種別に応じてBallHoldPointを返す。外見の初期反映前はPlayerNetworkProfileの種別を参照する。
+- モデル切り替え後は既存のBallController.LateUpdateとBallHoldAttachment.Attachが新しいジョイントへ描画を付け替え、サーバー上の本体も追従する。追加の通信状態は持たない。
+- InspectorではMan Ball Hold PointとWoman Ball Hold Pointに各モデルのジョイントを登録する。従来のBall Hold Point参照は男性用へ引き継ぐ。
+
+## 電流の外見管理
+- `Assets/VFX/Lightning/VFXScripts/`: 継承元の `ALightningBolt` が共通マテリアルの読込、所有者の色取得、変更通知の購読と表示色の反映を担当する。継承先は形状と発生方法を担当する。
+- `Assets/VFX/Lightning/Resources/Lightning/`: 全種類の電流で使う芯用・発光用マテリアルを保持する。色は電流ごとの `MaterialPropertyBlock` で上書きする。
+- `PlayerAppearance.TryGetEffectColor` / `EffectColorChanged`: プレイヤーの選択色を演出へ提供する取得口と変更通知。プレイヤーの子以外へ生成する電流は `ALightningBolt.SetOwner` で所有者を渡す。
+
 ## 球面を這う電撃VFX
 - `Assets/VFX/Lightning/VFXScripts` は、電撃のプール・発生周期・寿命・芯と発光の描画を基底クラスで管理し、派生クラスで形状と追従方法を定義する。
 - `ALightningBolt.GenerateLightning` は形状生成、`UpdateBoltTransform` は生成直後と有効な各フレームの追従更新の拡張ポイント。既存の派生クラスは従来の直線ベースの形状生成を利用する。
@@ -161,3 +176,24 @@ GameRepository/
 - `ALightningBolt.UpdateSource` は電撃の更新・発生より前に追跡元の状態を更新する拡張ポイント。`ClearActiveBolts` は有効な電撃をプールへ戻し、表示を終了する。
 - `TrailLightningBolt` は移動経路用の入口。追跡対象の移動を距離でサンプリングし、発生時の経路をワールド座標で固定する。停止中は新規発生を止め、瞬間移動・追跡対象の変更・再有効化で記録を区切る。既存の電撃は寿命で終了するが、コンポーネント無効化時は表示を終了する。
 - 経路の保存・距離制限・等間隔の経路取得は固定長の循環バッファに分離する。電撃ごとの経路配列は再利用する。記録点数の上限でも古い記録を破棄するため、最大長は保存を保証する距離ではなく上限として扱う。
+
+## alpha更新とモデル・電撃色の統合
+
+- 所持状態と追尾パスは `BallController` が管理し、描画の付け替えと復元は `BallHoldAttachment` に委譲する。所持位置は `PlayerBallCarrier.BallHoldPoint` が表示中の男女モデルに応じて提供する。
+- `BallHoldAttachment` は描画配下の電撃へ所有者を明示し、解放時に色の上書きを解除する。ボール本体の投球状態は軌跡電撃の表示条件として同期する。
+- `ALightningBolt` はプログラム生成の電撃と差し替えPrefabの再生を切り替える。生成プールは遅延初期化し、初期化前に受け取った選択色も反映する。無効化時は色通知の購読解除と両方式の再生停止を行う。
+- 色の個別上書きはLineRendererを対象とし、差し替えPrefab内のParticleSystemやVFX Graphの色制御は含めない。
+- `VFX_testScene` はモデルの保持ジョイント確認用配置を残し、alphaの独立したボールとモデル接触電撃の確認用配置を併設する。
+
+## Prefab電流のVFXカラー連携
+- `ALightningBolt.SetColor`: 通常の線描画とPrefab方式に共通する色指定の入口。所有者の色変更とPrefab生成時に反映する。
+- `LightningPrefabColor`: 生成インスタンスの公開入力 `ColorIndex` へ色番号を渡し、VFX Graph内のSwitchで色を選択させる。直接色指定と従来Graphでは `EffectColor` を使い、所有者解除時には生成時の設定へ戻す。
+- デザイナー向けの公開入力仕様は `docs/LightningVfxColor.md` を参照する。
+- `LightningPrefabPlayback`: Prefab内のParticleSystemとVFX Graphの再生・停止・残存粒子の終了待ちを担当する。足元の接触エフェクトは離地後も粒子の寿命まで表示を維持する。
+- `PlayerAppearance` の電流カラー設定で取得元を選択色/チーム色から切り替える。`TryGetEffectColor` が描画色とVFXパレット種別を返し、設定・選択色・所属チームの変更を電流へ通知する。
+
+## ボールの場外復帰
+
+- `Assets/Scripts/Ball/`の場外判定は、サーバー上で未所持かつ試合進行中のボールを対象とする。判定範囲はワールド座標で設定する。
+- 復帰の共通エントリーポイントは`BallController.RespawnAtInitialPosition()`。所持状態、投球・追尾・物理状態、再取得制限を初期化し、試合の停止状態を維持して生成時の位置へ戻す。
+- 試合再開用の`ResetForRestart()`とデバッグ用の手動復帰も同じエントリーポイントを使用する。試合再開時のみ、復帰後にボールを停止状態へ切り替える。
