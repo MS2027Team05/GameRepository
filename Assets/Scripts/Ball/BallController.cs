@@ -101,6 +101,11 @@ public class BallController : NetworkBehaviour
 	public event Action<ulong, ETeamType, Vector3> BallStolenFromEnemy;
 
 	/// <summary>
+	/// Host側でボールを投げたときに通知します(投球者ClientId, 味方へのロックオンパスの場合はtrue)。
+	/// </summary>
+	public event Action<ulong, bool> BallThrownServer;
+
+	/// <summary>
 	/// 現在ボールを所持しているプレイヤーのClientIdを取得します。
 	/// </summary>
 	public ulong CurrentHolderId
@@ -610,6 +615,9 @@ public class BallController : NetworkBehaviour
 			m_BallPhysics.BeginHoming(targetPosition);
 		}
 
+		// 味方へのロックオンパス(useTransform=true)とそれ以外のシュート/投げを区別して通知します。
+		BallThrownServer?.Invoke(previousHolderClientId, useTransform);
+
 		Debug.Log(
 			"[BallController] 追尾パス開始: " +
 			(useTransform ? target.name : "EnemyGoal"));
@@ -687,6 +695,7 @@ public class BallController : NetworkBehaviour
 		// BallPhysicsControllerへ、
 		// シュート開始を通知します。
 		OnShot?.Invoke();
+		BallThrownServer?.Invoke(previousHolderClientId, false);
 
 		return true;
 	}

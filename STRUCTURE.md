@@ -11,7 +11,7 @@
 得点後は`GoalCelebration`で全プレイヤーとボールをその場に停止します。各端末の`GoalController`が子を含めた粒子の消滅を確認し、`MatchManager`が接続中の対象端末すべての完了を受信してから再配置へ進めます。`MatchHudController`は同じ状態に連動してInspector指定の得点メッセージを表示します。
 得点メッセージの文言はHUDのInspectorでチームごとに設定し、`MatchManager.GoalScoringTeam`が同期する得点先から選択します。
 ゴールリプレイは`Game/Replay/ReplayRecorder`がクライアント側リングバッファへプレイヤーとボールの座標・状態を記録し、`MatchManager`の再生設定(`AfterEveryGoal` / `AfterMatchBestGoal` / `Both`)に応じて`GoalCelebration`後または試合終了後に`GoalReplay`へ遷移して再生する。ベストゴール判定は`IGoalHighlightEvaluator`に分離し、試合内の貢献度スコアとも連携する。
-試合終了時の個人表彰(称号)と展示用累計統計は`Game/Stats/MatchStatsTracker`が各クライアント(移動・燃料・視認時間)とサーバー(パス・パスカット・セーブ・ゴール・アシスト・陣地・保持時間)の記録を集約し、`MatchAwardEvaluator`で各プレイヤー1〜3個の称号を選出後、`MatchManager`が`SessionPlayerDataStore`経由でリザルト画面へ引き継ぐ。リザルト画面ではローカルプレイヤー自身の個人表彰のみを`UI/ResultAwardItemUI`で表示する。累計統計は`ExhibitionStatsStore`がローカルJSON(`Path.Combine(Application.persistentDataPath, "ExhibitionStats.json")` / Windows標準例: `%USERPROFILE%\AppData\LocalLow\<CompanyName>\<ProductName>\ExhibitionStats.json`)へ保存し、F1スタッフメニューから参照・初期化できる。
+試合終了時の個人表彰(称号)と展示用累計統計は`Game/Stats/MatchStatsTracker`が各クライアント(移動・燃料・視認時間)とサーバー(パス・パスカット・セーブ・ゴール・アシスト・陣地・保持時間・スタン・投球内訳)の記録を集約し、`MatchAwardEvaluator`で各プレイヤー1〜3個の称号を選出後、`MatchManager`が`SessionPlayerDataStore`経由でリザルト画面へ引き継ぐ。リザルト画面ではローカルプレイヤー自身の個人表彰のみを`UI/ResultAwardItemUI`で表示する。累計統計は`ExhibitionStatsStore`がローカルJSON(`Path.Combine(Application.persistentDataPath, "ExhibitionStats.json")` / Windows標準例: `%USERPROFILE%\AppData\LocalLow\<CompanyName>\<ProductName>\ExhibitionStats.json`)へ保存し(ロビー出発時のキャラ・カラー選択累計も記録)、F1スタッフメニューから参照・初期化できる。また、1試合ごとの全体・チーム別・個人別デバッグ統計は`MatchDebugStatsStore`が`MatchStatsLogs/Match_XXXX_yyyyMMdd_HHmmss.json`へ整形出力する。
 リザルト画面(`ResultUIController`)から`LobbyScene`へ戻る際は、ホスト(Server)が通信を切断せずに`SessionPlayerDataStore.ResetAllReadyStates()`および`NetworkManager.Singleton.SceneManager.LoadScene`を実行し、全端末を同期して`LobbyScene`へ復帰させる(ただし遷移先が`TitleScene`の場合は従来通り切断してタイトルへ戻る)。
 
 ```text
@@ -73,7 +73,8 @@ GameRepository/
 │   │   │   ├── Stats/                   # 試合行動統計・個人表彰(称号)・展示用累計統計
 │   │   │   │   ├── MatchAwardData.cs    # 統計・称号・同期ペイロードの共通データ定義
 │   │   │   │   ├── MatchAwardEvaluator.cs # No.1/No.2個人表彰(最大3個)の選出とラベル整形
-│   │   │   │   ├── ExhibitionStatsStore.cs # 展示用累計統計のJSON永続化・サマリー生成
+│   │   │   │   ├── ExhibitionStatsStore.cs # 展示用累計統計・キャラ/カラー選択累計のJSON永続化・サマリー生成
+│   │   │   │   ├── MatchDebugStatsStore.cs # 1試合ごとの全体・チーム別・個人別デバッグ統計の個別JSON保存
 │   │   │   │   └── MatchStatsTracker.cs # [EntryPoint] クライアント/サーバー行動集計・確定処理
 │   │   │   └── Spectator/               # 観戦カメラ演出・自動スイッチング制御
 │   │   │       ├── SpectatorCameraDirector.cs # [EntryPoint] 定点・天地固定追従・ゴール前カメラの自動スイッチング制御

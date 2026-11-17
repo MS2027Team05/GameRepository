@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 試合中の全プレイヤー行動(15項目)を計測・集約し、
-/// 終了時に個人表彰(称号)の選出および展示用累計統計の記録を行うコンポーネント。
+/// 試合中の全プレイヤー行動統計を計測・集約し、
+/// 終了時に個人表彰(称号)の選出および累計・試合別統計の記録を行うコンポーネント。
 /// </summary>
 public sealed class MatchStatsTracker : MonoBehaviour
 {
@@ -60,6 +60,7 @@ public sealed class MatchStatsTracker : MonoBehaviour
 	{
 		PlayerController.OnLocalPlayerAirMoveStarted += HandleLocalAirMoveStarted;
 		PlayerResourceController.OnLocalResourceConsumed += HandleLocalResourceConsumed;
+		ElectricAction.OnServerEnemyStunned += HandleServerEnemyStunned;
 		EnsureBallSubscription();
 	}
 
@@ -67,6 +68,7 @@ public sealed class MatchStatsTracker : MonoBehaviour
 	{
 		PlayerController.OnLocalPlayerAirMoveStarted -= HandleLocalAirMoveStarted;
 		PlayerResourceController.OnLocalResourceConsumed -= HandleLocalResourceConsumed;
+		ElectricAction.OnServerEnemyStunned -= HandleServerEnemyStunned;
 		UnsubscribeFromBall();
 	}
 
@@ -254,6 +256,15 @@ public sealed class MatchStatsTracker : MonoBehaviour
 		}
 
 		exhibitionSnapshot = ExhibitionStatsStore.RecordMatchResult(redScore, blueScore, summaries);
+		ETeamType winnerTeam = redScore == blueScore
+			? ETeamType.None
+			: (redScore > blueScore ? ETeamType.Red : ETeamType.Blue);
+		MatchDebugStatsStore.SaveMatchLog(
+			exhibitionSnapshot.m_TotalMatches,
+			redScore,
+			blueScore,
+			winnerTeam,
+			summaries);
 		return summaries;
 	}
 
@@ -496,6 +507,7 @@ public sealed class MatchStatsTracker : MonoBehaviour
 			m_Ball.FriendlyPassCompleted += HandleFriendlyPassCompleted;
 			m_Ball.EnemyShotIntercepted += HandleEnemyShotIntercepted;
 			m_Ball.BallStolenFromEnemy += HandleBallStolenFromEnemy;
+			m_Ball.BallThrownServer += HandleBallThrownServer;
 			m_SubscribedBall = m_Ball;
 		}
 	}
@@ -510,7 +522,47 @@ public sealed class MatchStatsTracker : MonoBehaviour
 		m_SubscribedBall.FriendlyPassCompleted -= HandleFriendlyPassCompleted;
 		m_SubscribedBall.EnemyShotIntercepted -= HandleEnemyShotIntercepted;
 		m_SubscribedBall.BallStolenFromEnemy -= HandleBallStolenFromEnemy;
+		m_SubscribedBall.BallThrownServer -= HandleBallThrownServer;
 		m_SubscribedBall = null;
+	}
+
+	private void HandleServerEnemyStunned(ulong attackerClientId, ulong targetClientId)
+	{
+		if (MatchManager.Instance == null || !MatchManager.Instance.IsServer ||
+			MatchManager.Instance.MatchState != MatchManager.EMatchState.Playing)
+		{
+			return;
+		}
+
+		if (attackerClientId == targetClientId)
+		{
+			return;
+		}
+
+		PlayerMatchStats stat = GetOrCreateServerStat(attackerClientId);
+		stat.m_StunCount++;
+		m_ServerStats[attackerClientId] = stat;
+	}
+
+	private void HandleBallThrownServer(ulong throwerClientId, bool isAllyLockOnPass)
+	{
+		if (MatchManager.Instance == null || !MatchManager.Instance.IsServer ||
+			MatchManager.Instance.MatchState != MatchManager.EMatchState.Playing)
+		{
+			return;
+		}
+
+		PlayerMatchStats stat = GetOrCreateServerStat(throwerClientId);
+		if (isAllyLockOnPass)
+		{
+			stat.m_LockOnPassCount++;
+		}
+		else
+		{
+			stat.m_NormalThrowCount++;
+		}
+
+		m_ServerStats[throwerClientId] = stat;
 	}
 
 	private void HandleFriendlyPassCompleted(ulong passerClientId, ulong receiverClientId, float distance)

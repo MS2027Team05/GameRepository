@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -10,6 +10,30 @@ using UnityEngine;
 /// </summary>
 public static class ExhibitionStatsStore
 {
+	[Serializable]
+	public sealed class CharacterSelectionCounts
+	{
+		public int m_Man;
+		public int m_Woman;
+	}
+
+	[Serializable]
+	public sealed class ColorSelectionCounts
+	{
+		public int m_Black;
+		public int m_Blue;
+		public int m_DeepBlue;
+		public int m_DeepRed;
+		public int m_Green;
+		public int m_LightBlue;
+		public int m_LightGreen;
+		public int m_Orange;
+		public int m_Purple;
+		public int m_Red;
+		public int m_White;
+		public int m_Yellow;
+	}
+
 	[Serializable]
 	public sealed class ExhibitionStatsData
 	{
@@ -29,6 +53,12 @@ public static class ExhibitionStatsStore
 		public int m_TotalPassCutCount;
 		public int m_TotalSaveCount;
 		public float m_TotalFuelConsumed;
+		public int m_TotalStunCount;
+		public int m_TotalLockOnPassCount;
+		public int m_TotalNormalThrowCount;
+		public string m_BallThrowSummary;
+		public CharacterSelectionCounts m_CharacterSelections = new CharacterSelectionCounts();
+		public ColorSelectionCounts m_ColorSelections = new ColorSelectionCounts();
 	}
 
 	private const string m_FileName = "ExhibitionStats.json";
@@ -106,11 +136,51 @@ public static class ExhibitionStatsStore
 				m_CachedData.m_TotalPassCutCount += Mathf.Max(0, stat.m_PassCutCount);
 				m_CachedData.m_TotalSaveCount += Mathf.Max(0, stat.m_SaveCount);
 				m_CachedData.m_TotalFuelConsumed += Mathf.Max(0f, stat.m_FuelConsumed);
+				m_CachedData.m_TotalStunCount += Mathf.Max(0, stat.m_StunCount);
+				m_CachedData.m_TotalLockOnPassCount += Mathf.Max(0, stat.m_LockOnPassCount);
+				m_CachedData.m_TotalNormalThrowCount += Mathf.Max(0, stat.m_NormalThrowCount);
 			}
 		}
 
+		m_CachedData.m_BallThrowSummary = BallThrowStatsFormatter.FormatBreakdown(
+			m_CachedData.m_TotalLockOnPassCount,
+			m_CachedData.m_TotalNormalThrowCount);
+
 		Save();
 		return ToSnapshot();
+	}
+
+	/// <summary>
+	/// ロビーから試合へ出発する時点で、各参加プレイヤーが選択していたキャラクター・カラーを累計加算して保存します。
+	/// </summary>
+	public static void RecordLobbySelections(IReadOnlyList<LobbyPlayerData> players)
+	{
+		if (players == null || players.Count == 0)
+		{
+			return;
+		}
+
+		EnsureLoaded();
+		EnsureSelectionContainers(m_CachedData);
+
+		bool changed = false;
+		for (int i = 0; i < players.Count; i++)
+		{
+			LobbyPlayerData player = players[i];
+			if (player.Team != ETeamType.Red && player.Team != ETeamType.Blue)
+			{
+				continue;
+			}
+
+			IncrementCharacterSelection(m_CachedData.m_CharacterSelections, player.CharacterType);
+			IncrementColorSelection(m_CachedData.m_ColorSelections, player.HighlightColor);
+			changed = true;
+		}
+
+		if (changed)
+		{
+			Save();
+		}
 	}
 
 	/// <summary>
@@ -138,7 +208,10 @@ public static class ExhibitionStatsStore
 			m_TotalPassCount = m_CachedData.m_TotalPassCount,
 			m_TotalPassCutCount = m_CachedData.m_TotalPassCutCount,
 			m_TotalSaveCount = m_CachedData.m_TotalSaveCount,
-			m_TotalFuelConsumed = m_CachedData.m_TotalFuelConsumed
+			m_TotalFuelConsumed = m_CachedData.m_TotalFuelConsumed,
+			m_TotalStunCount = m_CachedData.m_TotalStunCount,
+			m_TotalLockOnPassCount = m_CachedData.m_TotalLockOnPassCount,
+			m_TotalNormalThrowCount = m_CachedData.m_TotalNormalThrowCount
 		};
 	}
 
@@ -148,6 +221,8 @@ public static class ExhibitionStatsStore
 	public static void ResetStats()
 	{
 		m_CachedData = new ExhibitionStatsData();
+		EnsureSelectionContainers(m_CachedData);
+		m_CachedData.m_BallThrowSummary = BallThrowStatsFormatter.FormatBreakdown(0, 0);
 		m_IsLoaded = true;
 		Save();
 	}
@@ -162,22 +237,33 @@ public static class ExhibitionStatsStore
 			return;
 		}
 
+		EnsureLoaded();
+		EnsureSelectionContainers(m_CachedData);
+
 		string holder = snapshot.m_MaxPlayerGoalsHolderName.Length > 0
 			? snapshot.m_MaxPlayerGoalsHolderName.ToString()
 			: "-";
+		string throwBreakdown = BallThrowStatsFormatter.FormatBreakdown(
+			snapshot.m_TotalLockOnPassCount,
+			snapshot.m_TotalNormalThrowCount);
 
 		builder.AppendLine("【展示累計統計レコード】");
 		builder.AppendLine($"総試合数: {snapshot.m_TotalMatches}試合 | 総ゴール: {snapshot.m_TotalGoals}点 (Red {snapshot.m_RedTotalGoals} / Blue {snapshot.m_BlueTotalGoals})");
 		builder.AppendLine($"1試合最多得点(チーム): {snapshot.m_MaxTeamScoreInSingleMatch}点 | 個人最多ゴール: {snapshot.m_MaxPlayerGoalsInSingleMatch}点 ({holder})");
 		builder.AppendLine($"最長ゴール距離: {snapshot.m_LongestGoalDistance:F1}m | 最長パス距離: {snapshot.m_LongestPassDistance:F1}m");
 		builder.AppendLine($"累計飛行距離: {snapshot.m_TotalFlightDistance:F1}m | 累計移動回数: {snapshot.m_TotalAirMoveCount}回");
-		builder.AppendLine($"累計パス: {snapshot.m_TotalPassCount}回 | パスカット: {snapshot.m_TotalPassCutCount}回 | セーブ: {snapshot.m_TotalSaveCount}回");
+		builder.AppendLine($"累計パス: {snapshot.m_TotalPassCount}回 | パスカット: {snapshot.m_TotalPassCutCount}回 | セーブ: {snapshot.m_TotalSaveCount}回 | スタン: {snapshot.m_TotalStunCount}回");
+		builder.AppendLine($"累計投球数: {throwBreakdown}");
+
+		CharacterSelectionCounts chars = m_CachedData.m_CharacterSelections;
+		builder.AppendLine($"累計キャラ選択: Man {chars.m_Man}回 / Woman {chars.m_Woman}回");
 	}
 
 	private static void EnsureLoaded()
 	{
 		if (m_IsLoaded && m_CachedData != null)
 		{
+			EnsureSelectionContainers(m_CachedData);
 			return;
 		}
 
@@ -192,6 +278,7 @@ public static class ExhibitionStatsStore
 				if (loaded != null)
 				{
 					m_CachedData = loaded;
+					EnsureSelectionContainers(m_CachedData);
 					return;
 				}
 			}
@@ -202,6 +289,81 @@ public static class ExhibitionStatsStore
 		}
 
 		m_CachedData = new ExhibitionStatsData();
+		EnsureSelectionContainers(m_CachedData);
+		m_CachedData.m_BallThrowSummary = BallThrowStatsFormatter.FormatBreakdown(0, 0);
+	}
+
+	private static void EnsureSelectionContainers(ExhibitionStatsData data)
+	{
+		if (data == null)
+		{
+			return;
+		}
+
+		data.m_CharacterSelections ??= new CharacterSelectionCounts();
+		data.m_ColorSelections ??= new ColorSelectionCounts();
+		if (string.IsNullOrEmpty(data.m_BallThrowSummary))
+		{
+			data.m_BallThrowSummary = BallThrowStatsFormatter.FormatBreakdown(
+				data.m_TotalLockOnPassCount,
+				data.m_TotalNormalThrowCount);
+		}
+	}
+
+	private static void IncrementCharacterSelection(CharacterSelectionCounts counts, ECharacterType characterType)
+	{
+		switch (characterType)
+		{
+			case ECharacterType.Man:
+				counts.m_Man++;
+				break;
+			case ECharacterType.Woman:
+				counts.m_Woman++;
+				break;
+		}
+	}
+
+	private static void IncrementColorSelection(ColorSelectionCounts counts, EHighlightColor highlightColor)
+	{
+		switch (highlightColor)
+		{
+			case EHighlightColor.Black:
+				counts.m_Black++;
+				break;
+			case EHighlightColor.Blue:
+				counts.m_Blue++;
+				break;
+			case EHighlightColor.DeepBlue:
+				counts.m_DeepBlue++;
+				break;
+			case EHighlightColor.DeepRed:
+				counts.m_DeepRed++;
+				break;
+			case EHighlightColor.Green:
+				counts.m_Green++;
+				break;
+			case EHighlightColor.LightBlue:
+				counts.m_LightBlue++;
+				break;
+			case EHighlightColor.LightGreen:
+				counts.m_LightGreen++;
+				break;
+			case EHighlightColor.Orange:
+				counts.m_Orange++;
+				break;
+			case EHighlightColor.Purple:
+				counts.m_Purple++;
+				break;
+			case EHighlightColor.Red:
+				counts.m_Red++;
+				break;
+			case EHighlightColor.White:
+				counts.m_White++;
+				break;
+			case EHighlightColor.Yellow:
+				counts.m_Yellow++;
+				break;
+		}
 	}
 
 	private static void Save()

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Unity.Collections;
 using Unity.Netcode;
 
@@ -22,6 +22,8 @@ public enum EMatchAwardCategory : byte
 	AirMoveCount = 12,
 	FuelConsumed = 13,
 	GroundWalkTime = 14,
+	EnemyStuns = 15,
+	AllyPassLockOns = 16,
 }
 
 /// <summary>
@@ -46,6 +48,9 @@ public struct PlayerMatchStats : INetworkSerializable
 	public float m_ObservedSeconds;
 	public float m_LongestPassDistance;
 	public float m_LongestGoalDistance;
+	public int m_StunCount;
+	public int m_LockOnPassCount;
+	public int m_NormalThrowCount;
 
 	public float GetMetricValue(EMatchAwardCategory category)
 	{
@@ -66,6 +71,8 @@ public struct PlayerMatchStats : INetworkSerializable
 			EMatchAwardCategory.AirMoveCount => m_AirMoveCount,
 			EMatchAwardCategory.FuelConsumed => m_FuelConsumed,
 			EMatchAwardCategory.GroundWalkTime => m_GroundWalkSeconds,
+			EMatchAwardCategory.EnemyStuns => m_StunCount,
+			EMatchAwardCategory.AllyPassLockOns => m_LockOnPassCount,
 			_ => 0f,
 		};
 	}
@@ -96,6 +103,9 @@ public struct PlayerMatchStats : INetworkSerializable
 		serializer.SerializeValue(ref m_ObservedSeconds);
 		serializer.SerializeValue(ref m_LongestPassDistance);
 		serializer.SerializeValue(ref m_LongestGoalDistance);
+		serializer.SerializeValue(ref m_StunCount);
+		serializer.SerializeValue(ref m_LockOnPassCount);
+		serializer.SerializeValue(ref m_NormalThrowCount);
 	}
 }
 
@@ -192,6 +202,9 @@ public struct ExhibitionStatsSnapshot : INetworkSerializable
 	public int m_TotalPassCutCount;
 	public int m_TotalSaveCount;
 	public float m_TotalFuelConsumed;
+	public int m_TotalStunCount;
+	public int m_TotalLockOnPassCount;
+	public int m_TotalNormalThrowCount;
 
 	public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
 	{
@@ -211,5 +224,55 @@ public struct ExhibitionStatsSnapshot : INetworkSerializable
 		serializer.SerializeValue(ref m_TotalPassCutCount);
 		serializer.SerializeValue(ref m_TotalSaveCount);
 		serializer.SerializeValue(ref m_TotalFuelConsumed);
+		serializer.SerializeValue(ref m_TotalStunCount);
+		serializer.SerializeValue(ref m_TotalLockOnPassCount);
+		serializer.SerializeValue(ref m_TotalNormalThrowCount);
+	}
+}
+
+/// <summary>
+/// ボール投球回数(ロックオンパス / 通常投げ)と確率の書式整形を提供します。
+/// </summary>
+public static class BallThrowStatsFormatter
+{
+	/// <summary>
+	/// ロックオンパス回数と通常投げ回数から総投球数とそれぞれの確率(%)を算出します。
+	/// </summary>
+	public static void CalculateRates(
+		int lockOnPassCount,
+		int normalThrowCount,
+		out int totalThrows,
+		out float lockOnRatePercent,
+		out float normalRatePercent)
+	{
+		int safeLockOn = lockOnPassCount > 0 ? lockOnPassCount : 0;
+		int safeNormal = normalThrowCount > 0 ? normalThrowCount : 0;
+		totalThrows = safeLockOn + safeNormal;
+		if (totalThrows <= 0)
+		{
+			lockOnRatePercent = 0f;
+			normalRatePercent = 0f;
+			return;
+		}
+
+		lockOnRatePercent = (float)safeLockOn / totalThrows * 100f;
+		normalRatePercent = (float)safeNormal / totalThrows * 100f;
+	}
+
+	/// <summary>
+	/// 「10回 (ロックオン: 7回(70.0%) / 通常投げ: 3回(30.0%))」形式の文字列を生成します。
+	/// </summary>
+	public static string FormatBreakdown(int lockOnPassCount, int normalThrowCount)
+	{
+		CalculateRates(
+			lockOnPassCount,
+			normalThrowCount,
+			out int totalThrows,
+			out float lockOnRate,
+			out float normalRate);
+
+		int safeLockOn = lockOnPassCount > 0 ? lockOnPassCount : 0;
+		int safeNormal = normalThrowCount > 0 ? normalThrowCount : 0;
+		return $"{totalThrows}回 (ロックオン: {safeLockOn}回({lockOnRate:F1}%) / 通常投げ: {safeNormal}回({normalRate:F1}%))";
 	}
 }
