@@ -96,7 +96,7 @@ GameRepository/
 │   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・試合結果(スコア/勝敗)保持・シーン間データ引継ぎ管理
 │   │   │   ├── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
 │   │   │   ├── TitleOverlayController.cs # [EntryPoint] ロビー内タイトル画面演出・個別開始制御
-│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1キー緊急管理・診断・インゲーム操作(無制限エネルギー/リスポーン/シーン遷移)制御
+│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1キー緊急管理・診断・インゲーム操作・統計ページ切替制御
 │   │   │   ├── GameSessionResetCoordinator.cs # [EntryPoint] ゲーム終了時の動的オブジェクト破棄・セッション初期化・ロビー復帰制御
 │   │   │   └── TutorialManager.cs       # [EntryPoint] チーム別チュートリアル進捗監視・同期遷移制御
 │   │   ├── Shader/              # シェーダー連携・描画制御スクリプト

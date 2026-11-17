@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -257,6 +257,12 @@ public static class ExhibitionStatsStore
 
 		CharacterSelectionCounts chars = m_CachedData.m_CharacterSelections;
 		builder.AppendLine($"累計キャラ選択: Man {chars.m_Man}回 / Woman {chars.m_Woman}回");
+
+		ColorSelectionCounts colors = m_CachedData.m_ColorSelections;
+		builder.AppendLine(
+			$"累計カラー選択(1/2): Black {colors.m_Black} | Blue {colors.m_Blue} | DeepBlue {colors.m_DeepBlue} | DeepRed {colors.m_DeepRed} | Green {colors.m_Green} | LightBlue {colors.m_LightBlue}");
+		builder.AppendLine(
+			$"累計カラー選択(2/2): LightGreen {colors.m_LightGreen} | Orange {colors.m_Orange} | Purple {colors.m_Purple} | Red {colors.m_Red} | White {colors.m_White} | Yellow {colors.m_Yellow}");
 	}
 
 	private static void EnsureLoaded()
