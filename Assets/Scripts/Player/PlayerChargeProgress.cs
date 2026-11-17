@@ -35,14 +35,6 @@ public class PlayerChargeProgress : MonoBehaviour
 		if (m_ElectricAction == null)
 			return;
 
-		// チャージ中でなければ進捗を0にする
-		if (!m_ElectricAction.IsCharging)
-		{
-			SetProgress(0f);
-			return;
-		}
-
-		// 電撃チャージの進捗をUIへ反映
 		SetProgress(m_ElectricAction.ChargeRatio);
 	}
 

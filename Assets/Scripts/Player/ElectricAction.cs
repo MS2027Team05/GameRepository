@@ -12,6 +12,8 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 	[Header("チャージ設定")]
 	[SerializeField] private float m_ChargeDuration = 1.5f;
 	[SerializeField] private float m_RequiredCost = 20.0f;
+	[Tooltip("チャージしていない間のゲージ減少速度（1秒あたりの割合）")]
+	[SerializeField] private float m_ChargeDecaySpeed = 0.25f;
 
 	[Header("電撃設定")]
 	[SerializeField] private float m_StunDuration = 2.0f;
@@ -59,16 +61,15 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 			return;
 		}
 
-		m_ChargeTimer = 0.0f;
+		// 進捗はリセットせず、前回の続きから開始
 		m_IsCharging = true;
 
 		m_NextChargeLogTime = 0.0f;
 		m_LoggedChargeFull = false;
 
 		Debug.Log(
-			$"[Electric Debug] チャージ開始。必要時間={m_ChargeDuration:F2}秒");
+			$"[Electric Debug] チャージ開始。現在の進捗={ChargeRatio * 100.0f:F0}%");
 	}
-
 
 	/// <summary>
 	/// 電撃チャージを更新します。
@@ -76,8 +77,21 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 	/// </summary>
 	public void UpdateCharge(float deltaTime)
 	{
-		if (!IsOwner || !m_IsCharging)
+		if (!IsOwner)
 			return;
+
+		// チャージ中でない場合は徐々に減少
+		if (!m_IsCharging)
+		{
+			m_ChargeTimer -=
+				Mathf.Max(0.0f, deltaTime) *
+				m_ChargeDecaySpeed *
+				m_ChargeDuration;
+
+			m_ChargeTimer = Mathf.Max(0.0f, m_ChargeTimer);
+
+			return;
+		}
 
 		// 有効な対象が存在するか確認
 		if (m_LockOnProvider == null ||
@@ -95,8 +109,6 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 		{
 			return;
 		}
-
-		float previousRatio = ChargeRatio;
 
 		m_ChargeTimer += Mathf.Max(0.0f, deltaTime);
 
@@ -145,11 +157,11 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 		}
 
 		m_IsCharging = false;
-		m_ChargeTimer = 0.0f;
 
 		m_NextChargeLogTime = 0.0f;
 		m_LoggedChargeFull = false;
 	}
+
 	/// <summary>
 	/// チャージ完了後、ロックオン対象へ電撃を発射します。
 	/// </summary>
@@ -249,6 +261,7 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 		ulong targetId =
 			targetNetworkObject.NetworkObjectId;
 
+		// 発射成功時はチャージ進捗をリセット
 		m_IsCharging = false;
 		m_ChargeTimer = 0.0f;
 

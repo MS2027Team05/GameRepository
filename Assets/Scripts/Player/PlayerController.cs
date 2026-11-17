@@ -314,11 +314,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 	}
 
+
 	/// <summary>
 	/// 新フロー: L1長押し中の電撃チャージおよび追尾パスチャージを更新します。
 	/// </summary>
 	private void UpdateReworkedSubAction()
 	{
+		// 電撃チャージの更新は、チャージ中でなくても毎フレーム実行する
+		m_ElectricAction?.UpdateCharge(Time.deltaTime);
+
 		if (!m_IsSubActionHeld)
 		{
 			return;
@@ -333,7 +337,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (m_IsChargingElectric)
 		{
 			m_LockOnProvider?.UpdateTargetSearch();
-			m_ElectricAction?.UpdateCharge(Time.deltaTime);
 			return;
 		}
 
