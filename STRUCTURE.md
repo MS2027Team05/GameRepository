@@ -191,3 +191,9 @@ GameRepository/
 - デザイナー向けの公開入力仕様は `docs/LightningVfxColor.md` を参照する。
 - `LightningPrefabPlayback`: Prefab内のParticleSystemとVFX Graphの再生・停止・残存粒子の終了待ちを担当する。足元の接触エフェクトは離地後も粒子の寿命まで表示を維持する。
 - `PlayerAppearance` の電流カラー設定で取得元を選択色/チーム色から切り替える。`TryGetEffectColor` が描画色とVFXパレット種別を返し、設定・選択色・所属チームの変更を電流へ通知する。
+
+## ボールの場外復帰
+
+- `Assets/Scripts/Ball/`の場外判定は、サーバー上で未所持かつ試合進行中のボールを対象とする。判定範囲はワールド座標で設定する。
+- 復帰の共通エントリーポイントは`BallController.RespawnAtInitialPosition()`。所持状態、投球・追尾・物理状態、再取得制限を初期化し、試合の停止状態を維持して生成時の位置へ戻す。
+- 試合再開用の`ResetForRestart()`とデバッグ用の手動復帰も同じエントリーポイントを使用する。試合再開時のみ、復帰後にボールを停止状態へ切り替える。

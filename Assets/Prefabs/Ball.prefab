@@ -163,6 +163,7 @@ GameObject:
   - component: {fileID: 3558045125194342948}
   - component: {fileID: 7969707258151822165}
   - component: {fileID: 2053310451881934135}
+  - component: {fileID: 22302541817656807}
   m_Layer: 8
   m_Name: Ball
   m_TagString: Untagged
@@ -480,6 +481,22 @@ MonoBehaviour:
   m_ReferenceDistance: 15
   m_MinScaleMultiplier: 1
   m_MaxScaleMultiplier: 2.5
+--- !u!114 &22302541817656807
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7223661482325723954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b945b9ca5c2a4195960af2fc45779b85, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BallOutOfBoundsRespawner
+  ShowTopMostFoldoutHeaderGroup: 1
+  m_IsRespawnEnabled: 1
+  m_MinBounds: {x: -150, y: 40, z: -150}
+  m_MaxBounds: {x: 150, y: 150, z: 150}
 --- !u!1 &8410741667192059326
 GameObject:
   m_ObjectHideFlags: 0

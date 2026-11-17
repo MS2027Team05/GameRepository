@@ -1307,9 +1307,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerOutOfBoundsRespawner
   ShowTopMostFoldoutHeaderGroup: 1
-  m_IsRespawnEnabled: 0
-  m_MinBounds: {x: -143, y: -50, z: -151}
-  m_MaxBounds: {x: 8, y: 50, z: 50}
+  m_IsRespawnEnabled: 1
+  m_MinBounds: {x: -150, y: 40, z: -150}
+  m_MaxBounds: {x: 150, y: 150, z: 150}
 --- !u!114 &2680069497177182038
 MonoBehaviour:
   m_ObjectHideFlags: 0

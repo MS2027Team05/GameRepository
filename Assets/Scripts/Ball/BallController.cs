@@ -712,15 +712,35 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public bool ResetForRestart()
 	{
-		if (!IsServer || !IsSpawned) return false;
+		if (!IsServer || !IsSpawned)
+		{
+			return false;
+		}
+
+		bool resetSucceeded = RespawnAtInitialPosition();
+		SetMatchPaused(true);
+		return resetSucceeded;
+	}
+
+	/// <summary>
+	/// 試合の停止状態を維持し、所持・投球・物理状態を初期化して生成時の位置へ戻します。
+	/// </summary>
+	public bool RespawnAtInitialPosition()
+	{
+		if (!IsServer || !IsSpawned)
+		{
+			return false;
+		}
+
 		m_IsShotInFlight.Value = false;
 		ReleaseBall();
 		if (HasHolder || (transform.parent != null && !NetworkObject.TryRemoveParent(true)))
 		{
-			SetMatchPaused(true);
 			return false;
 		}
 
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
 		m_HasRepickupLock = false;
 		m_LastHolderClientId = 0;
 		m_RepickupUnlockTime = 0f;
@@ -728,9 +748,12 @@ public class BallController : NetworkBehaviour
 		ClearHolderAttachment();
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
+		m_Rigidbody.isKinematic = false;
 		m_Rigidbody.useGravity = false;
+		m_Rigidbody.linearVelocity = Vector3.zero;
+		m_Rigidbody.angularVelocity = Vector3.zero;
 		m_NetworkTransform.Teleport(m_InitialPosition, m_InitialRotation, transform.localScale);
-		SetMatchPaused(true);
+		SetMatchPaused(IsMatchPaused);
 		return true;
 	}
 
