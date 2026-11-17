@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// Inspectorで指定されたゴール範囲と得点先を試合管理へ接続します。
