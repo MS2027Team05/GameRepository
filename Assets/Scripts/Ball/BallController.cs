@@ -27,6 +27,10 @@ public class BallController : NetworkBehaviour
 	[Tooltip("ボール周辺の検知に使用するSensor用Colliderです。")]
 	[SerializeField] private Collider m_SensorCollider;
 
+	[Header("所持中の描画")]
+	[Tooltip("ボール直下にある描画専用の親Transformです。ColliderやNetworkObjectは含めず、所持中はプレイヤーの所持ジョイントへ移動します。")]
+	[SerializeField] private Transform m_VisualRoot;
+
 	[Header("シュート設定")]
 	[Tooltip("ボールを射出するときの初速度に使用する値です(おおむねm/s)。")]
 	[SerializeField] private float m_ShootPower;
@@ -55,7 +59,8 @@ public class BallController : NetworkBehaviour
 	private Rigidbody m_Rigidbody;
 	private NetworkTransform m_NetworkTransform;
 	private BallPhysicsController m_BallPhysics;
-	private PlayerBallCarrier m_CurrentHolderCarrier;
+	private BallHoldAttachment m_HoldAttachment;
+	private PlayerBallCarrier m_AppliedHolder;
 	private Vector3 m_InitialPosition;
 	private Quaternion m_InitialRotation;
 	public bool IsMatchPaused { get; private set; }
@@ -140,7 +145,33 @@ public class BallController : NetworkBehaviour
 	/// <summary>
 	/// サーバー側で最後にシュート・パス・解放が行われた座標を取得します。
 	/// </summary>
-	public Vector3 LastReleaseOrigin => m_HasHolder.Value ? transform.position : m_LastReleaseOrigin;
+	public Vector3 LastReleaseOrigin => m_HasHolder.Value ? VisualTransform.position : m_LastReleaseOrigin;
+
+	/// <summary>
+	/// 描画基準となるTransformを取得します(未設定時は本体Transform)。
+	/// </summary>
+	public Transform VisualTransform => m_VisualRoot != null ? m_VisualRoot : transform;
+
+	/// <summary>
+	/// VisualRootの初期ローカル座標を取得します。
+	/// </summary>
+	public Vector3 VisualDefaultLocalPosition => (m_HoldAttachment != null && m_HoldAttachment.HasVisualRoot)
+		? m_HoldAttachment.OriginalLocalPosition
+		: Vector3.zero;
+
+	/// <summary>
+	/// VisualRootの初期ローカル回転を取得します。
+	/// </summary>
+	public Quaternion VisualDefaultLocalRotation => (m_HoldAttachment != null && m_HoldAttachment.HasVisualRoot)
+		? m_HoldAttachment.OriginalLocalRotation
+		: Quaternion.identity;
+
+	/// <summary>
+	/// VisualRootの初期ローカルスケールを取得します。
+	/// </summary>
+	public Vector3 VisualDefaultLocalScale => (m_HoldAttachment != null && m_HoldAttachment.HasVisualRoot)
+		? m_HoldAttachment.OriginalLocalScale
+		: Vector3.one;
 
 	/// <summary>
 	/// サーバー側で直近のプレーが味方パスを経由していたか取得します。
@@ -166,6 +197,7 @@ public class BallController : NetworkBehaviour
 			GetComponent<Rigidbody>();
 		m_NetworkTransform = GetComponent<NetworkTransform>();
 		m_BallPhysics = GetComponent<BallPhysicsController>();
+		m_HoldAttachment = new BallHoldAttachment(transform, m_VisualRoot);
 	}
 
 	/// <summary>
@@ -185,12 +217,39 @@ public class BallController : NetworkBehaviour
 		}
 		m_HasHolder.OnValueChanged +=
 			HandleHolderStateChanged;
-		m_CurrentHolderNetworkObjectId.OnValueChanged +=
-			HandleHolderNetworkObjectIdChanged;
+		m_CurrentHolderNetworkObjectId.OnValueChanged += HandleHolderObjectChanged;
 
 		if (m_HasHolder.Value)
 		{
 			ApplyHolderState(true);
+		}
+	}
+
+	/// <summary>
+	/// アニメーション反映後に、所持ジョイントへ描画とサーバー側のボール本体を合わせます。
+	/// </summary>
+	private void LateUpdate()
+	{
+		if (!IsSpawned || !HasHolder)
+		{
+			return;
+		}
+
+		// 途中参加などで所持者が後からSpawnした場合は、参照解決を再試行します。
+		if (m_AppliedHolder == null)
+		{
+			RefreshHolderAttachment();
+		}
+
+		if (m_AppliedHolder == null || m_AppliedHolder.BallHoldPoint == null)
+		{
+			return;
+		}
+
+		m_HoldAttachment.Attach(m_AppliedHolder.BallHoldPoint);
+		if (IsServer)
+		{
+			UpdateHeldPose();
 		}
 	}
 
@@ -224,11 +283,6 @@ public class BallController : NetworkBehaviour
 		}
 	}
 
-	private void LateUpdate()
-	{
-		UpdateHeldPosition();
-	}
-
 	/// <summary>
 	/// 射出後のボール速度が設定値以下になったら、味方パスの回復資格を失効させます。
 	/// 一度失効した資格は、ボールが再加速しても復活しません。
@@ -257,8 +311,8 @@ public class BallController : NetworkBehaviour
 	{
 		m_HasHolder.OnValueChanged -=
 			HandleHolderStateChanged;
-		m_CurrentHolderNetworkObjectId.OnValueChanged -=
-			HandleHolderNetworkObjectIdChanged;
+		m_CurrentHolderNetworkObjectId.OnValueChanged -= HandleHolderObjectChanged;
+		ClearHolderAttachment();
 	}
 
 	/// <summary>
@@ -483,9 +537,6 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		// 元の所持者の状態を解除
-		oldHolder.SetBallState(false);
-
 		// 所持者情報を更新
 		m_CurrentHolderId.Value =
 			newHolderClientId;
@@ -493,8 +544,7 @@ public class BallController : NetworkBehaviour
 		m_CurrentHolderNetworkObjectId.Value =
 			newHolderNetworkObjectId;
 
-		// 新しい所持者の状態を設定
-		newHolder.SetBallState(true);
+		// 所持者の描画・PlayerBallCarrier状態はRefreshHolderAttachmentで更新します。
 		m_WasFriendlyPassAssisted = false;
 		m_LastAssistClientId = 0;
 		m_CurrentPassChainCount = 0;
@@ -799,15 +849,35 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public bool ResetForRestart()
 	{
-		if (!IsServer || !IsSpawned) return false;
+		if (!IsServer || !IsSpawned)
+		{
+			return false;
+		}
+
+		bool resetSucceeded = RespawnAtInitialPosition();
+		SetMatchPaused(true);
+		return resetSucceeded;
+	}
+
+	/// <summary>
+	/// 試合の停止状態を維持し、所持・投球・物理状態を初期化して生成時の位置へ戻します。
+	/// </summary>
+	public bool RespawnAtInitialPosition()
+	{
+		if (!IsServer || !IsSpawned)
+		{
+			return false;
+		}
+
 		m_IsShotInFlight.Value = false;
 		ReleaseBall();
 		if (HasHolder || (transform.parent != null && !NetworkObject.TryRemoveParent(true)))
 		{
-			SetMatchPaused(true);
 			return false;
 		}
 
+		m_IsPassInFlight = false;
+		m_LastPasserTeam = ETeamType.None;
 		m_HasRepickupLock = false;
 		m_LastHolderClientId = 0;
 		m_LastPasserClientId = 0;
@@ -816,14 +886,17 @@ public class BallController : NetworkBehaviour
 		m_IsGoalHomingInFlight = false;
 		m_RepickupUnlockTime = 0f;
 		m_CurrentHolderId.Value = 0;
-		m_CurrentHolderCarrier = null;
+		ClearHolderAttachment();
 		m_LastReleaseOrigin = m_InitialPosition;
 		m_WasFriendlyPassAssisted = false;
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
+		m_Rigidbody.isKinematic = false;
 		m_Rigidbody.useGravity = false;
+		m_Rigidbody.linearVelocity = Vector3.zero;
+		m_Rigidbody.angularVelocity = Vector3.zero;
 		m_NetworkTransform.Teleport(m_InitialPosition, m_InitialRotation, transform.localScale);
-		SetMatchPaused(true);
+		SetMatchPaused(IsMatchPaused);
 		return true;
 	}
 
@@ -838,28 +911,14 @@ public class BallController : NetworkBehaviour
 		ApplyHolderState(
 			newValue);
 
-		if (!newValue)
-		{
-			m_CurrentHolderCarrier = null;
-		}
 	}
 
 	/// <summary>
-	/// 所持者のNetworkObjectId変更を検知し、旧所持者と新所持者の状態を更新します。
+	/// 所持中の直接奪取も含め、所持者の変更を各端末へ反映します。
 	/// </summary>
-	private void HandleHolderNetworkObjectIdChanged(
-		ulong previousValue,
-		ulong newValue)
+	private void HandleHolderObjectChanged(ulong previousValue, ulong newValue)
 	{
-		if (previousValue != 0 && previousValue != newValue)
-		{
-			UpdateCarrierBallState(previousValue, false);
-		}
-
-		if (newValue != 0 && m_HasHolder.Value)
-		{
-			UpdateCarrierBallState(newValue, true);
-		}
+		RefreshHolderAttachment();
 	}
 
 	/// <summary>
@@ -881,8 +940,7 @@ public class BallController : NetworkBehaviour
 				true;
 		}
 
-		SetHolderBallState(
-			hasHolder);
+		RefreshHolderAttachment();
 	}
 
 	/// <summary>
@@ -937,19 +995,9 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		Transform holderTransform =
-			holderNetworkObject.transform;
-
-		transform.localPosition =
-			holderTransform.InverseTransformPoint(
-				holder.BallHoldPoint.position);
-
-		transform.localRotation =
-			Quaternion.Inverse(
-				holderTransform.rotation) *
-			holder.BallHoldPoint.rotation;
-
-		m_CurrentHolderCarrier = holder;
+		transform.SetPositionAndRotation(
+			holder.BallHoldPoint.position,
+			holder.BallHoldPoint.rotation);
 
 		if (m_NetworkTransform != null && m_NetworkTransform.CanCommitToTransform)
 		{
@@ -973,6 +1021,9 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
+		// 射出要求を処理した時点のジョイント位置から解放します。
+		UpdateHeldPose();
+
 		if (transform.parent != null)
 		{
 			bool removeSucceeded =
@@ -985,7 +1036,7 @@ public class BallController : NetworkBehaviour
 			}
 		}
 
-		m_CurrentHolderCarrier = null;
+		m_HoldAttachment.Restore();
 
 		m_Rigidbody.isKinematic =
 			false;
@@ -1000,101 +1051,58 @@ public class BallController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 現在記録されている所持者へ
-	/// ボール所持状態を通知します。
+	/// 同期された所持者を解決し、プレイヤーの所持状態と描画の親を更新します。
 	/// </summary>
-	private void SetHolderBallState(
-		bool hasBall)
+	private void RefreshHolderAttachment()
 	{
-		ulong holderNetworkObjectId =
-			m_CurrentHolderNetworkObjectId.Value;
+		PlayerBallCarrier holder = null;
+		if (HasHolder && NetworkManager != null && NetworkManager.SpawnManager != null && NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			m_CurrentHolderNetworkObjectId.Value, out NetworkObject holderNetworkObject))
+		{
+			holder = holderNetworkObject.GetComponent<PlayerBallCarrier>();
+		}
 
-		if (holderNetworkObjectId == 0)
+		if (m_AppliedHolder != holder)
+		{
+			ClearHolderAttachment();
+			m_AppliedHolder = holder;
+		}
+
+		if (holder == null)
 		{
 			return;
 		}
 
-		UpdateCarrierBallState(
-			holderNetworkObjectId,
-			hasBall);
+		holder.SetBallState(true);
+		m_HoldAttachment.Attach(holder.BallHoldPoint);
 	}
 
 	/// <summary>
-	/// 指定されたNetworkObjectIdのプレイヤーへボール所持状態を通知します。
+	/// 旧所持者の状態を解除し、描画をボール本体へ戻します。
 	/// </summary>
-	private void UpdateCarrierBallState(
-		ulong carrierNetworkObjectId,
-		bool hasBall)
+	private void ClearHolderAttachment()
 	{
-		if (NetworkManager == null || NetworkManager.SpawnManager == null)
+		if (m_AppliedHolder != null)
 		{
-			return;
+			m_AppliedHolder.SetBallState(false);
 		}
 
-		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
-			carrierNetworkObjectId,
-			out NetworkObject carrierNetworkObject))
-		{
-			return;
-		}
-
-		PlayerBallCarrier carrier =
-			carrierNetworkObject.GetComponent<PlayerBallCarrier>();
-
-		if (carrier == null)
-		{
-			return;
-		}
-
-		carrier.SetBallState(hasBall);
-
-		if (hasBall)
-		{
-			m_CurrentHolderCarrier = carrier;
-		}
-		else if (m_CurrentHolderCarrier == carrier)
-		{
-			m_CurrentHolderCarrier = null;
-		}
+		m_AppliedHolder = null;
+		m_HoldAttachment?.Restore();
 	}
 
 	/// <summary>
-	/// ボール所持中、プレイヤーの腰ボーン(BallHoldPoint)へ追従させます。
+	/// 通信・物理用の本体を、描画と同じ所持ジョイント位置へ合わせます。
 	/// </summary>
-	private void UpdateHeldPosition()
+	private void UpdateHeldPose()
 	{
-		if (!m_HasHolder.Value)
+		if (m_AppliedHolder == null || m_AppliedHolder.BallHoldPoint == null)
 		{
 			return;
 		}
 
-		if (m_CurrentHolderCarrier == null)
-		{
-			ulong holderNetworkObjectId = m_CurrentHolderNetworkObjectId.Value;
-			if (holderNetworkObjectId != 0 &&
-				NetworkManager != null &&
-				NetworkManager.SpawnManager != null &&
-				NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(holderNetworkObjectId, out NetworkObject holderNetworkObject))
-			{
-				m_CurrentHolderCarrier = holderNetworkObject.GetComponent<PlayerBallCarrier>();
-			}
-		}
-
-		if (m_CurrentHolderCarrier == null || m_CurrentHolderCarrier.BallHoldPoint == null)
-		{
-			return;
-		}
-
-		Transform holderTransform = m_CurrentHolderCarrier.transform;
-		Transform holdPoint = m_CurrentHolderCarrier.BallHoldPoint;
-
-		transform.localPosition =
-			holderTransform.InverseTransformPoint(
-				holdPoint.position);
-
-		transform.localRotation =
-			Quaternion.Inverse(
-				holderTransform.rotation) *
-			holdPoint.rotation;
+		Transform holdPoint = m_AppliedHolder.BallHoldPoint;
+		transform.SetPositionAndRotation(holdPoint.position, holdPoint.rotation);
 	}
+
 }

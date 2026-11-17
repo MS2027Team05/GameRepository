@@ -234,11 +234,12 @@ public sealed class ReplayRecorder : MonoBehaviour
 
 		if (m_Ball != null)
 		{
+			Transform ballVisual = m_Ball.VisualTransform;
 			slot.m_Ball = new ReplayBallPose
 			{
 				m_IsValid = true,
-				m_Position = m_Ball.transform.position,
-				m_Rotation = m_Ball.transform.rotation,
+				m_Position = ballVisual.position,
+				m_Rotation = ballVisual.rotation,
 				m_HasHolder = m_Ball.HasHolder,
 				m_HolderClientId = m_Ball.CurrentHolderId,
 				m_IsShotInFlight = m_Ball.IsShotInFlight

@@ -264,26 +264,40 @@ public sealed class ReplayPlayer : MonoBehaviour
 			ballRoot.transform.localScale = m_CachedRealBall.transform.localScale;
 			bool clonedAnyVisual = false;
 
-			for (int i = 0; i < m_CachedRealBall.transform.childCount; i++)
+			Transform visualTransform = m_CachedRealBall.VisualTransform;
+			if (visualTransform != null && visualTransform != m_CachedRealBall.transform)
 			{
-				Transform child = m_CachedRealBall.transform.GetChild(i);
-				if (child == null)
-				{
-					continue;
-				}
-
-				// 当たり判定センサー以外の描画用・エフェクト用子階層を複製します。
-				if (child.GetComponent<Renderer>() == null &&
-					child.GetComponentInChildren<Renderer>(true) == null &&
-					child.GetComponentInChildren<ALightningBolt>(true) == null)
-				{
-					continue;
-				}
-
-				GameObject visualChild = Instantiate(child.gameObject, ballRoot.transform, false);
-				visualChild.name = child.name;
+				GameObject visualChild = Instantiate(visualTransform.gameObject, ballRoot.transform, false);
+				visualChild.name = visualTransform.name;
+				visualChild.transform.localPosition = m_CachedRealBall.VisualDefaultLocalPosition;
+				visualChild.transform.localRotation = m_CachedRealBall.VisualDefaultLocalRotation;
+				visualChild.transform.localScale = m_CachedRealBall.VisualDefaultLocalScale;
 				StripNonVisualComponents(visualChild);
 				clonedAnyVisual = true;
+			}
+			else
+			{
+				for (int i = 0; i < m_CachedRealBall.transform.childCount; i++)
+				{
+					Transform child = m_CachedRealBall.transform.GetChild(i);
+					if (child == null)
+					{
+						continue;
+					}
+
+					// 当たり判定センサー以外の描画用・エフェクト用子階層を複製します。
+					if (child.GetComponent<Renderer>() == null &&
+						child.GetComponentInChildren<Renderer>(true) == null &&
+						child.GetComponentInChildren<ALightningBolt>(true) == null)
+					{
+						continue;
+					}
+
+					GameObject visualChild = Instantiate(child.gameObject, ballRoot.transform, false);
+					visualChild.name = child.name;
+					StripNonVisualComponents(visualChild);
+					clonedAnyVisual = true;
+				}
 			}
 
 			if (clonedAnyVisual)
@@ -544,6 +558,11 @@ public sealed class ReplayPlayer : MonoBehaviour
 		if (m_CachedRealBall != null)
 		{
 			HideHierarchyVisuals(m_CachedRealBall.transform);
+			Transform visualTransform = m_CachedRealBall.VisualTransform;
+			if (visualTransform != null && !visualTransform.IsChildOf(m_CachedRealBall.transform))
+			{
+				HideHierarchyVisuals(visualTransform);
+			}
 		}
 	}
 
