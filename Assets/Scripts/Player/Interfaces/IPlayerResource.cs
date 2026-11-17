@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 /// <summary>
 /// プレイヤーのリソース(電力/スタミナ)の消費・回復管理を担当するモジュールのインターフェース。
@@ -51,5 +51,10 @@ public interface IPlayerResource
 	/// アクション実行を通知し、無行動経過による急速自然回復の待機タイマーをリセットします。
 	/// </summary>
 	void NotifyActionPerformed();
+
+	/// <summary>
+	/// リソース残量を最大値(100%)へリセットし、無行動経過による待機タイマーを初期化します。
+	/// </summary>
+	void ResetToFull();
 }
 

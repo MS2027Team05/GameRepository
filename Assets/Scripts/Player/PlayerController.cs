@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Components;
@@ -1113,6 +1113,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	{
 		SetMatchActionEnabled(false);
 		Respawn(position, rotation);
+		m_PlayerResource?.ResetToFull();
 		ConfirmRestartServerRpc(sequence);
 	}
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -253,6 +253,27 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 		}
 
 		m_IdleElapsedTime = 0.0f;
+	}
+
+	/// <summary>試合開始・得点後リスタート時にリソースを最大値(100%)へ初期化します。</summary>
+	public void ResetToFull()
+	{
+		if (!IsSpawned || !IsOwner)
+		{
+			return;
+		}
+
+		m_IdleElapsedTime = 0.0f;
+		SetDebugRegenerating(false);
+
+		float maxResource = MaxResource;
+		if (m_CurrentResource == maxResource)
+		{
+			return;
+		}
+
+		m_CurrentResource = maxResource;
+		NotifyResourceChanged();
 	}
 
 	/// <summary>Hostがパス成立を認めた場合のみOwner側から呼び出されます。</summary>
