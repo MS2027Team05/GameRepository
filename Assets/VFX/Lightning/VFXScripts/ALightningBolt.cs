@@ -36,7 +36,8 @@ public abstract class ALightningBolt : MonoBehaviour
     private bool m_HasFinishedSpawning;
     private GameObject m_PrefabContainer;
     private GameObject m_InstantiatedPrefab;
-    private ParticleSystem[] m_PrefabParticles;
+    private LightningPrefabPlayback m_PrefabPlayback;
+    private LightningPrefabColor m_PrefabColor;
     private bool m_IsUsingPrefab;
 
     private static readonly int m_BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -50,6 +51,8 @@ public abstract class ALightningBolt : MonoBehaviour
     private bool m_IsOwnerSubscribed;
     private bool m_HasColor;
     private Color m_Color;
+    private bool m_UseOwnerPalette;
+    private EHighlightColor? m_OwnerPaletteColor;
 
     protected sealed class BoltData
     {
@@ -103,8 +106,15 @@ public abstract class ALightningBolt : MonoBehaviour
     /// </summary>
     public void SetColor(Color color)
     {
+        SetColor(color, false);
+    }
+
+    private void SetColor(Color color, bool useOwnerPalette)
+    {
         m_Color = color;
         m_HasColor = true;
+        m_UseOwnerPalette = useOwnerPalette;
+        ApplyPrefabColor();
 
         if (m_Bolts == null)
         {
@@ -171,18 +181,20 @@ public abstract class ALightningBolt : MonoBehaviour
 
     private void RefreshOwnerColor()
     {
-        if (m_Owner != null && m_Owner.TryGetEffectColor(out Color color))
+        if (m_Owner != null && m_Owner.TryGetEffectColor(out Color color, out EHighlightColor? paletteColor))
         {
-            SetColor(color);
+            m_OwnerPaletteColor = paletteColor;
+            SetColor(color, true);
         }
         else if (m_HasColor)
         {
-            SetColor(m_Color);
+            SetColor(m_Color, m_UseOwnerPalette);
         }
     }
 
     private void ClearColor()
     {
+        m_PrefabColor?.RestoreColor();
         if (m_Bolts == null)
         {
             return;
@@ -193,6 +205,19 @@ public abstract class ALightningBolt : MonoBehaviour
             bolt.m_CoreLineRenderer.SetPropertyBlock(null);
             bolt.m_GlowLineRenderer.SetPropertyBlock(null);
         }
+    }
+
+    private void ApplyPrefabColor()
+    {
+        if (m_PrefabColor == null || !m_HasColor)
+        {
+            return;
+        }
+
+        EHighlightColor? paletteColor = m_UseOwnerPalette && m_Owner != null
+            ? m_OwnerPaletteColor
+            : (EHighlightColor?)null;
+        m_PrefabColor.SetColor(m_Color, paletteColor);
     }
 
     private static void SetMaterialColor(MaterialPropertyBlock properties, Material material, Color color)
@@ -245,7 +270,7 @@ public abstract class ALightningBolt : MonoBehaviour
             CreateBoltPool();
             if (m_HasColor)
             {
-                SetColor(m_Color);
+                SetColor(m_Color, m_UseOwnerPalette);
             }
         }
 
@@ -265,6 +290,8 @@ public abstract class ALightningBolt : MonoBehaviour
         return CanSpawnBolt();
     }
 
+    protected virtual bool KeepsPrefabParticlesAfterStop => false;
+
     protected virtual void UpdatePrefabEffectTransform(Transform effectTransform)
     {
     }
@@ -273,7 +300,12 @@ public abstract class ALightningBolt : MonoBehaviour
     {
         if (!CanPlayPrefabEffect())
         {
-            StopPrefabEffect();
+            StopPrefabEffect(!KeepsPrefabParticlesAfterStop);
+            if (m_PrefabContainer != null && m_PrefabContainer.activeSelf)
+            {
+                UpdatePrefabEffectTransform(m_PrefabContainer.transform);
+            }
+            m_PrefabPlayback?.UpdateDrain();
             return;
         }
 
@@ -291,66 +323,19 @@ public abstract class ALightningBolt : MonoBehaviour
             m_PrefabContainer.transform.SetParent(transform, false);
             GameObject effect = Instantiate(m_EffectPrefab, m_PrefabContainer.transform, false);
             effect.SetActive(true);
-            m_PrefabParticles = effect.GetComponentsInChildren<ParticleSystem>(true);
+            m_PrefabPlayback = new LightningPrefabPlayback(m_PrefabContainer, effect);
+            m_PrefabColor = new LightningPrefabColor(effect);
+            ApplyPrefabColor();
             m_InstantiatedPrefab = m_EffectPrefab;
         }
 
         UpdatePrefabEffectTransform(m_PrefabContainer.transform);
-        if (!m_PrefabContainer.activeSelf)
-        {
-            m_PrefabContainer.SetActive(true);
-            PlayPrefabParticles();
-        }
-        else if (m_PrefabParticles.Length > 0 && !ArePrefabParticlesAlive())
-        {
-            PlayPrefabParticles();
-        }
+        m_PrefabPlayback.Play();
     }
 
-    private bool ArePrefabParticlesAlive()
+    private void StopPrefabEffect(bool clear = true)
     {
-        // 子も個別に確認し、再生待機中や残存粒子がある間は再スタートしません。
-        for (int i = 0; i < m_PrefabParticles.Length; i++)
-        {
-            ParticleSystem particles = m_PrefabParticles[i];
-            if (particles != null && particles.gameObject.activeInHierarchy && particles.IsAlive(false))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private void PlayPrefabParticles()
-    {
-        for (int i = 0; i < m_PrefabParticles.Length; i++)
-        {
-            ParticleSystem particles = m_PrefabParticles[i];
-            if (particles != null && particles.gameObject.activeInHierarchy)
-            {
-                // 階層を重複して再生しないよう、各ParticleSystemを個別に開始します。
-                particles.Play(false);
-            }
-        }
-    }
-
-    private void StopPrefabEffect()
-    {
-        if (m_PrefabContainer == null || !m_PrefabContainer.activeSelf)
-        {
-            return;
-        }
-
-        for (int i = 0; i < m_PrefabParticles.Length; i++)
-        {
-            if (m_PrefabParticles[i] != null)
-            {
-                m_PrefabParticles[i].Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
-            }
-        }
-
-        m_PrefabContainer.SetActive(false);
+        m_PrefabPlayback?.Stop(clear);
     }
 
     protected virtual void UpdateSource()
@@ -383,7 +368,7 @@ public abstract class ALightningBolt : MonoBehaviour
 
     protected void ResetSpawnCycle()
     {
-        StopPrefabEffect();
+        StopPrefabEffect(!KeepsPrefabParticlesAfterStop);
         m_SpawnCycle++;
         m_HasFinishedSpawning = false;
         m_SpawnTimer = 0f;

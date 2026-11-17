@@ -15,6 +15,7 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
     private bool m_HasPlayed;
 
     protected override bool ReusesDeactivatedBolts => false;
+    protected override bool KeepsPrefabParticlesAfterStop => true;
 
     public void Play()
     {
@@ -92,6 +93,7 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
         {
             m_ContactDetector.ContactEntered += Play;
             m_ContactDetector.ContactExited += ResetForNextContact;
+            Play();
         }
     }
 
@@ -103,6 +105,7 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
             m_ContactDetector.ContactEntered -= Play;
             m_ContactDetector.ContactExited -= ResetForNextContact;
         }
+        ResetForNextContact();
     }
 
     private void ResetForNextContact()

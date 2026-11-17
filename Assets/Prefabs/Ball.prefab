@@ -281,7 +281,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
   GlobalObjectIdHash: 1705466128
   InScenePlacedSourceGlobalObjectIdHash: 0
@@ -308,7 +308,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 19fe2442fcd67da458b2c35d88b82ee7, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallController
   ShowTopMostFoldoutHeaderGroup: 1
   m_PhysicsCollider: {fileID: 7969707258151822165}
@@ -327,9 +327,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 487c7f86bbb2f6645afc7ca7290321b8, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallPhysicsController
   ShowTopMostFoldoutHeaderGroup: 1
+  m_HomingSpeed: 25
+  m_HomingEndDistance: 0.5
   m_FlightDeceleration: 10
   m_StopSpeedThreshold: 0.5
   m_AttachSurfaceMask:
@@ -374,7 +376,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c0734a4747a3ca74eb48e2ccd5189e36, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallDebugRespawner
   ShowTopMostFoldoutHeaderGroup: 1
 --- !u!114 &7810532941759177924
@@ -387,7 +389,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkTransform
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkTransformExpanded: 0
@@ -433,7 +435,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkRigidbody
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkRigidbodyBaseExpanded: 0
@@ -461,6 +463,23 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.5
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &2053310451881934135
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7223661482325723954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5ef4defa1c442e4995e65433b362fb7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BallSpectatorHighlight
+  m_HighlightMarker: {fileID: 0}
+  m_KeepMinimumVisibleScale: 1
+  m_ReferenceDistance: 15
+  m_MinScaleMultiplier: 1
+  m_MaxScaleMultiplier: 2.5
 --- !u!1 &8410741667192059326
 GameObject:
   m_ObjectHideFlags: 0
@@ -568,11 +587,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4376072512400170643, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value:
+      value: 
       objectReference: {fileID: 2100000, guid: 253607d71b03d5844b3a77a0a4a0dcf7, type: 2}
     - target: {fileID: 6424957613478006672, guid: 32121d7e540989447bef8ee7da4cd3c2, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value:
+      value: 
       objectReference: {fileID: 2100000, guid: 253607d71b03d5844b3a77a0a4a0dcf7, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -615,28 +634,11 @@ Animator:
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
   m_AnimatePhysics: 0
-  m_WarningMessage:
+  m_WarningMessage: 
   m_HasTransformHierarchy: 1
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &2053310451881934135
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7223661482325723954}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e5ef4defa1c442e4995e65433b362fb7, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::BallSpectatorHighlight
-  m_HighlightMarker: {fileID: 0}
-  m_KeepMinimumVisibleScale: 1
-  m_ReferenceDistance: 15
-  m_MinScaleMultiplier: 1
-  m_MaxScaleMultiplier: 2.5
 --- !u!114 &5287252754361425507
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -647,7 +649,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c2fafae1ce7748e7b851e2cfd671088d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SphereSurfaceLightningBolt
   m_UsePrefabEffect: 0
   m_EffectPrefab: {fileID: 0}
@@ -662,7 +664,7 @@ MonoBehaviour:
   m_Lifetime: 0.1
   m_SpawnInterval: 0.04
   m_CenterPoint: {fileID: 0}
-  m_Radius: 0.25
+  m_Radius: 0.65
   m_SurfaceOffset: 0
   m_ArcAngle: 90
   m_CrawlSpeed: 100
@@ -676,7 +678,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 33dab10436744ccea1d082a657b40b25, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TrailLightningBolt
   m_UsePrefabEffect: 0
   m_EffectPrefab: {fileID: 0}

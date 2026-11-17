@@ -27,7 +27,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 4803231768260244818}
   m_Father: {fileID: 0}
@@ -106,6 +106,12 @@ VisualEffect:
         m_Overridden: 0
       - m_Value: {x: 0, y: 0.22084741, z: 0.7924527, w: 1}
         m_Name: Blue
+        m_Overridden: 0
+      - m_Value: {x: 0.017116912, y: 0.09529549, z: 0.74901956, w: 1}
+        m_Name: DeepBlue
+        m_Overridden: 0
+      - m_Value: {x: 0.046665095, y: 0.43965724, z: 0.8879232, w: 1}
+        m_Name: LightBlue
         m_Overridden: 0
     m_Uint:
       m_Array: []

@@ -184,3 +184,10 @@ GameRepository/
 - `ALightningBolt` はプログラム生成の電撃と差し替えPrefabの再生を切り替える。生成プールは遅延初期化し、初期化前に受け取った選択色も反映する。無効化時は色通知の購読解除と両方式の再生停止を行う。
 - 色の個別上書きはLineRendererを対象とし、差し替えPrefab内のParticleSystemやVFX Graphの色制御は含めない。
 - `VFX_testScene` はモデルの保持ジョイント確認用配置を残し、alphaの独立したボールとモデル接触電撃の確認用配置を併設する。
+
+## Prefab電流のVFXカラー連携
+- `ALightningBolt.SetColor`: 通常の線描画とPrefab方式に共通する色指定の入口。所有者の色変更とPrefab生成時に反映する。
+- `LightningPrefabColor`: 生成インスタンスの公開入力 `ColorIndex` へ色番号を渡し、VFX Graph内のSwitchで色を選択させる。直接色指定と従来Graphでは `EffectColor` を使い、所有者解除時には生成時の設定へ戻す。
+- デザイナー向けの公開入力仕様は `docs/LightningVfxColor.md` を参照する。
+- `LightningPrefabPlayback`: Prefab内のParticleSystemとVFX Graphの再生・停止・残存粒子の終了待ちを担当する。足元の接触エフェクトは離地後も粒子の寿命まで表示を維持する。
+- `PlayerAppearance` の電流カラー設定で取得元を選択色/チーム色から切り替える。`TryGetEffectColor` が描画色とVFXパレット種別を返し、設定・選択色・所属チームの変更を電流へ通知する。
