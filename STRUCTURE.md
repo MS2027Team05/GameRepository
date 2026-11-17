@@ -92,7 +92,7 @@ GameRepository/
 │   │   │   ├── LobbyCharacterDisplayManager.cs # ロビー内3Dモデル表示・台座同期制御
 │   │   │   ├── LobbyPlayerDisplay.cs    # ロビー台座用の表示特化キャラクター外見・頭上3Dネーム追従制御
 │   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
-│   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(キャラ・色・固定チーム・IP)永続化・自動反映
+│   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(キャラ・色・固定チーム・IP・視点感度)永続化・自動反映
 │   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・試合結果(スコア/勝敗)保持・シーン間データ引継ぎ管理
 │   │   │   ├── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
 │   │   │   ├── TitleOverlayController.cs # [EntryPoint] ロビー内タイトル画面演出・個別開始制御
@@ -135,7 +135,7 @@ GameRepository/
 │   │       ├── PlayerCameraEffect.cs    # 三人称視点カメラ旋回(接地面法線追従)・高速移動時FOV変更・カメラシェイク制御・視点リセット
 │   │       ├── PlayerEdgeDiagnostics.cs # 角部・接地境界脱落時の挙動解析・診断HUD描画制御
 │   │       ├── PlayerGroundDetector.cs  # 足元/角/壁面の接地・法線検知およびデバッグGizmo描画
-│   │       ├── PlayerInputReceiver.cs   # 入力検知(R1移動・L1干渉アクション押下/離し対応)・視点操作・カーソルロック管理
+│   │       ├── PlayerInputReceiver.cs   # 入力検知(R1移動・L1干渉アクション押下/離し対応)・視点操作(マウス/PAD感度適用)・カーソルロック管理
 │   │       ├── PlayerRecoveryEffectController.cs # リソース急速回復・パスボーナス時のVFX再生およびネットワーク同期制御
 │   │       ├── PlayerResourceController.cs # [EntryPoint] Owner側リソース消費・通常回復・遅延急速回復・パス受取ボーナス管理
 │   │       ├── PlayerOutOfBoundsRespawner.cs # [EntryPoint] XYZ範囲外検知・初期スポーン地点への復帰要求
@@ -149,7 +149,7 @@ GameRepository/
 │   │       ├── MatchHudController.cs    # 試合残り時間・チーム得点のHUD表示制御
 │   │       ├── ResultAwardItemUI.cs     # リザルト画面の個人表彰1項目分(金/銀メダル・文言・個別背景)表示制御
 │   │       ├── ResultUIController.cs    # [EntryPoint] リザルト画面制御・スコア/プレイヤー外見/自身の実績表示・復帰制御
-│   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
+│   │       ├── SettingsPanelController.cs # 設定画面(視点感度・音量・描画設定)開閉・UI制御
 │   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
 │   ├── Settings/                # プロジェクト設定・URP描画設定
 │   ├── Shader/                  # カスタムシェーダー格納 (アウトライン・遮蔽シルエット等)
