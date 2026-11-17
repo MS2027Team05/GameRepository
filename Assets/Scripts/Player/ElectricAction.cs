@@ -69,13 +69,32 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 			$"[Electric Debug] チャージ開始。必要時間={m_ChargeDuration:F2}秒");
 	}
 
+
 	/// <summary>
 	/// 電撃チャージを更新します。
+	/// 有効なロックオン対象が存在するときだけチャージを進めます。
 	/// </summary>
 	public void UpdateCharge(float deltaTime)
 	{
 		if (!IsOwner || !m_IsCharging)
 			return;
+
+		// 有効な対象が存在するか確認
+		if (m_LockOnProvider == null ||
+			!m_LockOnProvider.HasValidTarget)
+		{
+			return;
+		}
+
+		// 電撃の対象として有効な種類か確認
+		ELockOnTargetType targetType =
+			m_LockOnProvider.CurrentTargetType;
+
+		if (targetType != ELockOnTargetType.Ball &&
+			targetType != ELockOnTargetType.EnemyPlayer)
+		{
+			return;
+		}
 
 		float previousRatio = ChargeRatio;
 

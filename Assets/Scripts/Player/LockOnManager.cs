@@ -11,10 +11,19 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	[Header("カメラ")]
 	[SerializeField] private Camera m_TargetCamera;
 
+	[Header("電撃チャージ")]
+	[SerializeField] private ElectricAction m_ElectricAction;
+
 	[Header("検索設定")]
 	[Tooltip("ロックオン対象を検索する最大距離")]
 	[SerializeField, Min(0.1f)]
 	private float m_MaxSearchDistance = 30f;
+
+	[Header("ロックオン検索範囲UI")]
+	[SerializeField]
+	private RectTransform m_LockOnSearchCircle;
+	[Tooltip("チェックでロックオンの時のみ円を出す")]
+	[SerializeField] private bool m_ShowSearchCircleOnlyWhenLockedOn = true;
 
 	[Tooltip("レティクル周辺の検索範囲")]
 	[SerializeField, Range(0.01f, 0.5f)]
@@ -30,11 +39,28 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 
 	[Header("ロックオンマーカー")]
 	[SerializeField]
-	private RectTransform m_AllyLockOnMarker;
+	private RectTransform m_LockOnTargetMarker;
+	[Tooltip("マーカーが最大サイズになる距離")]
+	[SerializeField]
+	private float m_MarkerNearDistance = 5f;
+	[Tooltip("マーカーが最小サイズになる距離")]
+	[SerializeField]
+	private float m_MarkerFarDistance = 30f;
+	[Tooltip("対象が近いときのマーカーサイズ")]
+	[SerializeField]
+	private float m_MarkerMaxSize = 80f;
+	[Tooltip("対象が遠いときのマーカーサイズ")]
+	[SerializeField]
+	private float m_MarkerMinSize = 25f;
+
+	[Header("表示、非表示を切り替えるUI")]
+	[SerializeField] private GameObject m_AimRerticle;
+	[SerializeField] private GameObject m_LockOnUI;
 
 	private PlayerBallCarrier m_BallCarrier;
 	private NetworkObject m_NetworkObject;
 	private PlayerNetworkProfile m_PlayerProfile;
+	private PlayerAimGuide m_AimGuide;
 
 	private ELockOnSearchMode m_CurrentSearchMode =
 		ELockOnSearchMode.None;
@@ -101,18 +127,29 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	public bool HasValidTarget =>
 		CurrentTarget != null;
 
+#if UNITY_EDITOR
+	private void OnValidate()
+	{
+		UpdateLockOnSearchCircleSize();
+	}
+#endif
+
 	private void Awake()
 	{
 		m_BallCarrier = GetComponent<PlayerBallCarrier>();
 		m_NetworkObject = GetComponent<NetworkObject>();
 		m_PlayerProfile = GetComponent<PlayerNetworkProfile>();
+		m_AimGuide = GetComponent<PlayerAimGuide>();
 
 		EnsureTargetCamera();
 
-		if (m_AllyLockOnMarker != null)
+		if (m_LockOnTargetMarker != null)
 		{
-			m_AllyLockOnMarker.gameObject.SetActive(false);
+			m_LockOnTargetMarker.gameObject.SetActive(false);
 		}
+
+		UpdateLockOnDisplayUI();
+		UpdateLockOnSearchCircleSize();
 	}
 
 	/// <summary>
@@ -162,6 +199,8 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 
 	private void Update()
 	{
+		UpdateLockOnSearchCircleSize();
+		UpdateLockOnDisplayUI();
 		UpdateLockOnMarker();
 	}
 
@@ -179,6 +218,126 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 			: ELockOnSearchMode.NonBallHolder);
 
 		UpdateTargetSearch();
+	}
+
+	/// <summary>
+	/// ロックオン状態に応じてUIの表示を切り替える
+	/// </summary>
+	private void UpdateLockOnDisplayUI()
+	{
+		bool isLockedOn = CurrentTarget != null;
+
+		if (m_AimRerticle != null)
+		{
+			m_AimRerticle.SetActive(!isLockedOn);
+		}
+
+		if (m_LockOnUI != null)
+		{
+			m_LockOnUI.SetActive(isLockedOn);
+		}
+
+		// ロックオン探索円の表示切り替え
+		if (m_LockOnSearchCircle != null)
+		{
+			// 電撃チャージ中なら、対象の有無に関係なく検索範囲を表示する
+			bool shouldShowSearchCircle =
+				m_ElectricAction != null &&
+				m_ElectricAction.IsCharging;
+
+			m_LockOnSearchCircle.gameObject.SetActive(shouldShowSearchCircle);
+		}
+	}
+
+	/// <summary>
+	/// ロックオン検索範囲UIの大きさと位置を更新
+	/// </summary>
+	private void UpdateLockOnSearchCircleSize()
+	{
+		if (m_LockOnSearchCircle == null ||
+			!EnsureTargetCamera())
+		{
+			return;
+		}
+
+		Canvas canvas =
+			m_LockOnSearchCircle.GetComponentInParent<Canvas>();
+
+		if (canvas == null)
+		{
+			return;
+		}
+
+		RectTransform canvasRect =
+			canvas.transform as RectTransform;
+
+		if (canvasRect == null)
+		{
+			return;
+		}
+
+		// カメラの画面サイズ
+		float pixelWidth = m_TargetCamera.pixelWidth;
+		float pixelHeight = m_TargetCamera.pixelHeight;
+
+		float shortSide =
+			Mathf.Min(pixelWidth, pixelHeight);
+
+		// 検索範囲の半径（ピクセル）
+		float searchRadiusPixels =
+			shortSide * m_ReticleSearchRadius;
+
+		// カメラの画面中央
+		Vector2 screenCenter =
+			m_TargetCamera.pixelRect.center;
+
+		// Canvasの座標に変換するカメラ
+		Camera uiCamera =
+			canvas.renderMode == RenderMode.ScreenSpaceOverlay
+			? null
+			: canvas.worldCamera;
+
+		// 画面中央をCanvas座標に変換
+		if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+			canvasRect,
+			screenCenter,
+			uiCamera,
+			out Vector2 localCenter))
+		{
+			return;
+		}
+
+		// 検索範囲の右端をCanvas座標に変換
+		Vector2 screenRight =
+			screenCenter + new Vector2(searchRadiusPixels, 0f);
+
+		if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+			canvasRect,
+			screenRight,
+			uiCamera,
+			out Vector2 localRight))
+		{
+			return;
+		}
+
+		// Canvas上での検索半径
+		float localRadius =
+			Vector2.Distance(localCenter, localRight);
+
+		// 画像内の明るい円形ラインの半径割合
+		// 現在の円形素材に合わせた補正値
+		const float visibleRadiusRatio = 0.96f;
+
+		// UIサイズを計算
+		float diameter =
+			(localRadius * 2f) / visibleRadiusRatio;
+
+		// UIの位置と大きさを更新
+		m_LockOnSearchCircle.anchoredPosition =
+			localCenter;
+
+		m_LockOnSearchCircle.sizeDelta =
+			new Vector2(diameter, diameter);
 	}
 
 	// =========================================================================
@@ -289,6 +448,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		// 検索結果を反映
 		CurrentTarget = bestTarget;
 		m_CurrentTargetType = bestType;
+
+		// ロックオン状態をエイムガイドに通知
+		m_AimGuide?.SetLockOnActive(CurrentTarget != null);
 
 		// 対象が変更された場合のみログを出す
 		if (m_PreviousTarget != CurrentTarget)
@@ -495,20 +657,29 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 			return;
 		}
 
-		Vector2 reticle =
-			new Vector2(0.5f, 0.5f);
+		// カメラ画面上の中央から対象までの距離を計算
+		float pixelWidth = m_TargetCamera.pixelWidth;
+		float pixelHeight = m_TargetCamera.pixelHeight;
+
+		Vector2 screenOffset = new Vector2(
+			(viewport.x - 0.5f) * pixelWidth,
+			(viewport.y - 0.5f) * pixelHeight
+		);
+
+		// 画面の短辺を基準に正規化
+		float shortSide = Mathf.Min(pixelWidth, pixelHeight);
 
 		float screenDistance =
-			Vector2.Distance(
-				new Vector2(viewport.x, viewport.y),
-				reticle);
+			screenOffset.magnitude / shortSide;
 
+		// 検索範囲外なら除外
 		if (screenDistance > m_ReticleSearchRadius)
 		{
 			if (canLog && type == ELockOnTargetType.Ball)
 			{
 				LogDebug(
-					$"ボール除外: レティクル外 (距離={screenDistance:F3} > 半径={m_ReticleSearchRadius:F3}, Viewport=({viewport.x:F2}, {viewport.y:F2}))");
+					$"ボール除外: レティクル外 " +
+					$"(距離={screenDistance:F3} > 半径={m_ReticleSearchRadius:F3})");
 			}
 
 			return;
@@ -571,10 +742,12 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		CurrentTarget = null;
 		m_CurrentTargetType = ELockOnTargetType.None;
 
-		if (m_AllyLockOnMarker != null)
+		if (m_LockOnTargetMarker != null)
 		{
-			m_AllyLockOnMarker.gameObject.SetActive(false);
+			m_LockOnTargetMarker.gameObject.SetActive(false);
 		}
+
+		m_AimGuide?.SetLockOnActive(false);
 	}
 
 	public void ClearTarget()
@@ -589,40 +762,83 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		m_CurrentTargetType = ELockOnTargetType.None;
 		m_PreviousTarget = null;
 
-		if (m_AllyLockOnMarker != null)
+		if (m_LockOnTargetMarker != null)
 		{
-			m_AllyLockOnMarker.gameObject.SetActive(false);
+			m_LockOnTargetMarker.gameObject.SetActive(false);
 		}
+
+		m_AimGuide?.SetLockOnActive(false);
+
+		UpdateLockOnDisplayUI();
 	}
 
 	/// <summary>
-	/// ロックオンマーカーを更新
+	/// 最優先ターゲットの位置にロックオンマーカーを表示
 	/// </summary>
 	private void UpdateLockOnMarker()
 	{
-		if (m_AllyLockOnMarker == null ||
-			m_TargetCamera == null)
+		if (m_LockOnTargetMarker == null ||
+			!EnsureTargetCamera())
 		{
 			return;
 		}
 
+		// ターゲットが存在しない場合は非表示
 		if (CurrentTarget == null)
 		{
-			m_AllyLockOnMarker.gameObject.SetActive(false);
+			m_LockOnTargetMarker.gameObject.SetActive(false);
 			return;
 		}
 
-		Vector3 screenPosition =
-			m_TargetCamera.WorldToScreenPoint(
-				GetTargetPosition(CurrentTarget));
+		// 対象の中心座標を取得
+		Vector3 worldPosition =
+			GetTargetPosition(CurrentTarget);
 
+		// カメラから対象までの距離
+		float distance =
+			Vector3.Distance(
+				m_TargetCamera.transform.position,
+				worldPosition);
+
+		// 距離を0～1に変換
+		float distanceRatio = Mathf.InverseLerp(
+			m_MarkerNearDistance,
+			m_MarkerFarDistance,
+			distance);
+
+		// 近いほど大きく、遠いほど小さくする
+		float markerSize = Mathf.Lerp(
+			m_MarkerMaxSize,
+			m_MarkerMinSize,
+			distanceRatio);
+
+		// マーカーの大きさを更新
+		m_LockOnTargetMarker.sizeDelta =
+			new Vector2(markerSize, markerSize);
+
+		// ワールド座標をスクリーン座標に変換
+		Vector3 screenPosition =
+			m_TargetCamera.WorldToScreenPoint(worldPosition);
+
+		// カメラの背面にいる場合は非表示
 		if (screenPosition.z <= 0f)
 		{
-			m_AllyLockOnMarker.gameObject.SetActive(false);
+			m_LockOnTargetMarker.gameObject.SetActive(false);
 			return;
 		}
 
-		m_AllyLockOnMarker.gameObject.SetActive(true);
-		m_AllyLockOnMarker.position = screenPosition;
+		// カメラの表示範囲外なら非表示
+		Rect cameraRect = m_TargetCamera.pixelRect;
+
+		if (!cameraRect.Contains(
+			new Vector2(screenPosition.x, screenPosition.y)))
+		{
+			m_LockOnTargetMarker.gameObject.SetActive(false);
+			return;
+		}
+
+		// マーカーを対象の画面位置に配置
+		m_LockOnTargetMarker.gameObject.SetActive(true);
+		m_LockOnTargetMarker.position = screenPosition;
 	}
 }

@@ -1,5 +1,6 @@
 ﻿// BallController.cs
 using System;
+using System.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
@@ -39,6 +40,10 @@ public class BallController : NetworkBehaviour
 	[Tooltip("味方パス回復の資格を失効させるボール速度のしきい値です(m/s)。この速度以下になると資格が失われ、再加速しても復活しません。")]
 	[SerializeField] private float m_PassBonusMinSpeed;
 
+	[Header("電撃奪取設定")]
+	[Tooltip("電撃でボールを奪ったとき、攻撃側プレイヤーまで移動する時間です(秒)。")]
+	[SerializeField] private float m_ElectricStealPullDuration = 0.5f;
+
 	private readonly NetworkVariable<ulong> m_CurrentHolderId =
 		new NetworkVariable<ulong>();
 
@@ -59,6 +64,9 @@ public class BallController : NetworkBehaviour
 	private bool m_HasRepickupLock;
 	private ulong m_LastHolderClientId;
 	private float m_RepickupUnlockTime;
+
+	private bool m_IsStealing;
+	private Coroutine m_ElectricStealCoroutine;
 
 	// Host側で、最後の正常なシュートが味方パスとして受取可能か記録します。
 	private bool m_IsPassInFlight;
@@ -208,7 +216,7 @@ public class BallController : NetworkBehaviour
 		ulong holderClientId,
 		ulong holderNetworkObjectId)
 	{
-		if (!IsServer || !CanPlayMatch())
+		if (!IsServer || !CanPlayMatch() || m_IsStealing)
 		{
 			return false;
 		}
@@ -293,26 +301,16 @@ public class BallController : NetworkBehaviour
 		return true;
 	}
 
-	//
-
 	/// <summary>
 	/// Host上で現在の所持者からボールを奪い、
-	/// 指定プレイヤーへ直接所持者を切り替えます。
+	/// 指定プレイヤーへ引き寄せて所持者を切り替えます。
 	/// </summary>
 	public bool TryStealHolder(
 		ulong newHolderClientId,
 		ulong newHolderNetworkObjectId)
 	{
-		if (!IsServer)
+		if (!IsServer || m_IsStealing || !CanPlayMatch())
 			return false;
-
-		if (!m_HasHolder.Value)
-		{
-			// 誰も持っていない場合は通常取得
-			return TrySetHolder(
-				newHolderClientId,
-				newHolderNetworkObjectId);
-		}
 
 		// 攻撃側プレイヤーを取得
 		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
@@ -335,51 +333,146 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		// 現在の所持者を取得
-		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
-			m_CurrentHolderNetworkObjectId.Value,
-			out NetworkObject oldHolderNetworkObject))
+		// 現在の所持者がいる場合だけ、所持状態を解除
+		if (m_HasHolder.Value)
 		{
-			return false;
+			if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+				m_CurrentHolderNetworkObjectId.Value,
+				out NetworkObject oldHolderNetworkObject))
+			{
+				return false;
+			}
+
+			PlayerBallCarrier oldHolder =
+				oldHolderNetworkObject.GetComponent<PlayerBallCarrier>();
+
+			if (oldHolder == null)
+				return false;
+
+			if (!DetachFromHolder())
+				return false;
+
+			// 元の所持者の所持状態を解除
+			m_HasHolder.Value = false;
+			oldHolder.SetBallState(false);
 		}
 
-		PlayerBallCarrier oldHolder =
-			oldHolderNetworkObject.GetComponent<PlayerBallCarrier>();
+		// 移動中は物理挙動と当たり判定を停止
+		m_Rigidbody.linearVelocity = Vector3.zero;
+		m_Rigidbody.angularVelocity = Vector3.zero;
+		m_Rigidbody.isKinematic = true;
 
-		if (oldHolder == null)
-			return false;
-
-		// 現在の親子関係を解除
-		if (!DetachFromHolder())
-			return false;
-
-		// 新しい所持者へ装着
-		if (!AttachToHolder(
-			newHolderNetworkObject,
-			newHolder))
+		if (m_PhysicsCollider != null)
 		{
-			// 装着に失敗した場合は元の所持者へ戻す
-			AttachToHolder(
-				oldHolderNetworkObject,
-				oldHolder);
-
-			return false;
+			m_PhysicsCollider.enabled = false;
 		}
 
-		// 元の所持者の状態を解除
-		oldHolder.SetBallState(false);
+		// 引き寄せ開始
+		m_IsStealing = true;
 
-		// 所持者情報を更新
-		m_CurrentHolderId.Value =
-			newHolderClientId;
-
-		m_CurrentHolderNetworkObjectId.Value =
-			newHolderNetworkObjectId;
-
-		// 新しい所持者の状態を設定
-		newHolder.SetBallState(true);
+		m_ElectricStealCoroutine =
+			StartCoroutine(ElectricStealPullCoroutine(
+				newHolderNetworkObject,
+				newHolder,
+				newHolderClientId,
+				newHolderNetworkObjectId));
 
 		return true;
+	}
+
+	/// <summary>
+	/// 電撃で奪ったボールを攻撃側プレイヤーまで引き寄せます。
+	/// </summary>
+	private IEnumerator ElectricStealPullCoroutine(
+		NetworkObject newHolderNetworkObject,
+		PlayerBallCarrier newHolder,
+		ulong newHolderClientId,
+		ulong newHolderNetworkObjectId)
+	{
+		Debug.Log("[BallController] 電撃による引き寄せ開始");
+		Vector3 startPosition = transform.position;
+		float elapsedTime = 0f;
+
+		float duration = Mathf.Max(
+			0.01f,
+			m_ElectricStealPullDuration);
+
+		while (elapsedTime < duration)
+		{
+			// 試合終了やプレイヤー消失時は引き寄せを中止
+			if (!CanPlayMatch() ||
+				newHolderNetworkObject == null ||
+				!newHolderNetworkObject.IsSpawned ||
+				newHolder == null ||
+				newHolder.BallHoldPoint == null)
+			{
+				break;
+			}
+
+			elapsedTime += Time.deltaTime;
+
+			float t = Mathf.Clamp01(elapsedTime / duration);
+
+			// 最初と最後がゆっくりになる補間
+			float smoothT = Mathf.SmoothStep(0f, 1f, t);
+
+			// プレイヤーの移動にも追従するよう、目的地を毎フレーム取得
+			Vector3 targetPosition =
+				newHolder.BallHoldPoint.position;
+
+			transform.position = Vector3.Lerp(
+				startPosition,
+				targetPosition,
+				smoothT);
+
+			Debug.Log(
+	$"[BallController] 引き寄せ中 Position: {transform.position}");
+
+			yield return null;
+		}
+
+		// 移動先が有効なら、最後に所持位置へ装着
+		if (CanPlayMatch() &&
+			newHolderNetworkObject != null &&
+			newHolderNetworkObject.IsSpawned &&
+			newHolder != null &&
+			newHolder.BallHoldPoint != null)
+		{
+			if (AttachToHolder(
+				newHolderNetworkObject,
+				newHolder))
+			{
+				// 所持者情報を更新
+				m_CurrentHolderId.Value =
+					newHolderClientId;
+
+				m_CurrentHolderNetworkObjectId.Value =
+					newHolderNetworkObjectId;
+
+				// 新しい所持者の状態を設定
+				m_HasHolder.Value = true;
+
+				m_IsStealing = false;
+				m_ElectricStealCoroutine = null;
+				yield break;
+			}
+
+			Debug.Log("[BallController] 引き寄せ完了");
+		}
+
+		// 装着できなかった場合は、ボールを自由状態に戻す
+		m_CurrentHolderId.Value = 0;
+		m_CurrentHolderNetworkObjectId.Value = 0;
+
+		m_Rigidbody.isKinematic = IsMatchPaused;
+
+		if (m_PhysicsCollider != null)
+		{
+			m_PhysicsCollider.enabled = true;
+		}
+
+		m_IsStealing = false;
+		m_ElectricStealCoroutine = null;
 	}
 
 
@@ -389,7 +482,7 @@ public class BallController : NetworkBehaviour
 	public bool TryShoot(
 		Vector3 shootDirection)
 	{
-		if (!IsServer || !CanPlayMatch())
+		if (!IsServer || !CanPlayMatch() || m_IsStealing)
 		{
 			return false;
 		}
@@ -459,7 +552,7 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public void ReleaseBall()
 	{
-		if (!IsServer)
+		if (!IsServer || m_IsStealing)
 		{
 			return;
 		}

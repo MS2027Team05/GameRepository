@@ -283,7 +283,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1705466128
+  GlobalObjectIdHash: 455381987
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -316,6 +316,7 @@ MonoBehaviour:
   m_ShootPower: 50
   m_RepickupDelay: 0.2
   m_PassBonusMinSpeed: 2
+  m_ElectricStealPullDuration: 0.5
 --- !u!114 &1323764943930010185
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -359,7 +360,6 @@ MonoBehaviour:
   m_SurfaceMaxBounceNormalSpeed: 10
   m_SurfaceMaxBounceTangentialSpeed: 15
   m_SurfaceGroundDeceleration: 5
-  m_EnableBounceDistanceDebug: 1
   m_SurfaceSearchRadius: 100
   m_SurfaceSearchInterval: 0.25
   m_SurfaceSeekSpeed: 4
