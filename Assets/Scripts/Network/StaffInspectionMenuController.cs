@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -367,7 +367,7 @@ public class StaffInspectionMenuController : MonoBehaviour
 			// ホストであり、かつタイトルシーン以外へ同期遷移する場合
 			if (NetworkManager.Singleton.IsServer && NetworkManager.Singleton.SceneManager != null && sceneName != "TitleScene")
 			{
-				NetworkManager.Singleton.SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+				NetworkSceneTimeoutController.LoadNetworkScene(sceneName, LoadSceneMode.Single);
 				return;
 			}
 

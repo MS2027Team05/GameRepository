@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -86,7 +86,7 @@ public class GameSessionResetCoordinator : NetworkBehaviour
 		string targetScene = !string.IsNullOrEmpty(m_LobbySceneName) ? m_LobbySceneName : "LobbyScene";
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
 		{
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, UnityEngine.SceneManagement.LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, UnityEngine.SceneManagement.LoadSceneMode.Single);
 		}
 	}
 
