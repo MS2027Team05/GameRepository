@@ -335,11 +335,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 	}
 
+
 	/// <summary>
 	/// 新フロー: L1長押し中の電撃チャージおよび追尾パスチャージを更新します。
 	/// </summary>
 	private void UpdateReworkedSubAction()
 	{
+		// 電撃チャージの更新は、チャージ中でなくても毎フレーム実行する
+		m_ElectricAction?.UpdateCharge(Time.deltaTime);
+
 		// パスモード中は、左クリックを離していても制限時間を計測する
 		if (m_IsPassModeActive)
 		{
@@ -384,8 +388,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_LockOnProvider?.UpdateTargetSearch();
 
 			LogPassLockOnTarget();
-
-			m_ElectricAction?.UpdateCharge(Time.deltaTime);
 			return;
 		}
 
