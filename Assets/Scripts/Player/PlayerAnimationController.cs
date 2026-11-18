@@ -2,11 +2,14 @@
 using UnityEngine;
 
 /// <summary>
-/// プレイヤーの地上移動速度からAnimatorの移動状態を更新し、他端末へ同期するコンポーネント。
+/// 地上移動状態を他端末へ同期し、移動状態とボール所持状態をAnimatorへ反映するコンポーネント。
 /// </summary>
 public sealed class PlayerAnimationController : NetworkBehaviour
 {
 	private static readonly int m_IsMovingHash = Animator.StringToHash("IsMoving");
+	private static readonly int m_HasBallHash = Animator.StringToHash("HasBall");
+
+	private IBallCarrier m_BallCarrier;
 
 	[Header("参照")]
 	[SerializeField] private Animator[] m_Animators;
@@ -27,6 +30,8 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 	private void Awake()
 	{
+		m_BallCarrier = GetComponent<IBallCarrier>();
+
 		if (m_SurfaceMover == null)
 		{
 			m_SurfaceMover = GetComponent<PlayerSurfaceMover>();
@@ -43,10 +48,14 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 		m_IsMoving.OnValueChanged += HandleMovingChanged;
 		m_RespawnVersion.OnValueChanged += HandleRespawnChanged;
 		ApplyMovingState(m_IsMoving.Value);
+		ApplyBallState();
 	}
 
 	private void Update()
 	{
+		// 所持情報は既存のボール同期から各端末へ反映されるため、所有者以外も更新する。
+		ApplyBallState();
+
 		if (m_SurfaceMover == null || m_PlayerController == null)
 		{
 			return;
@@ -107,6 +116,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 			if (animator == null || animator.runtimeAnimatorController == null) continue;
 			animator.Rebind();
 			animator.SetBool(m_IsMovingHash, false);
+			animator.SetBool(m_HasBallHash, m_BallCarrier != null && m_BallCarrier.HasBall);
 			if (animator.isActiveAndEnabled)
 			{
 				animator.Update(0f);
@@ -117,6 +127,23 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 	private void HandleMovingChanged(bool previousValue, bool newValue)
 	{
 		ApplyMovingState(newValue);
+	}
+
+	private void ApplyBallState()
+	{
+		if (m_Animators == null)
+		{
+			return;
+		}
+
+		bool hasBall = m_BallCarrier != null && m_BallCarrier.HasBall;
+		foreach (Animator animator in m_Animators)
+		{
+			if (animator != null)
+			{
+				animator.SetBool(m_HasBallHash, hasBall);
+			}
+		}
 	}
 
 	private void ApplyMovingState(bool isMoving)
