@@ -178,6 +178,22 @@ public class LobbyManager : NetworkBehaviour
 
 	private void HandleLobbyPlayersChanged(NetworkListEvent<LobbyPlayerData> changeEvent)
 	{
+		if (NetworkManager.Singleton != null &&
+			changeEvent.Value.ClientId == NetworkManager.Singleton.LocalClientId)
+		{
+			bool shouldSyncFromServer =
+				changeEvent.Type == NetworkListEvent<LobbyPlayerData>.EventType.Value ||
+				(changeEvent.Type == NetworkListEvent<LobbyPlayerData>.EventType.Add &&
+				 changeEvent.Value.Team != ETeamType.None);
+
+			if (shouldSyncFromServer)
+			{
+				ETeamType syncedTeam = changeEvent.Value.Team;
+				NetworkConnectManager.SetSpectatorClientState(syncedTeam == ETeamType.Spectator);
+				LocalPlayerProfilePreferences.SetAssignedTeam(syncedTeam);
+			}
+		}
+
 		NotifyDataChanged();
 	}
 
@@ -306,7 +322,9 @@ public class LobbyManager : NetworkBehaviour
 		ulong localClientId = NetworkManager.Singleton.LocalClientId;
 		ECharacterType charType = LocalPlayerProfilePreferences.GetCharacterType();
 		EHighlightColor highlightColor = LocalPlayerProfilePreferences.GetHighlightColor();
-		ETeamType assignedTeam = LocalPlayerProfilePreferences.GetAssignedTeam();
+		ETeamType assignedTeam = NetworkConnectManager.IsSpectatorClient
+			? ETeamType.Spectator
+			: LocalPlayerProfilePreferences.GetAssignedTeam();
 
 		RequestUpdateCachedAppearanceServerRpc(localClientId, charType, highlightColor, assignedTeam);
 	}
@@ -387,7 +405,6 @@ public class LobbyManager : NetworkBehaviour
 			return;
 		}
 
-		LocalPlayerProfilePreferences.SetAssignedTeam(team);
 		RequestJoinTeamServerRpc(NetworkManager.Singleton.LocalClientId, team);
 	}
 
@@ -692,6 +709,18 @@ public class LobbyManager : NetworkBehaviour
 			if (m_LobbyPlayers[i].ClientId == clientId)
 			{
 				var data = m_LobbyPlayers[i];
+				// 観戦者指定が送られてきた場合は、仮に自動割り当て等で別チームになっていても確実に観戦者へ更新
+				if (assignedTeam == ETeamType.Spectator)
+				{
+					data.CharacterType = charType;
+					data.HighlightColor = highlightColor;
+					data.Team = ETeamType.Spectator;
+					data.IsReady = true;
+					m_LobbyPlayers[i] = data;
+					SessionPlayerDataStore.Instance?.SavePlayerData(data);
+					break;
+				}
+
 				if (data.IsReady)
 				{
 					return;
