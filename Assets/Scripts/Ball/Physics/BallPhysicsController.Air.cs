@@ -134,11 +134,31 @@ public partial class BallPhysicsController
 			return;
 		}
 
-		// 空中飛行時は見つけたSurface上の一点を
-		// 固定された重力源として使用します。
-		m_SurfaceGravity.SetFixedPoint(
-			nearestHit.collider,
-			nearestHit.point);
+		// BallSurfaceSourceを持つObjectでは、
+		// 最初にHitしたTriangleを起点としてSurfaceを追跡します。
+		//
+		// Target Object自体はロックしたまま、
+		// 重力対象のSurfaceだけをBall位置に合わせて更新します。
+		BallSurfaceSource surfaceSource =
+			nearestHit.collider.GetComponent<BallSurfaceSource>();
+
+		bool usesTrackedBallSurface =
+			surfaceSource != null &&
+			surfaceSource.IsReady &&
+			nearestHit.triangleIndex >=
+				0 &&
+			m_SurfaceGravity.SetTrackedBallSurface(
+				surfaceSource,
+				nearestHit.triangleIndex);
+
+		if (!usesTrackedBallSurface)
+		{
+			// BallSurfaceSourceを持たない従来AttachSurfaceは、
+			// 互換性のためFixedPoint方式を維持します。
+			m_SurfaceGravity.SetFixedPoint(
+				nearestHit.collider,
+				nearestHit.point);
+		}
 
 		ChangeMotionState(
 			EBallMotionState.AttractingSurface);
@@ -149,10 +169,10 @@ public partial class BallPhysicsController
 	/// 疑似重力を適用します。
 	/// </summary>
 	/// <remarks>
-	/// 空中飛行中のFixedPoint重力では
-	/// AttractDecelerationを使用します。
+	/// Flying中はTarget Object内で追跡している
+	/// 現在の最近Surface方向へ疑似重力を加えます。
 	///
-	/// 一度SurfaceへバウンドしたLocalSurface重力では
+	/// 一度SurfaceへバウンドしたLocalSurfaceでは
 	/// SurfaceMoveDecelerationを使用し、
 	/// 転がり続けないよう徐々に速度を失わせます。
 	/// </remarks>
@@ -201,8 +221,6 @@ public partial class BallPhysicsController
 		Vector3 currentVelocity =
 			m_Rigidbody.linearVelocity;
 
-		// 空中のスイング状態と、
-		// Surface接触後では別の減速値を使用します。
 		float deceleration =
 			m_SurfaceGravity.IsLocalSurfaceTarget
 				? m_SurfaceMoveDeceleration
@@ -213,24 +231,24 @@ public partial class BallPhysicsController
 				currentVelocity,
 				Vector3.zero,
 				deceleration *
-				Time.fixedDeltaTime);
+					Time.fixedDeltaTime);
 
-		// 慣性を残しながら、
-		// 現在のSurface方向へ疑似重力を追加します。
+		// 現在追跡している最近Surface方向へ
+		// 通常の疑似重力として加速度を加えます。
 		Vector3 nextVelocity =
 			dampedVelocity +
-			gravityDirection *
-			attractionAcceleration *
-			Time.fixedDeltaTime;
+			gravityDirection.normalized *
+				attractionAcceleration *
+				Time.fixedDeltaTime;
 
 		if (m_AttractMaxSpeed >
-			0.0f &&
+				0.0f &&
 			nextVelocity.magnitude >
-			m_AttractMaxSpeed)
+				m_AttractMaxSpeed)
 		{
 			nextVelocity =
 				nextVelocity.normalized *
-				m_AttractMaxSpeed;
+					m_AttractMaxSpeed;
 		}
 
 		m_Rigidbody.linearVelocity =
