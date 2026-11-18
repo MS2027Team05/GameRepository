@@ -16,6 +16,9 @@ public class MatchHudController : MonoBehaviour
 	[SerializeField, TextArea] private string m_RedGoalMessage;
 	[Tooltip("Blueチームが得点した際に表示する文言を設定します。")]
 	[SerializeField, TextArea] private string m_BlueGoalMessage;
+	[Header("リプレイ演出中の文字(任意)")]
+	[SerializeField] private TMPro.TMP_Text m_ReplayMessageText;
+	[SerializeField] private string m_ReplayMessage;
 	private string m_LastGoalMessage;
 	private int m_LastCountdownSeconds = -1;
 
@@ -36,11 +39,13 @@ public class MatchHudController : MonoBehaviour
 		UpdateBlueScore(m_MatchManager.BlueScore);
 		UpdateCountdown();
 		UpdateGoalMessage();
+		UpdateReplayMessage();
 	}
 
 	private void OnDisable()
 	{
 		if (m_GoalMessageText != null) m_GoalMessageText.enabled = false;
+		if (m_ReplayMessageText != null) m_ReplayMessageText.enabled = false;
 		if (m_MatchManager == null)
 		{
 			return;
@@ -67,6 +72,19 @@ public class MatchHudController : MonoBehaviour
 	{
 		UpdateCountdown();
 		UpdateGoalMessage();
+		UpdateReplayMessage();
+	}
+
+	private void UpdateReplayMessage()
+	{
+		if (m_ReplayMessageText == null) return;
+		bool visible = m_MatchManager != null && m_MatchManager.IsSpawned &&
+			m_MatchManager.MatchState == MatchManager.EMatchState.GoalReplay;
+		m_ReplayMessageText.enabled = visible;
+		if (visible && !string.IsNullOrWhiteSpace(m_ReplayMessage))
+		{
+			m_ReplayMessageText.SetText(m_ReplayMessage);
+		}
 	}
 
 	private void UpdateGoalMessage()

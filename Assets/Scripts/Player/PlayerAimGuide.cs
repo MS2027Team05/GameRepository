@@ -61,6 +61,7 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	private bool m_IsTakingOff;
 	private bool m_IsTrackingLanding;
 	private bool m_IsAdditionalMoveAimAvailable = true;
+	private bool m_IsLockOnActive;
 
 	public bool CanFall => m_CanFall;
 	public bool IsTakingOff => m_IsTakingOff;
@@ -280,7 +281,8 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		}
 
 		// 移動可能な地点を捉えていない場合は非表示。
-		if (!m_CanFall ||
+		if (m_IsLockOnActive ||
+			!m_CanFall ||
 			m_IsTakingOff ||
 			m_AimLineStart == null ||
 			(m_IsTrackingLanding && !m_IsAdditionalMoveAimAvailable))
@@ -346,7 +348,8 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		}
 
 		// 飛行中の着地点追跡が無効なら非表示。
-		if (!m_IsTrackingLanding ||
+		if (m_IsLockOnActive ||
+			!m_IsTrackingLanding ||
 			!m_IsAdditionalMoveAimAvailable ||
 			m_AimLineStart == null)
 		{
@@ -424,6 +427,23 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 		else
 		{
 			HideAimPredictionLine();
+		}
+	}
+
+	/// <summary>
+	/// ロックオン状態に応じて予測線の表示を切り替える。
+	/// </summary>
+	public void SetLockOnActive(bool active)
+	{
+		m_IsLockOnActive = active;
+
+		if (active)
+		{
+			HideAimPredictionLine();
+		}
+		else
+		{
+			UpdateAimPredictionLine();
 		}
 	}
 

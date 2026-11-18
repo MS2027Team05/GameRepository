@@ -1,5 +1,6 @@
 ﻿// ElectricAction.cs
 
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -12,6 +13,8 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 	[Header("チャージ設定")]
 	[SerializeField] private float m_ChargeDuration = 1.5f;
 	[SerializeField] private float m_RequiredCost = 20.0f;
+	[Tooltip("チャージしていない間のゲージ減少速度（1秒あたりの割合）")]
+	[SerializeField] private float m_ChargeDecaySpeed = 0.25f;
 
 	[Header("電撃設定")]
 	[SerializeField] private float m_StunDuration = 2.0f;
@@ -33,6 +36,11 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 
 
 	public bool IsCharging => m_IsCharging;
+
+	/// <summary>
+	/// サーバー側で敵プレイヤーへスタンを適用した際に通知します(攻撃者ClientId, 被弾者ClientId)。
+	/// </summary>
+	public static event Action<ulong, ulong> OnServerEnemyStunned;
 
 	public float ChargeRatio =>
 		m_ChargeDuration <= 0.0f
@@ -59,25 +67,54 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 			return;
 		}
 
-		m_ChargeTimer = 0.0f;
+		// 進捗はリセットせず、前回の続きから開始
 		m_IsCharging = true;
 
 		m_NextChargeLogTime = 0.0f;
 		m_LoggedChargeFull = false;
 
 		Debug.Log(
-			$"[Electric Debug] チャージ開始。必要時間={m_ChargeDuration:F2}秒");
+			$"[Electric Debug] チャージ開始。現在の進捗={ChargeRatio * 100.0f:F0}%");
 	}
 
 	/// <summary>
 	/// 電撃チャージを更新します。
+	/// 有効なロックオン対象が存在するときだけチャージを進めます。
 	/// </summary>
 	public void UpdateCharge(float deltaTime)
 	{
-		if (!IsOwner || !m_IsCharging)
+		if (!IsOwner)
 			return;
 
-		float previousRatio = ChargeRatio;
+		// チャージ中でない場合は徐々に減少
+		if (!m_IsCharging)
+		{
+			m_ChargeTimer -=
+				Mathf.Max(0.0f, deltaTime) *
+				m_ChargeDecaySpeed *
+				m_ChargeDuration;
+
+			m_ChargeTimer = Mathf.Max(0.0f, m_ChargeTimer);
+
+			return;
+		}
+
+		// 有効な対象が存在するか確認
+		if (m_LockOnProvider == null ||
+			!m_LockOnProvider.HasValidTarget)
+		{
+			return;
+		}
+
+		// 電撃の対象として有効な種類か確認
+		ELockOnTargetType targetType =
+			m_LockOnProvider.CurrentTargetType;
+
+		if (targetType != ELockOnTargetType.Ball &&
+			targetType != ELockOnTargetType.EnemyPlayer)
+		{
+			return;
+		}
 
 		m_ChargeTimer += Mathf.Max(0.0f, deltaTime);
 
@@ -126,11 +163,11 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 		}
 
 		m_IsCharging = false;
-		m_ChargeTimer = 0.0f;
 
 		m_NextChargeLogTime = 0.0f;
 		m_LoggedChargeFull = false;
 	}
+
 	/// <summary>
 	/// チャージ完了後、ロックオン対象へ電撃を発射します。
 	/// </summary>
@@ -230,6 +267,7 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 		ulong targetId =
 			targetNetworkObject.NetworkObjectId;
 
+		// 発射成功時はチャージ進捗をリセット
 		m_IsCharging = false;
 		m_ChargeTimer = 0.0f;
 
@@ -433,6 +471,7 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 
 			// ボール奪取の成否にかかわらず敵をスタンさせる
 			enemy.ApplyStunOwnerRpc(m_StunDuration);
+			OnServerEnemyStunned?.Invoke(OwnerClientId, enemy.OwnerClientId);
 
 			Debug.Log(
 				$"[Electric Debug] 敵をスタンさせました。Duration={m_StunDuration}");

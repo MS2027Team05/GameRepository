@@ -82,6 +82,11 @@ public class SpectatorCameraDirector : MonoBehaviour
 	private Vector3 m_SmoothedLookAtPoint;
 	private Transform m_ActiveOverviewAnchor;
 
+	// リプレイ上書き制御
+	private bool m_IsReplayOverrideActive;
+	private ETeamType m_ReplayScoringTeam;
+	private Transform m_ReplayBallTarget;
+
 	// キャッシュ参照
 	private BallController m_CachedBall;
 	private GoalController[] m_CachedGoals;
@@ -165,6 +170,17 @@ public class SpectatorCameraDirector : MonoBehaviour
 		// 観戦カメラが非アクティブな端末では何もしない
 		if (m_ManagedCamera == null || !m_ManagedCamera.gameObject.activeInHierarchy)
 		{
+			return;
+		}
+
+		if (m_IsReplayOverrideActive)
+		{
+			Transform replayAnchor = GetGoalAnchor(m_ReplayScoringTeam);
+			if (CurrentShotType != ECameraShotType.GoalArea)
+			{
+				SwitchShot(ECameraShotType.GoalArea, true);
+			}
+			UpdateGoalShot(replayAnchor, m_ReplayBallTarget);
 			return;
 		}
 
@@ -549,7 +565,52 @@ public class SpectatorCameraDirector : MonoBehaviour
 		ApplyLookAtRotation(m_SmoothedLookAtPoint);
 	}
 
-	private void UpdateGoalShot(Transform anchor)
+	/// <summary>
+	/// 得点先チームに対応するゴール前カメラアンカーを取得します。
+	/// </summary>
+	public Transform GetGoalAnchor(ETeamType scoringTeam)
+	{
+		EnsureAnchors();
+		Transform anchor = (scoringTeam == ETeamType.Red) ? m_RedGoalAnchor : m_BlueGoalAnchor;
+		if (anchor == null)
+		{
+			anchor = m_RedGoalAnchor != null ? m_RedGoalAnchor : m_BlueGoalAnchor;
+		}
+		return anchor;
+	}
+
+	/// <summary>
+	/// リプレイ再生中のゴールカメラ上書き追従を開始・解除します。
+	/// </summary>
+	public void SetReplayOverride(bool active, ETeamType scoringTeam, Transform replayBallTransform)
+	{
+		m_IsReplayOverrideActive = active;
+		m_ReplayScoringTeam = scoringTeam;
+		m_ReplayBallTarget = replayBallTransform;
+
+		if (!active)
+		{
+			return;
+		}
+
+		Transform anchor = GetGoalAnchor(scoringTeam);
+		if (CurrentShotType != ECameraShotType.GoalArea)
+		{
+			SwitchShot(ECameraShotType.GoalArea, true);
+		}
+
+		if (m_ManagedCamera != null && anchor != null)
+		{
+			m_CurrentFollowVelocity = Vector3.zero;
+			m_CurrentLookAtVelocity = Vector3.zero;
+			m_ManagedCamera.transform.position = anchor.position;
+			Vector3 initialLookAt = replayBallTransform != null ? replayBallTransform.position : Vector3.zero;
+			m_SmoothedLookAtPoint = initialLookAt;
+			ApplyLookAtRotation(m_SmoothedLookAtPoint);
+		}
+	}
+
+	private void UpdateGoalShot(Transform anchor, Transform overrideBall = null)
 	{
 		if (m_ManagedCamera == null) return;
 
@@ -558,7 +619,9 @@ public class SpectatorCameraDirector : MonoBehaviour
 			m_ManagedCamera.transform.position = Vector3.SmoothDamp(m_ManagedCamera.transform.position, anchor.position, ref m_CurrentFollowVelocity, 0.2f);
 		}
 
-		Vector3 targetLookAt = m_CachedBall != null ? m_CachedBall.transform.position : Vector3.zero;
+		Vector3 targetLookAt = overrideBall != null
+			? overrideBall.position
+			: (m_CachedBall != null ? m_CachedBall.transform.position : Vector3.zero);
 		m_SmoothedLookAtPoint = Vector3.SmoothDamp(m_SmoothedLookAtPoint, targetLookAt, ref m_CurrentLookAtVelocity, 0.15f);
 
 		ApplyLookAtRotation(m_SmoothedLookAtPoint);

@@ -18,6 +18,10 @@ public sealed class PlayerAppearance : MonoBehaviour
 	[Header("チームカラー設定")]
 	[SerializeField] private Renderer[] m_TeamColorRenderers;
 
+	[Header("電流カラー設定")]
+	[Tooltip("このプレイヤーが使用する電流の色を、選択色または所属チームの色から決定します。")]
+	[SerializeField] private EEffectColorSource m_EffectColorSource;
+
 	private PlayerNetworkProfile m_NetworkProfile;
 	private PlayerSilhouette m_PlayerSilhouette;
 
@@ -29,6 +33,12 @@ public sealed class PlayerAppearance : MonoBehaviour
 	private ETeamType m_CurrentTeam;
 	private Material m_CurrentMaterial;
 	private Material m_CurrentTeamMaterial;
+	private bool m_HasSelectedEffectColor;
+
+	/// <summary>
+	/// 電流に使用する色の変更を演出側へ通知します。
+	/// </summary>
+	public event System.Action EffectColorChanged;
 
 	public PlayerAppearanceCatalog AppearanceCatalog { get => m_AppearanceCatalog; }
 	public bool HasAppliedCharacterType { get => m_HasAppliedCharacterType; }
@@ -159,6 +169,49 @@ public sealed class PlayerAppearance : MonoBehaviour
 		m_CurrentColor = colorType;
 		m_CurrentMaterial = activeCharacterType == ECharacterType.Woman ? womanMaterial : manMaterial;
 		m_HasAppliedColor = m_CurrentMaterial != null;
+		m_HasSelectedEffectColor = true;
+		EffectColorChanged?.Invoke();
+	}
+
+	/// <summary>
+	/// Inspectorで指定した取得元に対応する電流用カラーを取得します。
+	/// </summary>
+	public bool TryGetEffectColor(out Color color)
+	{
+		return TryGetEffectColor(out color, out _);
+	}
+
+	/// <summary>
+	/// 電流の色とVFX用パレット種別を同じ取得元から返します。
+	/// チーム未確定時にはカタログの既定表示色を使います。
+	/// </summary>
+	public bool TryGetEffectColor(out Color color, out EHighlightColor? paletteColor)
+	{
+		color = default;
+		paletteColor = null;
+		if (m_AppearanceCatalog == null)
+		{
+			return false;
+		}
+
+		if (m_EffectColorSource == EEffectColorSource.TeamColor)
+		{
+			color = m_AppearanceCatalog.GetTeamDisplayColor(m_CurrentTeam);
+			paletteColor = m_CurrentTeam switch
+			{
+				ETeamType.Red => EHighlightColor.Red,
+				ETeamType.Blue => EHighlightColor.Blue,
+				_ => null,
+			};
+			return true;
+		}
+
+		if (!m_HasSelectedEffectColor || !m_AppearanceCatalog.TryGetPreviewColor(m_CurrentColor, out color))
+		{
+			return false;
+		}
+		paletteColor = m_CurrentColor;
+		return true;
 	}
 
 	/// <summary>
@@ -167,6 +220,10 @@ public sealed class PlayerAppearance : MonoBehaviour
 	public void ApplyTeamColor(ETeamType team)
 	{
 		m_CurrentTeam = team;
+		if (m_EffectColorSource == EEffectColorSource.TeamColor)
+		{
+			EffectColorChanged?.Invoke();
+		}
 
 		if (team == ETeamType.None)
 		{
@@ -221,6 +278,9 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 	private void OnValidate()
 	{
+		UnityEditor.EditorApplication.delayCall -= NotifyEffectColorChangedDelayed;
+		UnityEditor.EditorApplication.delayCall += NotifyEffectColorChangedDelayed;
+
 		if (Application.isPlaying)
 		{
 			return;
@@ -228,6 +288,14 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
 		UnityEditor.EditorApplication.delayCall += ApplyAppearanceDelayed;
+	}
+
+	private void NotifyEffectColorChangedDelayed()
+	{
+		if (this != null)
+		{
+			EffectColorChanged?.Invoke();
+		}
 	}
 
 	private void ApplyAppearanceDelayed()
@@ -250,6 +318,7 @@ public sealed class PlayerAppearance : MonoBehaviour
 	private void OnDestroy()
 	{
 		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
+		UnityEditor.EditorApplication.delayCall -= NotifyEffectColorChangedDelayed;
 	}
 #endif
 }

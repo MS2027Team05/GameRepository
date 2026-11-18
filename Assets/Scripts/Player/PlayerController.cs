@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
@@ -57,6 +58,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	public EPlayerState CurrentState { get; private set; } = EPlayerState.Idle;
 	public bool IsMatchActionEnabled => m_IsMatchActionEnabled;
+
+	/// <summary>
+	/// Owner端末で空中移動(離陸または空中追加移動)が開始された際にClientIdを通知します。
+	/// </summary>
+	public static event Action<ulong> OnLocalPlayerAirMoveStarted;
 
 	private Coroutine m_StunCoroutine;
 
@@ -329,11 +335,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 	}
 
+
 	/// <summary>
 	/// 新フロー: L1長押し中の電撃チャージおよび追尾パスチャージを更新します。
 	/// </summary>
 	private void UpdateReworkedSubAction()
 	{
+		// 電撃チャージの更新は、チャージ中でなくても毎フレーム実行する
+		m_ElectricAction?.UpdateCharge(Time.deltaTime);
+
 		// パスモード中は、左クリックを離していても制限時間を計測する
 		if (m_IsPassModeActive)
 		{
@@ -378,8 +388,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_LockOnProvider?.UpdateTargetSearch();
 
 			LogPassLockOnTarget();
-
-			m_ElectricAction?.UpdateCharge(Time.deltaTime);
 			return;
 		}
 
@@ -590,6 +598,10 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		ActivateMovingEffect(targetPoint);
 		m_AimGuide?.BeginLandingTracking(targetPoint, targetNormal);
 		m_CameraEffect?.PlayFallEffect();
+		if (IsOwner)
+		{
+			OnLocalPlayerAirMoveStarted?.Invoke(OwnerClientId);
+		}
 	}
 
 	private void ActivateMovingEffect(Vector3 targetPoint)
@@ -1103,6 +1115,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	{
 		SetMatchActionEnabled(false);
 		Respawn(position, rotation);
+		m_PlayerResource?.ResetToFull();
 		ConfirmRestartServerRpc(sequence);
 	}
 
