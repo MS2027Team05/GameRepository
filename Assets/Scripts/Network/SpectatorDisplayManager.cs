@@ -172,6 +172,17 @@ public class SpectatorDisplayManager : MonoBehaviour
 		{
 			m_SpectatorCamera.targetDisplay = targetDisplayIndex;
 			m_SpectatorCamera.gameObject.SetActive(true);
+			m_SpectatorCamera.enabled = true;
+
+			// Display 1(targetDisplay == 0)で観戦カメラを映す純粋観戦端末では、シーン既定のMainCameraが同時描画して競合するのを防ぐ
+			if (targetDisplayIndex == 0 && (!isServer || !NetworkConnectManager.IsPlayerHost))
+			{
+				Camera mainCam = Camera.main;
+				if (mainCam != null && mainCam != m_SpectatorCamera && mainCam.targetDisplay == 0)
+				{
+					mainCam.enabled = false;
+				}
+			}
 		}
 
 		if (m_SpectatorUIRoot != null)

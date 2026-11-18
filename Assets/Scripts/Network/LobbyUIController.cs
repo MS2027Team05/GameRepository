@@ -138,12 +138,17 @@ public class LobbyUIController : MonoBehaviour
 		SetPanelActive(m_DisconnectNoticePanel, false);
 
 		// 3. プレイヤー操作・キャラクリ3D・デバッグの表示制御
-		bool isSpectator = SpectatorDisplayManager.IsLocalSpectator;
+		bool isSpectator = IsLocalPlayerSpectator();
 		if ((isServer && !isPlayerHost) || isSpectator)
 		{
 			// 本番観戦ホストおよび観戦者クライアント: プレイヤー操作UIおよびデバッグUIは非表示、3D台座・モデルはタイトル非表示時に表示
 			SetPanelActive(m_PlayerControlPanel, false);
 			SetDebugControlsActive(false);
+
+			if (m_AppearancePickerUI != null)
+			{
+				m_AppearancePickerUI.ClosePicker();
+			}
 
 			if (m_CharacterDisplayRoot != null)
 			{
@@ -175,10 +180,26 @@ public class LobbyUIController : MonoBehaviour
 		}
 	}
 
+	private bool IsLocalPlayerSpectator()
+	{
+		if (SpectatorDisplayManager.IsLocalSpectator)
+		{
+			return true;
+		}
+
+		if (m_LobbyManager != null && m_LobbyManager.TryGetLocalPlayerData(out var localPlayer))
+		{
+			return localPlayer.Team == ETeamType.Spectator;
+		}
+
+		return false;
+	}
+
 	private void HandleTitleDismissed()
 	{
 		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
 		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
+		bool isSpectator = IsLocalPlayerSpectator();
 
 		// ホスト端末ならタイトル解除時にホスト用パネルを表示
 		if (isServer)
@@ -195,9 +216,9 @@ public class LobbyUIController : MonoBehaviour
 			m_CharacterDisplayRoot.SetActive(true);
 		}
 
-		if (!isServer || isPlayerHost)
+		if ((!isServer || isPlayerHost) && !isSpectator)
 		{
-			// クライアントまたは兼任ホストならキャラクリUIを表示
+			// クライアントまたは兼任ホスト(非観戦者)ならキャラクリUIを表示
 			SetPanelActive(
 				m_PlayerControlPanel,
 				true,
@@ -207,6 +228,15 @@ public class LobbyUIController : MonoBehaviour
 			if (isServer && isPlayerHost)
 			{
 				SetDebugControlsActive(true);
+			}
+		}
+		else
+		{
+			SetPanelActive(m_PlayerControlPanel, false);
+			SetDebugControlsActive(false);
+			if (m_AppearancePickerUI != null)
+			{
+				m_AppearancePickerUI.ClosePicker();
 			}
 		}
 
@@ -496,6 +526,17 @@ public class LobbyUIController : MonoBehaviour
 	{
 		if (!m_LobbyManager.TryGetLocalPlayerData(out var localPlayer))
 		{
+			return;
+		}
+
+		// 観戦者へ切り替わった場合はプレイヤー操作パネルを非表示にする
+		if (localPlayer.Team == ETeamType.Spectator || SpectatorDisplayManager.IsLocalSpectator)
+		{
+			if (m_AppearancePickerUI != null)
+			{
+				m_AppearancePickerUI.ClosePicker();
+			}
+			SetPanelActive(m_PlayerControlPanel, false);
 			return;
 		}
 
