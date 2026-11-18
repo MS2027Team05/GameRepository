@@ -14831,7 +14831,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1659972142
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16073,6 +16073,8 @@ MonoBehaviour:
   m_OverviewMaxApproachRatio: 0.55
   m_OverviewMinDistanceToBall: 12
   m_OverviewZoomSmoothTime: 0.6
+  m_PostCutRotationLockDuration: 0
+  m_FollowRotationDeadZoneAngle: 0
 --- !u!114 &1836264175
 MonoBehaviour:
   m_ObjectHideFlags: 0

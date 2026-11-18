@@ -12,9 +12,6 @@ public sealed partial class BallSurfaceSimulation
 {
 	private bool m_IsConcaveAirborneTransfer;
 
-	private Vector3 m_ConcaveBallCenter;
-	private Vector3 m_ConcaveBallWorldVelocity;
-
 	private Vector3 m_ConcaveReferenceVelocity;
 	private Vector3 m_ConcaveReferenceNormal;
 	private int m_ConcaveReferenceEntryEdgeIndex;
@@ -68,28 +65,41 @@ public sealed partial class BallSurfaceSimulation
 		Vector3 sourceNormal =
 			currentTriangleNormal.normalized;
 
-		float centerOffset =
-			Mathf.Max(
-				m_BallRadius +
-					m_Height,
-				m_MinimumCalculationValue);
+		Vector3 ballCenter;
+		Vector3 ballWorldVelocity;
 
-		// Concaveへ入った瞬間のBall中心は、
-		// Smooth Normalから作り直しません。
-		//
-		// Edgeへ到達した時点の現在面Normalと
-		// 既存HeightからWorld位置をそのまま引き継ぎます。
-		Vector3 ballCenter =
-			edgePoint +
-			sourceNormal *
-				centerOffset;
+		if (m_HasWorldState)
+		{
+			ballCenter =
+				m_WorldCenter;
 
-		// World速度も現在面のSurface / Vertical成分から
-		// そのまま復元し、Concave切替だけでは方向を変えません。
-		Vector3 ballWorldVelocity =
-			m_SurfaceVelocity +
-			sourceNormal *
-				m_VerticalVelocity;
+			ballWorldVelocity =
+				m_WorldVelocity;
+		}
+		else
+		{
+			float centerOffset =
+				Mathf.Max(
+					m_BallRadius +
+						m_Height,
+					m_MinimumCalculationValue);
+
+			ballCenter =
+				edgePoint +
+				sourceNormal *
+					centerOffset;
+
+			ballWorldVelocity =
+				m_SurfaceVelocity +
+				sourceNormal *
+					m_VerticalVelocity;
+		}
+
+		Vector3 beforeCenter =
+			ballCenter;
+
+		Vector3 beforeVelocity =
+			ballWorldVelocity;
 
 		if (!TryMapConcaveReferenceVelocity(
 			m_SurfaceVelocity,
@@ -114,11 +124,9 @@ public sealed partial class BallSurfaceSimulation
 		m_IsConcaveAirborneTransfer =
 			true;
 
-		m_ConcaveBallCenter =
-			ballCenter;
-
-		m_ConcaveBallWorldVelocity =
-			ballWorldVelocity;
+		SetWorldState(
+			ballCenter,
+			ballWorldVelocity);
 
 		m_CurrentTriangleIndex =
 			neighborTriangleIndex;
@@ -140,6 +148,11 @@ public sealed partial class BallSurfaceSimulation
 
 		SyncConcaveAirbornePublicState();
 
+		ValidateTransitionWorldState(
+			beforeCenter,
+			beforeVelocity,
+			"Face -> Concave");
+
 		return true;
 	}
 
@@ -154,10 +167,17 @@ public sealed partial class BallSurfaceSimulation
 	/// 途中の面へのBounceを取りこぼすことを防ぎます。
 	/// </remarks>
 	private EAdvanceResult AdvanceConcaveAirborneTransfer(
-		float deltaTime)
+		float deltaTime,
+		out float unusedTime)
 	{
+		unusedTime =
+			0.0f;
+
 		if (!m_IsConcaveAirborneTransfer)
 		{
+			unusedTime =
+				deltaTime;
+
 			return EAdvanceResult.Moved;
 		}
 
@@ -215,8 +235,15 @@ public sealed partial class BallSurfaceSimulation
 					vertexA,
 					vertexB,
 					vertexC,
-					currentNormal))
+					currentNormal,
+					out float stationarySegmentUnusedTime))
 				{
+					unusedTime =
+						Mathf.Clamp(
+							stationarySegmentUnusedTime,
+							0.0f,
+							remainingTime);
+
 					return EAdvanceResult.Moved;
 				}
 
@@ -333,16 +360,24 @@ public sealed partial class BallSurfaceSimulation
 				remainingTime *
 					segmentFraction;
 
-			// Referenceが現在Triangle上を進んだ時間だけ、
-			// BallもWorld空間で進めます。
-			// この区間の接触先は必ず現在Triangleです。
 			if (TryAdvanceConcaveBallSegment(
 				segmentTime,
 				vertexA,
 				vertexB,
 				vertexC,
-				currentNormal))
+				currentNormal,
+				out float segmentUnusedTime))
 			{
+				// Contactまでに使わなかった区間に加え、
+				// Referenceがまだ進んでいない後続時間も返します。
+				unusedTime =
+					Mathf.Clamp(
+						remainingTime -
+							segmentTime +
+							segmentUnusedTime,
+						0.0f,
+						remainingTime);
+
 				return EAdvanceResult.Moved;
 			}
 
@@ -400,8 +435,36 @@ public sealed partial class BallSurfaceSimulation
 				return EAdvanceResult.InvalidGeometry;
 			}
 
-			// Ball本体のWorld速度は一切変更せず、
-			// Reference速度だけを共有Edge基準で隣面へ写します。
+			if (edgeType ==
+				BallSurfaceMeshData.EEdgeType.Convex)
+			{
+				Vector3 beforeCenter =
+					m_WorldCenter;
+
+				Vector3 beforeVelocity =
+					m_WorldVelocity;
+
+				if (BeginConvexEdgeTransition(
+					crossedEdgeIndex,
+					neighborTriangleIndex,
+					neighborEntryEdgeIndex,
+					currentNormal,
+					neighborNormal))
+				{
+					ClearConcaveAirborneTransferState();
+
+					ValidateTransitionWorldState(
+						beforeCenter,
+						beforeVelocity,
+						"Concave -> Convex");
+
+					unusedTime =
+						remainingTime;
+
+					return EAdvanceResult.Moved;
+				}
+			}
+
 			if (!TryMapConcaveReferenceVelocity(
 				m_ConcaveReferenceVelocity,
 				neighborTriangleIndex,
@@ -432,7 +495,6 @@ public sealed partial class BallSurfaceSimulation
 
 			transitionCount++;
 
-			// crossingFractionが極端に0へ寄った場合の無限Loop防止です。
 			if (segmentTime <=
 				m_MinimumCalculationValue)
 			{
@@ -461,8 +523,12 @@ public sealed partial class BallSurfaceSimulation
 		Vector3 vertexA,
 		Vector3 vertexB,
 		Vector3 vertexC,
-		Vector3 triangleNormal)
+		Vector3 triangleNormal,
+		out float unusedTime)
 	{
+		unusedTime =
+			0.0f;
+
 		if (deltaTime <=
 			m_MinimumCalculationValue)
 		{
@@ -470,14 +536,11 @@ public sealed partial class BallSurfaceSimulation
 		}
 
 		Vector3 startCenter =
-			m_ConcaveBallCenter;
+			m_WorldCenter;
 
 		Vector3 startVelocity =
-			m_ConcaveBallWorldVelocity;
+			m_WorldVelocity;
 
-		// Ballの速度方向は強制変更せず、
-		// Referenceが現在いるTriangleの幾何Normal方向へ
-		// この区間の重力だけを適用します。
 		Vector3 acceleration =
 			-triangleNormal.normalized *
 				m_GravityAcceleration;
@@ -507,15 +570,13 @@ public sealed partial class BallSurfaceSimulation
 			vertexC,
 			triangleNormal,
 			out Vector3 contactPoint,
-			out Vector3 contactVelocity) &&
+			out Vector3 contactVelocity,
+			out float contactTime) &&
 			Vector3.Dot(
 				contactVelocity,
 				triangleNormal) <
 				-m_MinimumCalculationValue)
 		{
-			// Sharp Edge付近のSmooth Normal補間で
-			// Bounce方向が斜めになることを避けるため、
-			// 実際に接触したTriangleの幾何Normalを使用します。
 			ApplyConcaveSurfaceBounce(
 				contactPoint,
 				triangleNormal,
@@ -523,14 +584,21 @@ public sealed partial class BallSurfaceSimulation
 
 			ClearConcaveAirborneTransferState();
 
+			unusedTime =
+				Mathf.Max(
+					0.0f,
+					deltaTime -
+						Mathf.Clamp(
+							contactTime,
+							0.0f,
+							deltaTime));
+
 			return true;
 		}
 
-		m_ConcaveBallCenter =
-			endCenter;
-
-		m_ConcaveBallWorldVelocity =
-			endVelocity;
+		SetWorldState(
+			endCenter,
+			endVelocity);
 
 		return false;
 	}
@@ -745,13 +813,17 @@ public sealed partial class BallSurfaceSimulation
 		Vector3 vertexC,
 		Vector3 triangleNormal,
 		out Vector3 contactPoint,
-		out Vector3 contactVelocity)
+		out Vector3 contactVelocity,
+		out float contactTime)
 	{
 		contactPoint =
 			Vector3.zero;
 
 		contactVelocity =
 			Vector3.zero;
+
+		contactTime =
+			0.0f;
 
 		float startClearance =
 			Vector3.Dot(
@@ -816,6 +888,9 @@ public sealed partial class BallSurfaceSimulation
 			startVelocity +
 			acceleration *
 				hitTime;
+
+		contactTime =
+			hitTime;
 
 		return true;
 	}
@@ -1013,25 +1088,18 @@ public sealed partial class BallSurfaceSimulation
 		Vector3 bounceNormal,
 		Vector3 incomingWorldVelocity)
 	{
-		// Concave空中中に実Ballが上下へ動いても、
-		// Surface上での進行方向は面を展開したときの
-		// Reference進行方向を引き継ぎます。
-		//
-		// ただし速度量までReferenceから復元すると、
-		// 実Ballの接触直前の接線速度より大きい値へ戻り、
-		// 接触後に加速したように見える場合があります。
-		//
-		// そのため方向だけReferenceから取得し、
-		// 速度量は実Ballの接触直前の接線速度を使用します。
+		Vector3 normalizedBounceNormal =
+			bounceNormal.normalized;
+
 		Vector3 referenceTangentVelocity =
 			Vector3.ProjectOnPlane(
 				m_ConcaveReferenceVelocity,
-				bounceNormal);
+				normalizedBounceNormal);
 
 		Vector3 incomingTangentVelocity =
 			Vector3.ProjectOnPlane(
 				incomingWorldVelocity,
-				bounceNormal);
+				normalizedBounceNormal);
 
 		float desiredSurfaceSpeed =
 			incomingTangentVelocity.magnitude *
@@ -1053,7 +1121,7 @@ public sealed partial class BallSurfaceSimulation
 		{
 			desiredSurfaceVelocity =
 				incomingTangentVelocity *
-				m_BounceTangentialRetention;
+					m_BounceTangentialRetention;
 		}
 
 		if (m_MaxBounceTangentialSpeed >
@@ -1074,7 +1142,7 @@ public sealed partial class BallSurfaceSimulation
 				0.0f,
 				-Vector3.Dot(
 					incomingWorldVelocity,
-					bounceNormal));
+					normalizedBounceNormal));
 
 		float bounceSpeed =
 			0.0f;
@@ -1113,6 +1181,14 @@ public sealed partial class BallSurfaceSimulation
 
 		m_VerticalVelocity =
 			bounceSpeed;
+
+		SetWorldState(
+			contactPoint +
+			normalizedBounceNormal *
+				m_BallRadius,
+			desiredSurfaceVelocity +
+			normalizedBounceNormal *
+				bounceSpeed);
 	}
 
 	/// <summary>
@@ -1122,6 +1198,7 @@ public sealed partial class BallSurfaceSimulation
 	private void SyncConcaveAirbornePublicState()
 	{
 		if (!m_IsConcaveAirborneTransfer ||
+			!m_HasWorldState ||
 			m_ConcaveReferenceNormal.sqrMagnitude <=
 				m_MinimumCalculationValue *
 					m_MinimumCalculationValue)
@@ -1134,17 +1211,17 @@ public sealed partial class BallSurfaceSimulation
 
 		m_SurfaceVelocity =
 			Vector3.ProjectOnPlane(
-				m_ConcaveBallWorldVelocity,
+				m_WorldVelocity,
 				referenceNormal);
 
 		m_VerticalVelocity =
 			Vector3.Dot(
-				m_ConcaveBallWorldVelocity,
+				m_WorldVelocity,
 				referenceNormal);
 
 		float signedDistance =
 			Vector3.Dot(
-				m_ConcaveBallCenter -
+				m_WorldCenter -
 					m_SurfacePoint,
 				referenceNormal);
 
@@ -1162,12 +1239,6 @@ public sealed partial class BallSurfaceSimulation
 	{
 		m_IsConcaveAirborneTransfer =
 			false;
-
-		m_ConcaveBallCenter =
-			Vector3.zero;
-
-		m_ConcaveBallWorldVelocity =
-			Vector3.zero;
 
 		m_ConcaveReferenceVelocity =
 			Vector3.zero;

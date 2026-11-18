@@ -5,6 +5,9 @@
 /// </summary>
 public partial class BallPhysicsController
 {
+	private bool m_HasPendingSurfaceExit;
+	private Vector3 m_PendingSurfaceExitVelocity;
+
 	/// <summary>
 	/// BallSurfaceへロックしてSurface Physicsを開始します。
 	/// </summary>
@@ -32,6 +35,9 @@ public partial class BallPhysicsController
 		{
 			return false;
 		}
+
+		// 新しいSurfaceへ入る時点で、以前の出口保留状態は破棄します。
+		ClearPendingSurfaceExit();
 
 		// Transform Scaleなどが変わった場合にも
 		// 現在のBall半径をSurface Simulationへ反映します。
@@ -78,6 +84,16 @@ public partial class BallPhysicsController
 	/// </summary>
 	private void UpdateSurfaceSimulation()
 	{
+		// Surface端へ到達したFrameではKinematicのまま出口位置を確定し、
+		// 次のFixedUpdate開始時にDynamicへ戻します。
+		// FixedUpdate途中でDynamicへ戻すと、その直後のPhysics更新で
+		// 1Step分が追加で進むため、二重進行を避けます。
+		if (m_HasPendingSurfaceExit)
+		{
+			CompletePendingSurfaceExit();
+			return;
+		}
+
 		if (!m_SurfaceSimulation.IsInitialized)
 		{
 			Debug.LogWarning(
@@ -103,8 +119,14 @@ public partial class BallPhysicsController
 			case BallSurfaceSimulation.EAdvanceResult.ConcaveEdgeReached:
 			case BallSurfaceSimulation.EAdvanceResult.BoundaryEdgeReached:
 			case BallSurfaceSimulation.EAdvanceResult.UnsupportedEdgeReached:
-				ApplySurfacePosition(
-					false);
+				if (!BeginPendingSurfaceExit())
+				{
+					Debug.LogWarning(
+						$"{name}: Surface出口のWorld状態を取得できなかったため停止します。 Result={result}",
+						this);
+
+					StopSurfaceMotionSafely();
+				}
 				break;
 
 			case BallSurfaceSimulation.EAdvanceResult.NotInitialized:
@@ -319,27 +341,102 @@ public partial class BallPhysicsController
 		return true;
 	}
 
+
+	/// <summary>
+	/// Surface端へ到達したWorld位置と速度を保持し、
+	/// 次のFixedUpdateでFlyingへ戻す準備をします。
+	/// </summary>
+	private bool BeginPendingSurfaceExit()
+	{
+		if (!m_SurfaceSimulation.TryGetWorldCenter(
+			out Vector3 worldCenter) ||
+			!m_SurfaceSimulation.TryGetWorldVelocity(
+				out Vector3 worldVelocity))
+		{
+			return false;
+		}
+
+		Vector3 colliderCenterOffset =
+			transform.TransformVector(
+				m_BallCollider.center);
+
+		// このFixedUpdateではKinematicを維持したまま、
+		// Surface計算で到達した正確な出口位置だけを反映します。
+		m_Rigidbody.position =
+			worldCenter -
+			colliderCenterOffset;
+
+		m_PendingSurfaceExitVelocity =
+			worldVelocity;
+
+		m_HasPendingSurfaceExit =
+			true;
+
+		m_SurfaceSimulation.Reset();
+		m_SurfaceGravity.Clear();
+
+		return true;
+	}
+
+	/// <summary>
+	/// 前FixedUpdateで確定したSurface出口速度をRigidbodyへ渡し、
+	/// 通常のFlying状態へ戻します。
+	/// </summary>
+	private void CompletePendingSurfaceExit()
+	{
+		Vector3 exitVelocity =
+			m_PendingSurfaceExitVelocity;
+
+		ClearPendingSurfaceExit();
+
+		m_Rigidbody.isKinematic =
+			false;
+
+		m_Rigidbody.linearVelocity =
+			exitVelocity;
+
+		m_Rigidbody.angularVelocity =
+			Vector3.zero;
+
+		m_FlightDirection =
+			exitVelocity.sqrMagnitude >
+				Mathf.Epsilon
+				? exitVelocity.normalized
+				: Vector3.zero;
+
+		m_PrePhysicsVelocity =
+			exitVelocity;
+
+		m_SurfaceGravity.Clear();
+
+		m_NextAttractSearchTime =
+			Time.time +
+			m_AttractSearchInterval;
+
+		ChangeMotionState(
+			EBallMotionState.Flying);
+	}
+
+	/// <summary>
+	/// 保留中のSurface出口状態を破棄します。
+	/// </summary>
+	private void ClearPendingSurfaceExit()
+	{
+		m_HasPendingSurfaceExit =
+			false;
+
+		m_PendingSurfaceExitVelocity =
+			Vector3.zero;
+	}
+
 	/// <summary>
 	/// Surface Physicsが保持している速度をWorld速度へ戻します。
 	/// </summary>
 	private bool TryGetSurfaceWorldVelocity(
 		out Vector3 worldVelocity)
 	{
-		worldVelocity =
-			Vector3.zero;
-
-		if (!m_SurfaceSimulation.TryGetCurrentSurfaceNormal(
-			out Vector3 surfaceNormal))
-		{
-			return false;
-		}
-
-		worldVelocity =
-			m_SurfaceSimulation.SurfaceVelocity +
-			surfaceNormal *
-				m_SurfaceSimulation.VerticalVelocity;
-
-		return true;
+		return m_SurfaceSimulation.TryGetWorldVelocity(
+			out worldVelocity);
 	}
 
 	/// <summary>

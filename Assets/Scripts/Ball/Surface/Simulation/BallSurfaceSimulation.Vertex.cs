@@ -154,33 +154,87 @@ public sealed partial class BallSurfaceSimulation
 	}
 
 	/// <summary>
-	/// Convex Edge端のVertexへ到達した位置から、
-	/// Vertex中心の球面パッチ移動を開始します。
+	/// Face上で2本のEdgeへ同時到達した実Convex Vertexへ直接進入します。
 	/// </summary>
-	/// <param name="vertexPoint">
-	/// 到達したVertexのWorld座標です。
-	/// </param>
-	/// <param name="ballCenterOffset">
-	/// Vertex到達時に使用していたBall中心Offsetです。
-	/// </param>
-	/// <param name="incomingSurfaceVelocity">
-	/// Vertexへ進入したSurface方向速度です。
-	/// </param>
-	private bool BeginConvexVertexSpherePatch(
+	private bool TryBeginDirectConvexVertexSpherePatch(
 		Vector3 vertexPoint,
-		Vector3 ballCenterOffset,
-		Vector3 incomingSurfaceVelocity)
+		Vector3 faceNormal)
 	{
 		if (m_SurfaceSource ==
 				null ||
 			m_MeshData ==
 				null ||
-			ballCenterOffset.sqrMagnitude <=
-				m_MinimumCalculationValue *
-					m_MinimumCalculationValue ||
-			incomingSurfaceVelocity.sqrMagnitude <=
+			faceNormal.sqrMagnitude <=
 				m_MinimumCalculationValue *
 					m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		Vector3 localVertexPoint =
+			m_SurfaceSource.transform.InverseTransformPoint(
+				vertexPoint);
+
+		// 実Convex Vertexでない同時Edge到達は、
+		// 従来の決定論的Edge選択へフォールバックします。
+		if (!m_MeshData.TryGetIncidentConvexEdges(
+			localVertexPoint,
+			out BallSurfaceMeshData.ConvexEdgeReference[] incidentEdges) ||
+			incidentEdges ==
+				null ||
+			incidentEdges.Length <
+				3)
+		{
+			return false;
+		}
+
+		Vector3 normalizedFaceNormal =
+			faceNormal.normalized;
+
+		float offsetDistance =
+			Mathf.Max(
+				m_BallRadius +
+					m_Height,
+				m_MinimumCalculationValue);
+
+		Vector3 worldCenter =
+			vertexPoint +
+			normalizedFaceNormal *
+				offsetDistance;
+
+		Vector3 worldVelocity =
+			m_SurfaceVelocity +
+			normalizedFaceNormal *
+				m_VerticalVelocity;
+
+		SetWorldState(
+			worldCenter,
+			worldVelocity);
+
+		return BeginConvexVertexSpherePatch(
+			vertexPoint);
+	}
+
+	/// <summary>
+	/// FaceまたはConvex Edgeから実Vertexへ到達したWorldStateを使い、
+	/// Vertex中心の球面パッチ移動を開始します。
+	/// </summary>
+	/// <remarks>
+	/// Traversal切替のためにBall中心位置や速度方向を作り直さず、
+	/// 現在のWorld中心とWorld速度をVertex基準の
+	/// Radial / Tangent成分へ分解します。
+	///
+	/// FaceからVertexへ直接入った場合だけ既存のConvex減速を1回適用し、
+	/// Edgeですでに減速済みの場合は同じ角通過中に再適用しません。
+	/// </remarks>
+	private bool BeginConvexVertexSpherePatch(
+		Vector3 vertexPoint)
+	{
+		if (m_SurfaceSource ==
+				null ||
+			m_MeshData ==
+				null ||
+			!m_HasWorldState)
 		{
 			return false;
 		}
@@ -208,16 +262,41 @@ public sealed partial class BallSurfaceSimulation
 			return false;
 		}
 
-		Vector3 radialDirection =
-			ballCenterOffset.normalized;
+		Vector3 beforeCenter =
+			m_WorldCenter;
 
-		float surfaceSpeed =
-			incomingSurfaceVelocity.magnitude;
+		Vector3 beforeVelocity =
+			m_WorldVelocity;
+
+		Vector3 radialVector =
+			beforeCenter -
+				vertexPoint;
+
+		float currentRadius =
+			radialVector.magnitude;
+
+		if (currentRadius <=
+				m_MinimumCalculationValue ||
+			currentRadius <
+				m_BallRadius -
+					m_TransitionPositionTolerance)
+		{
+			return false;
+		}
+
+		Vector3 radialDirection =
+			radialVector /
+				currentRadius;
+
+		float radialSpeed =
+			Vector3.Dot(
+				beforeVelocity,
+				radialDirection);
 
 		Vector3 tangentVelocity =
-			Vector3.ProjectOnPlane(
-				incomingSurfaceVelocity,
-				radialDirection);
+			beforeVelocity -
+			radialDirection *
+				radialSpeed;
 
 		if (tangentVelocity.sqrMagnitude <=
 			m_MinimumCalculationValue *
@@ -225,10 +304,6 @@ public sealed partial class BallSurfaceSimulation
 		{
 			return false;
 		}
-
-		tangentVelocity =
-			tangentVelocity.normalized *
-			surfaceSpeed;
 
 		Vector3 rotationAxis =
 			Vector3.Cross(
@@ -245,10 +320,17 @@ public sealed partial class BallSurfaceSimulation
 		rotationAxis.Normalize();
 
 		// FaceからVertexへ直接入った場合はここで1回だけ減速します。
-		// すでにConvex Edge進入時に減速済みなら倍率は1.0となり、
-		// Edge → Vertexの連続遷移で二重減速しません。
+		// Edgeですでに減速済みならConsume側が1.0を返すため、
+		// Edge -> Vertexの連続遷移では速度を重複して落としません。
 		float speedRetention =
 			ConsumeConvexTraversalSpeedRetention();
+
+		Vector3 retainedWorldVelocity =
+			beforeVelocity *
+				speedRetention;
+
+		radialSpeed *=
+			speedRetention;
 
 		tangentVelocity *=
 			speedRetention;
@@ -276,6 +358,21 @@ public sealed partial class BallSurfaceSimulation
 
 		m_SurfaceVelocity =
 			tangentVelocity;
+
+		m_Height =
+			Mathf.Max(
+				0.0f,
+				currentRadius -
+					m_BallRadius);
+
+		m_VerticalVelocity =
+			radialSpeed;
+
+		// Traversal表現だけをVertexへ切り替えます。
+		// 位置はそのまま、速度は既存Retentionを同方向へ1回だけ適用します。
+		SetWorldState(
+			beforeCenter,
+			retainedWorldVelocity);
 
 		return true;
 	}
@@ -444,7 +541,15 @@ public sealed partial class BallSurfaceSimulation
 		Vector3 vertexPoint =
 			m_ConvexVertexSpherePoint;
 
+		// Vertex -> Edgeは同じConvex角通過の続きなので、
+		// Vertex状態のResetで速度減衰済みフラグを失わないよう保持します。
+		bool hasAppliedSpeedRetention =
+			m_HasAppliedConvexTraversalSpeedRetention;
+
 		ResetConvexVertexSpherePatch();
+
+		m_HasAppliedConvexTraversalSpeedRetention =
+			hasAppliedSpeedRetention;
 
 		if (!BeginConvexEdgeTransitionFromVertexSpherePatch(
 			boundaryEdge,

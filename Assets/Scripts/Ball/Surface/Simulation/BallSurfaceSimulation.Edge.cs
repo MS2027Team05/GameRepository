@@ -232,13 +232,26 @@ public sealed partial class BallSurfaceSimulation
 							remainingTime
 						: 0.0f;
 
-				// 2本のEdgeへほぼ同時に到達した場合も、
-				// Vertex専用の進行方向へ切り替えません。
+				// 2本のEdgeへ同時到達した地点が実Convex Vertexなら、
+				// 片方のEdgeを強制選択せずVertex球面へ直接入ります。
 				//
-				// 「ほんの僅かに片側を先に通った」ものとして、
-				// 決定論的に1本だけを先行Edgeへ選びます。
-				// その後は通常のEdge遷移を連続して処理するため、
-				// Surfaceの展開ルール自体は通常時と同じです。
+				// まずFace上の到達時WorldStateを確定し、
+				// Vertex側はそのWorld位置・World速度をそのまま受け取ります。
+				if (TryBeginDirectConvexVertexSpherePatch(
+					crossingVertex,
+					currentNormal))
+				{
+					remainingTime *=
+						1.0f -
+							Mathf.Clamp01(
+								crossingFraction);
+
+					transitionCount++;
+					continue;
+				}
+
+				// Convex Vertexとして成立しない場合だけ、
+				// 従来どおり決定論的に1本のEdgeへフォールバックします。
 				crossedEdgeIndex =
 					ResolveSimultaneousVertexEdge(
 						crossedEdgeIndex,
@@ -317,6 +330,14 @@ public sealed partial class BallSurfaceSimulation
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Concave)
 			{
+				if (!TrySetWorldStateFromFacePoint(
+					m_CurrentTriangleIndex,
+					crossingPoint,
+					currentNormal))
+				{
+					return EAdvanceResult.InvalidGeometry;
+				}
+
 				// 空中でConcaveへ入った場合だけ、
 				// Ball本体とMesh上の基準点を分離した専用状態へ入ります。
 				//
@@ -367,6 +388,13 @@ public sealed partial class BallSurfaceSimulation
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Convex)
 			{
+				if (!TrySetWorldStateFromFacePoint(
+					m_CurrentTriangleIndex,
+					crossingPoint,
+					currentNormal))
+				{
+					return EAdvanceResult.InvalidGeometry;
+				}
 
 				m_SurfacePoint =
 					crossingPoint;
