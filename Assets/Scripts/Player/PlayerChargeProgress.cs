@@ -1,4 +1,4 @@
-﻿
+﻿using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,9 +7,6 @@ using UnityEngine.UI;
 /// </summary>
 public class PlayerChargeProgress : MonoBehaviour
 {
-	[Header("電撃チャージ")]
-	[SerializeField] private ElectricAction m_ElectricAction;
-
 	[Header("UI設定")]
 	[SerializeField] private RectTransform m_SegmentsRoot;
 
@@ -23,18 +20,69 @@ public class PlayerChargeProgress : MonoBehaviour
 	[SerializeField] private Color m_ActiveColor = Color.cyan;
 	[SerializeField] private Color m_InactiveColor = Color.gray;
 
+	private ElectricAction m_ElectricAction;
+	private NetworkObject m_PlayerNetworkObject;
+
 	private Image[] m_Segments;
+
+	// 全ての棒で共通使用する白いSprite
+	private static Sprite m_WhiteSprite;
+
+	// Owner判定用
+	private bool m_OwnerChecked;
 
 	private void Start()
 	{
+		// 棒を生成
 		CreateSegments();
+
+		// 親のPlayerからElectricActionを取得
+		m_ElectricAction =
+			GetComponentInParent<ElectricAction>();
+
+		// 親のPlayerからNetworkObjectを取得
+		m_PlayerNetworkObject =
+			GetComponentInParent<NetworkObject>();
+
+		if (m_ElectricAction == null)
+		{
+			Debug.LogWarning(
+				"[PlayerChargeProgress] ElectricActionが見つかりません。");
+		}
+
+		if (m_PlayerNetworkObject == null)
+		{
+			Debug.LogWarning(
+				"[PlayerChargeProgress] NetworkObjectが見つかりません。");
+		}
 	}
 
 	private void Update()
 	{
+		// Owner判定がまだの場合
+		if (!m_OwnerChecked)
+		{
+			if (m_PlayerNetworkObject == null)
+				return;
+
+			// NetworkObjectのSpawn完了を待つ
+			if (!m_PlayerNetworkObject.IsSpawned)
+				return;
+
+			m_OwnerChecked = true;
+
+			// 自分が操作していないPlayerのUIは非表示
+			if (!m_PlayerNetworkObject.IsOwner)
+			{
+				gameObject.SetActive(false);
+				return;
+			}
+		}
+
 		if (m_ElectricAction == null)
 			return;
 
+		// チャージ進捗を取得してUIに反映
 		SetProgress(m_ElectricAction.ChargeRatio);
 	}
 
@@ -84,8 +132,37 @@ public class PlayerChargeProgress : MonoBehaviour
 			m_Segments[i] =
 				segment.GetComponent<Image>();
 
+			// 白いSpriteを設定
+			m_Segments[i].sprite = GetWhiteSprite();
+
+			// 色を初期化
 			m_Segments[i].color = m_InactiveColor;
 		}
+	}
+
+	/// <summary>
+	/// UI用の白いSpriteを生成して取得します。
+	/// </summary>
+	private static Sprite GetWhiteSprite()
+	{
+		if (m_WhiteSprite != null)
+			return m_WhiteSprite;
+
+		Texture2D texture = new Texture2D(
+			1,
+			1,
+			TextureFormat.RGBA32,
+			false);
+
+		texture.SetPixel(0, 0, Color.white);
+		texture.Apply();
+
+		m_WhiteSprite = Sprite.Create(
+			texture,
+			new Rect(0, 0, 1, 1),
+			new Vector2(0.5f, 0.5f));
+
+		return m_WhiteSprite;
 	}
 
 	/// <summary>
@@ -104,7 +181,14 @@ public class PlayerChargeProgress : MonoBehaviour
 
 		for (int i = 0; i < m_Segments.Length; i++)
 		{
-			m_Segments[i].color =
+			Image segment = m_Segments[i];
+
+			if (segment == null)
+				continue;
+
+			segment.enabled = true;
+
+			segment.color =
 				i < activeCount
 				? m_ActiveColor
 				: m_InactiveColor;

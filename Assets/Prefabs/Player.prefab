@@ -2944,7 +2944,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 38bc48b7240c26c4c81997b2ba9ce6f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerChargeProgress
-  m_ElectricAction: {fileID: -2503078115639488532}
   m_SegmentsRoot: {fileID: 1424492970393574978}
   m_SegmentCount: 20
   m_Radius: 75
