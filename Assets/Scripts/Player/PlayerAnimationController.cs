@@ -8,11 +8,14 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 {
 	private static readonly int m_IsMovingHash = Animator.StringToHash("IsMoving");
 	private static readonly int m_HasBallHash = Animator.StringToHash("HasBall");
+	private static readonly int m_IsSpecialMovingHash = Animator.StringToHash("IsSpecialMoving");
 
 	private IBallCarrier m_BallCarrier;
 
 	[Header("参照")]
 	[SerializeField] private Animator[] m_Animators;
+	[Tooltip("Player側のIsSpecialMovingに合わせてMoveを再生するテンタクルのAnimatorです。")]
+	[SerializeField] private Animator m_TentacleAnimator;
 	[SerializeField] private PlayerSurfaceMover m_SurfaceMover;
 	[SerializeField] private PlayerController m_PlayerController;
 
@@ -59,6 +62,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 	private void Update()
 	{
+		ApplySpecialMovingState();
 		// 所持情報は既存のボール同期から各端末へ反映されるため、所有者以外も更新する。
 		ApplyBallState();
 
@@ -117,17 +121,54 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 	private void ResetAnimators()
 	{
+		if (m_TentacleAnimator != null)
+		{
+			m_TentacleAnimator.Rebind();
+			m_TentacleAnimator.SetBool(m_IsSpecialMovingHash, false);
+			if (m_TentacleAnimator.isActiveAndEnabled)
+			{
+				m_TentacleAnimator.Update(0f);
+			}
+		}
 		if (m_Animators == null) return;
 		foreach (Animator animator in m_Animators)
 		{
 			if (animator == null || animator.runtimeAnimatorController == null) continue;
 			animator.Rebind();
+			animator.SetBool(m_IsSpecialMovingHash, false);
 			animator.SetBool(m_IsMovingHash, false);
 			animator.SetBool(m_HasBallHash, m_BallCarrier != null && m_BallCarrier.HasBall);
 			if (animator.isActiveAndEnabled)
 			{
 				animator.Update(0f);
 			}
+		}
+	}
+
+	/// <summary>
+	/// 表示中のPlayer Animatorを基準に、特殊移動の手動切り替えを他の表示モデルとテンタクルへ反映します。
+	/// </summary>
+	private void ApplySpecialMovingState()
+	{
+		if (m_Animators == null) return;
+
+		bool isSpecialMoving = false;
+		foreach (Animator animator in m_Animators)
+		{
+			if (animator == null || !animator.isActiveAndEnabled || animator.runtimeAnimatorController == null) continue;
+			isSpecialMoving = animator.GetBool(m_IsSpecialMovingHash);
+			break;
+		}
+
+		foreach (Animator animator in m_Animators)
+		{
+			if (animator == null || animator.runtimeAnimatorController == null) continue;
+			animator.SetBool(m_IsSpecialMovingHash, isSpecialMoving);
+		}
+
+		if (m_TentacleAnimator != null && m_TentacleAnimator.runtimeAnimatorController != null)
+		{
+			m_TentacleAnimator.SetBool(m_IsSpecialMovingHash, isSpecialMoving);
 		}
 	}
 
