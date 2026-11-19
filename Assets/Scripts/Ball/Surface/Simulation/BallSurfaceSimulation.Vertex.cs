@@ -65,6 +65,17 @@ public sealed partial class BallSurfaceSimulation
 		int firstEdgeIndex,
 		int secondEdgeIndex)
 	{
+		return ResolveSimultaneousVertexEdge(
+			firstEdgeIndex,
+			secondEdgeIndex,
+			m_SurfaceVelocity);
+	}
+
+	private int ResolveSimultaneousVertexEdge(
+		int firstEdgeIndex,
+		int secondEdgeIndex,
+		Vector3 travelDirection)
+	{
 		if (firstEdgeIndex <
 			0)
 		{
@@ -95,6 +106,30 @@ public sealed partial class BallSurfaceSimulation
 				m_CurrentTriangleIndex,
 				secondEdgeIndex);
 
+		if (TryGetVertexEdgeExitScore(
+				firstEdgeIndex,
+				travelDirection,
+				out float firstExitScore) &&
+			TryGetVertexEdgeExitScore(
+				secondEdgeIndex,
+				travelDirection,
+				out float secondExitScore))
+		{
+			if (firstExitScore >
+				secondExitScore +
+					m_MinimumCalculationValue)
+			{
+				return firstEdgeIndex;
+			}
+
+			if (secondExitScore >
+				firstExitScore +
+					m_MinimumCalculationValue)
+			{
+				return secondEdgeIndex;
+			}
+		}
+
 		int firstPriority =
 			GetVertexTieBreakPriority(
 				firstEdgeType);
@@ -118,6 +153,99 @@ public sealed partial class BallSurfaceSimulation
 		return Mathf.Min(
 			firstEdgeIndex,
 			secondEdgeIndex);
+	}
+
+	/// <summary>
+	/// Returns how strongly the current travel direction exits across an edge.
+	/// </summary>
+	private bool TryGetVertexEdgeExitScore(
+		int edgeIndex,
+		Vector3 travelDirection,
+		out float exitScore)
+	{
+		exitScore =
+			0.0f;
+
+		if (travelDirection.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		if (!TryGetTriangleWorldData(
+			m_CurrentTriangleIndex,
+			out Vector3 vertexA,
+			out Vector3 vertexB,
+			out Vector3 vertexC,
+			out Vector3 currentNormal) ||
+			!TryGetEdgeWorldVertices(
+				m_CurrentTriangleIndex,
+				edgeIndex,
+				out Vector3 edgeStart,
+				out Vector3 edgeEnd))
+		{
+			return false;
+		}
+
+		Vector3 edgeVector =
+			edgeEnd -
+				edgeStart;
+
+		if (edgeVector.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		Vector3 tangentDirection =
+			Vector3.ProjectOnPlane(
+				travelDirection,
+				currentNormal);
+
+		if (tangentDirection.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		Vector3 edgeDirection =
+			edgeVector.normalized;
+
+		Vector3 edgeMidPoint =
+			(edgeStart + edgeEnd) *
+			0.5f;
+
+		Vector3 triangleCenter =
+			(vertexA + vertexB + vertexC) /
+			3.0f;
+
+		Vector3 insideDirection =
+			Vector3.ProjectOnPlane(
+				triangleCenter - edgeMidPoint,
+				currentNormal);
+
+		insideDirection -=
+			edgeDirection *
+				Vector3.Dot(
+					insideDirection,
+					edgeDirection);
+
+		if (insideDirection.sqrMagnitude <=
+			m_MinimumCalculationValue *
+				m_MinimumCalculationValue)
+		{
+			return false;
+		}
+
+		exitScore =
+			-Vector3.Dot(
+				tangentDirection.normalized,
+				insideDirection.normalized);
+
+		return true;
 	}
 
 	/// <summary>

@@ -328,7 +328,8 @@ public sealed partial class BallSurfaceSimulation
 					crossedEdgeIndex =
 						ResolveSimultaneousVertexEdge(
 							crossedEdgeIndex,
-							simultaneousEdgeIndex);
+							simultaneousEdgeIndex,
+							m_ConcaveReferenceVelocity);
 				}
 
 				segmentFraction =
@@ -366,7 +367,7 @@ public sealed partial class BallSurfaceSimulation
 				vertexB,
 				vertexC,
 				currentNormal,
-				out float segmentUnusedTime))
+				out float airborneSegmentUnusedTime))
 			{
 				// Contactまでに使わなかった区間に加え、
 				// Referenceがまだ進んでいない後続時間も返します。
@@ -374,7 +375,7 @@ public sealed partial class BallSurfaceSimulation
 					Mathf.Clamp(
 						remainingTime -
 							segmentTime +
-							segmentUnusedTime,
+							airborneSegmentUnusedTime,
 						0.0f,
 						remainingTime);
 

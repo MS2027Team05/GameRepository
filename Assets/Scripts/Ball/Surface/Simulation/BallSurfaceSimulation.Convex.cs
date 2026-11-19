@@ -55,6 +55,9 @@ public sealed partial class BallSurfaceSimulation
 			return false;
 		}
 
+		float edgeLength =
+			edgeVector.magnitude;
+
 		Vector3 edgeDirection =
 			edgeVector.normalized;
 
@@ -85,6 +88,22 @@ public sealed partial class BallSurfaceSimulation
 				m_WorldCenter -
 					edgeStart,
 				edgeDirection);
+
+		// Treat the Convex edge as a finite segment, not an infinite line.
+		if (edgeProjectionDistance <
+				-m_TransitionPositionTolerance ||
+			edgeProjectionDistance >
+				edgeLength +
+					m_TransitionPositionTolerance)
+		{
+			return false;
+		}
+
+		edgeProjectionDistance =
+			Mathf.Clamp(
+				edgeProjectionDistance,
+				0.0f,
+				edgeLength);
 
 		Vector3 edgeProjectionPoint =
 			edgeStart +
@@ -151,6 +170,25 @@ public sealed partial class BallSurfaceSimulation
 			Vector3.Dot(
 				tangentVelocity,
 				edgeDirection);
+
+		bool startsAtEdgeStart =
+			edgeProjectionDistance <=
+				m_TransitionPositionTolerance;
+
+		bool startsAtEdgeEnd =
+			edgeProjectionDistance >=
+				edgeLength -
+					m_TransitionPositionTolerance;
+
+		if ((startsAtEdgeStart &&
+				alongSpeed <
+					-m_MinimumCalculationValue) ||
+			(startsAtEdgeEnd &&
+				alongSpeed >
+					m_MinimumCalculationValue))
+		{
+			return false;
+		}
 
 		Vector3 crossDirection =
 			Vector3.Cross(
@@ -689,8 +727,14 @@ public sealed partial class BallSurfaceSimulation
 						m_SurfacePoint,
 					alongDirection);
 
-			if (distanceToVertex <=
-				m_MinimumCalculationValue)
+			if (distanceToVertex <
+				-m_TransitionPositionTolerance)
+			{
+				timeToVertex =
+					float.PositiveInfinity;
+			}
+			else if (distanceToVertex <=
+				m_TransitionPositionTolerance)
 			{
 				timeToVertex =
 					0.0f;
@@ -790,16 +834,30 @@ public sealed partial class BallSurfaceSimulation
 				return true;
 			}
 
-			// Convex Vertexとして成立しないMeshでは、
-			// 従来通り現在Edgeだけを完了して通常Triangleへ戻します。
-			m_ConvexCurrentAngle =
-				m_ConvexSignedAngle;
+			// Mixed Convex/Concave vertices may not form a general Convex sphere.
+			// Stop only the edge-axis component and consume real time for the
+			// remaining circular motion instead of completing it at zero time.
+			m_ConvexAlongSpeed =
+				0.0f;
 
 			UpdateConvexTransitionVelocity();
 
-			return CompleteConvexEdgeTransition(
-				out completedEntryEdgeIndex,
-				out completed);
+			if (remainingTime >
+				m_MinimumCalculationValue)
+			{
+				return AdvanceConvexEdgeTransition(
+					ref remainingTime,
+					out completed,
+					out completedEntryEdgeIndex);
+			}
+
+			completed =
+				false;
+
+			completedEntryEdgeIndex =
+				-1;
+
+			return true;
 		}
 
 		bool reachedTarget =

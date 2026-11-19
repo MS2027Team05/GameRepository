@@ -255,7 +255,8 @@ public sealed partial class BallSurfaceSimulation
 				crossedEdgeIndex =
 					ResolveSimultaneousVertexEdge(
 						crossedEdgeIndex,
-						simultaneousEdgeIndex);
+						simultaneousEdgeIndex,
+						m_SurfaceVelocity);
 			}
 			else
 			{
