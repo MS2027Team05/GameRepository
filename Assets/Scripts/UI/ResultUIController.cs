@@ -142,18 +142,23 @@ public class ResultUIController : MonoBehaviour
 			return;
 		}
 
-		// 3D台座への反映
+		// 3D台座への反映(試合に参加したRed/Blueプレイヤーのみ対象)
 		int displayIndex = 0;
 		if (m_PlayerDisplays != null && m_PlayerDisplays.Length > 0)
 		{
 			foreach (var kvp in allPlayers)
 			{
+				var playerData = kvp.Value;
+				if (playerData.Team != ETeamType.Red && playerData.Team != ETeamType.Blue)
+				{
+					continue;
+				}
+
 				if (displayIndex >= m_PlayerDisplays.Length)
 				{
 					break;
 				}
 
-				var playerData = kvp.Value;
 				var display = m_PlayerDisplays[displayIndex];
 				if (display != null)
 				{
@@ -177,7 +182,7 @@ public class ResultUIController : MonoBehaviour
 
 		DisplayLocalPlayerAwards(store);
 
-		// UIテキスト一覧への反映
+		// UIテキスト一覧への反映(観戦者・未所属は除外)
 		if (m_PlayerListText != null)
 		{
 			m_Builder.Clear();
@@ -185,7 +190,12 @@ public class ResultUIController : MonoBehaviour
 			foreach (var kvp in allPlayers)
 			{
 				var p = kvp.Value;
-				string teamTag = p.Team == ETeamType.Red ? "[RED]" : (p.Team == ETeamType.Blue ? "[BLUE]" : "[NONE]");
+				if (p.Team != ETeamType.Red && p.Team != ETeamType.Blue)
+				{
+					continue;
+				}
+
+				string teamTag = p.Team == ETeamType.Red ? "[RED]" : "[BLUE]";
 				m_Builder.Append($"{teamTag} {p.PlayerName}\n");
 			}
 
@@ -360,7 +370,7 @@ public class ResultUIController : MonoBehaviour
 			SessionPlayerDataStore.Instance?.ResetAllReadyStates();
 			PlayerInputReceiver.SetAllPaused(false);
 			PlayerInputReceiver.SetCursorLocked(false);
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, LoadSceneMode.Single);
 			return;
 		}
 

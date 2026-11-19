@@ -59,6 +59,12 @@ public class SpectatorCameraDirector : MonoBehaviour
 	[Tooltip("俯瞰ズーム移動のスムージング時間(秒、0以下で既定値0.6秒)")]
 	[SerializeField] private float m_OverviewZoomSmoothTime;
 
+	[Header("カメラ切り替え後の回転抑制(3D酔い防止設定)")]
+	[Tooltip("カメラ切り替え直後に視点の回転をロックして固定する秒数(0以下で既定値0.6秒)")]
+	[SerializeField] private float m_PostCutRotationLockDuration;
+	[Tooltip("プレイヤー追従カメラ時、注視点がこの角度(度)以内に収まっている間はカメラ回転を行わない不感帯角度(0以下で既定値6度)")]
+	[SerializeField] private float m_FollowRotationDeadZoneAngle;
+
 	// 現在のショット状態
 	public ECameraShotType CurrentShotType { get; private set; } = ECameraShotType.StadiumOverview;
 	public string CurrentShotName => CurrentShotType switch
@@ -74,13 +80,18 @@ public class SpectatorCameraDirector : MonoBehaviour
 	// イベント
 	public event Action<ECameraShotType, string> OnCameraShotChanged;
 
+	private const float m_DefaultPostCutRotationLockDuration = 0.6f;
+	private const float m_DefaultFollowRotationDeadZoneAngle = 6.0f;
+
 	private float m_CurrentShotTimer;
+	private float m_PostCutRotationLockTimer;
 	private float m_PlayerScanTimer;
 	private bool m_HasAppliedInitialBallFocus;
 	private Vector3 m_CurrentFollowVelocity;
 	private Vector3 m_CurrentLookAtVelocity;
 	private Vector3 m_SmoothedLookAtPoint;
 	private Transform m_ActiveOverviewAnchor;
+	private Transform m_ActiveGoalAnchor;
 
 	// リプレイ上書き制御
 	private bool m_IsReplayOverrideActive;
@@ -176,9 +187,11 @@ public class SpectatorCameraDirector : MonoBehaviour
 		if (m_IsReplayOverrideActive)
 		{
 			Transform replayAnchor = GetGoalAnchor(m_ReplayScoringTeam);
-			if (CurrentShotType != ECameraShotType.GoalArea)
+			if (CurrentShotType != ECameraShotType.GoalArea || m_ActiveGoalAnchor != replayAnchor)
 			{
+				m_ActiveGoalAnchor = replayAnchor;
 				SwitchShot(ECameraShotType.GoalArea, true);
+				SnapGoalCameraToAnchor(replayAnchor, m_ReplayBallTarget);
 			}
 			UpdateGoalShot(replayAnchor, m_ReplayBallTarget);
 			return;
@@ -198,14 +211,20 @@ public class SpectatorCameraDirector : MonoBehaviour
 		}
 
 		m_CurrentShotTimer += Time.deltaTime;
+		if (m_PostCutRotationLockTimer > 0f)
+		{
+			m_PostCutRotationLockTimer = Mathf.Max(0f, m_PostCutRotationLockTimer - Time.deltaTime);
+		}
 		m_PlayerScanTimer -= Time.deltaTime;
 
 		// 1. 緊急割り込み判定(ゴール接近またはGoalCelebration)
 		if (CheckGoalUrgentCondition(out Transform targetGoalAnchor))
 		{
-			if (CurrentShotType != ECameraShotType.GoalArea)
+			if (CurrentShotType != ECameraShotType.GoalArea || m_ActiveGoalAnchor != targetGoalAnchor)
 			{
+				m_ActiveGoalAnchor = targetGoalAnchor;
 				SwitchShot(ECameraShotType.GoalArea, true);
+				SnapGoalCameraToAnchor(targetGoalAnchor);
 			}
 			UpdateGoalShot(targetGoalAnchor);
 			return;
@@ -217,7 +236,7 @@ public class SpectatorCameraDirector : MonoBehaviour
 			if (CurrentShotType != ECameraShotType.PlayerFollow || CurrentFollowTarget != m_CachedBall.transform)
 			{
 				CurrentFollowTarget = m_CachedBall.transform;
-				SwitchShot(ECameraShotType.PlayerFollow, CurrentShotType != ECameraShotType.PlayerFollow);
+				SwitchShot(ECameraShotType.PlayerFollow, true);
 			}
 			UpdateFollowShot();
 			return;
@@ -295,21 +314,25 @@ public class SpectatorCameraDirector : MonoBehaviour
 			Transform holderTransform = FindBallHolderTransform(m_CachedBall.CurrentHolderId);
 			if (holderTransform != null)
 			{
+				bool isTargetOrShotChanged = CurrentShotType != ECameraShotType.PlayerFollow || CurrentFollowTarget != holderTransform;
 				CurrentFollowTarget = holderTransform;
-				SwitchShot(ECameraShotType.PlayerFollow, false);
+				if (isTargetOrShotChanged)
+				{
+					SwitchShot(ECameraShotType.PlayerFollow, true);
+				}
 				return;
 			}
 		}
 
-		// ボールがフリー、または定点が一定時間経過した場合は交互に俯瞰/追従へ
+		// ボールがフリー、または定点が一定時間経過した場合は交互に俯瞰/追従へ(常に即時ハードカット切り替え)
 		if (CurrentShotType == ECameraShotType.StadiumOverview && m_CachedBall != null)
 		{
 			CurrentFollowTarget = m_CachedBall.transform;
-			SwitchShot(ECameraShotType.PlayerFollow, false);
+			SwitchShot(ECameraShotType.PlayerFollow, true);
 		}
 		else
 		{
-			SwitchShot(ECameraShotType.StadiumOverview, false);
+			SwitchShot(ECameraShotType.StadiumOverview, true);
 		}
 	}
 
@@ -352,6 +375,13 @@ public class SpectatorCameraDirector : MonoBehaviour
 	{
 		CurrentShotType = nextType;
 		m_CurrentShotTimer = 0f;
+		m_CurrentFollowVelocity = Vector3.zero;
+		m_CurrentLookAtVelocity = Vector3.zero;
+
+		float lockDuration = m_PostCutRotationLockDuration > 0.001f
+			? m_PostCutRotationLockDuration
+			: m_DefaultPostCutRotationLockDuration;
+		m_PostCutRotationLockTimer = lockDuration;
 
 		float targetFov = nextType switch
 		{
@@ -370,12 +400,34 @@ public class SpectatorCameraDirector : MonoBehaviour
 		{
 			SelectBestOverviewAnchor();
 		}
-		else if (nextType == ECameraShotType.PlayerFollow && instantCut && m_ManagedCamera != null)
+		else if (nextType == ECameraShotType.PlayerFollow && m_ManagedCamera != null)
 		{
 			SnapFollowCameraToCurrentTarget();
 		}
+		else if (nextType == ECameraShotType.GoalArea && m_ManagedCamera != null && m_ActiveGoalAnchor != null)
+		{
+			SnapGoalCameraToAnchor(m_ActiveGoalAnchor, m_IsReplayOverrideActive ? m_ReplayBallTarget : null);
+		}
 
 		OnCameraShotChanged?.Invoke(CurrentShotType, CurrentShotName);
+	}
+
+	private void SnapGoalCameraToAnchor(Transform anchor, Transform overrideBall = null)
+	{
+		if (m_ManagedCamera == null || anchor == null)
+		{
+			return;
+		}
+
+		m_CurrentFollowVelocity = Vector3.zero;
+		m_CurrentLookAtVelocity = Vector3.zero;
+		m_ManagedCamera.transform.position = anchor.position;
+
+		Vector3 targetLookAt = overrideBall != null
+			? overrideBall.position
+			: (m_CachedBall != null ? m_CachedBall.transform.position : anchor.position + anchor.forward * 10f);
+		m_SmoothedLookAtPoint = targetLookAt;
+		ApplyLookAtRotation(m_SmoothedLookAtPoint);
 	}
 
 	private void SnapFollowCameraToCurrentTarget()
@@ -426,6 +478,7 @@ public class SpectatorCameraDirector : MonoBehaviour
 			m_CurrentLookAtVelocity = Vector3.zero;
 			m_ManagedCamera.transform.position = ComputeOverviewTargetPosition(bestAnchor.position, ballPos);
 			m_SmoothedLookAtPoint = ballPos;
+			ApplyLookAtRotation(m_SmoothedLookAtPoint);
 		}
 	}
 
@@ -552,15 +605,44 @@ public class SpectatorCameraDirector : MonoBehaviour
 
 		// 2点フレーミング(対象とボールの中間点)
 		Vector3 centerPoint = (targetPos + ballPos) * 0.5f;
-		m_SmoothedLookAtPoint = Vector3.SmoothDamp(m_SmoothedLookAtPoint, centerPoint, ref m_CurrentLookAtVelocity, m_LookAtSmoothTime);
 
-		// カメラ理想位置(ワールド上方向・後方への一定オフセット配置)
+		// カメラ理想位置(ワールド上方向・後方への一定オフセット配置。プレイヤー自身の視点回転の影響は受けない)
 		Vector3 desiredCamPos = targetPos + m_FollowOffset;
 
 		// 壁めり込み回避(SphereCast)
-		desiredCamPos = ResolveSafeCameraPosition(m_SmoothedLookAtPoint, desiredCamPos);
+		desiredCamPos = ResolveSafeCameraPosition(centerPoint, desiredCamPos);
 
-		m_ManagedCamera.transform.position = Vector3.SmoothDamp(m_ManagedCamera.transform.position, desiredCamPos, ref m_CurrentFollowVelocity, m_FollowPositionSmoothTime);
+		m_ManagedCamera.transform.position = Vector3.SmoothDamp(
+			m_ManagedCamera.transform.position,
+			desiredCamPos,
+			ref m_CurrentFollowVelocity,
+			m_FollowPositionSmoothTime);
+
+		// カメラ切り替え直後の回転ロック時間中は、視点回転を行わず初期アングルを維持して酔いを防止
+		if (m_PostCutRotationLockTimer > 0f)
+		{
+			return;
+		}
+
+		// 不感帯(デッドゾーン)判定: 現在のカメラ正面方向と目標注視点の角度差が小さい間は回転を止めて視界を安定化
+		Vector3 toCenter = centerPoint - m_ManagedCamera.transform.position;
+		if (toCenter.sqrMagnitude > 0.001f)
+		{
+			float deadZoneAngle = m_FollowRotationDeadZoneAngle > 0.01f
+				? m_FollowRotationDeadZoneAngle
+				: m_DefaultFollowRotationDeadZoneAngle;
+			float currentAngle = Vector3.Angle(m_ManagedCamera.transform.forward, toCenter);
+			if (currentAngle <= deadZoneAngle)
+			{
+				return;
+			}
+		}
+
+		m_SmoothedLookAtPoint = Vector3.SmoothDamp(
+			m_SmoothedLookAtPoint,
+			centerPoint,
+			ref m_CurrentLookAtVelocity,
+			m_LookAtSmoothTime);
 
 		ApplyLookAtRotation(m_SmoothedLookAtPoint);
 	}
@@ -594,20 +676,9 @@ public class SpectatorCameraDirector : MonoBehaviour
 		}
 
 		Transform anchor = GetGoalAnchor(scoringTeam);
-		if (CurrentShotType != ECameraShotType.GoalArea)
-		{
-			SwitchShot(ECameraShotType.GoalArea, true);
-		}
-
-		if (m_ManagedCamera != null && anchor != null)
-		{
-			m_CurrentFollowVelocity = Vector3.zero;
-			m_CurrentLookAtVelocity = Vector3.zero;
-			m_ManagedCamera.transform.position = anchor.position;
-			Vector3 initialLookAt = replayBallTransform != null ? replayBallTransform.position : Vector3.zero;
-			m_SmoothedLookAtPoint = initialLookAt;
-			ApplyLookAtRotation(m_SmoothedLookAtPoint);
-		}
+		m_ActiveGoalAnchor = anchor;
+		SwitchShot(ECameraShotType.GoalArea, true);
+		SnapGoalCameraToAnchor(anchor, replayBallTransform);
 	}
 
 	private void UpdateGoalShot(Transform anchor, Transform overrideBall = null)
@@ -616,7 +687,8 @@ public class SpectatorCameraDirector : MonoBehaviour
 
 		if (anchor != null)
 		{
-			m_ManagedCamera.transform.position = Vector3.SmoothDamp(m_ManagedCamera.transform.position, anchor.position, ref m_CurrentFollowVelocity, 0.2f);
+			// ゴールカメラは定点アンカー位置へ補間なしで固定配置
+			m_ManagedCamera.transform.position = anchor.position;
 		}
 
 		Vector3 targetLookAt = overrideBall != null

@@ -31,6 +31,17 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	[SerializeField] private Transform m_StartPoint;
 	[SerializeField] private Transform m_EndPoint;
 
+	// 他端末・観戦視点へ移動時エフェクトの稼働状態と終点座標を同期するNetworkVariable
+	private readonly NetworkVariable<bool> m_NetIsMovingEffectActive = new NetworkVariable<bool>(
+		false,
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Owner);
+
+	private readonly NetworkVariable<Vector3> m_NetMovingEffectEndPoint = new NetworkVariable<Vector3>(
+		Vector3.zero,
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Owner);
+
 	// 各担当者が実装するインターフェース・コンポーネント参照
 	private IGravityMover m_GravityMover;
 	private ISurfaceMover m_SurfaceMover;
@@ -158,6 +169,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 			// 他プレイヤーのレティクルは表示しない
 			m_AimGuide?.SetConstantReticleActive(false);
+
+			// 非Owner(観戦視点・他クライアント)向けに同期済み移動エフェクト状態を購読・初期反映
+			m_NetIsMovingEffectActive.OnValueChanged += HandleNetMovingEffectActiveChanged;
+			m_NetMovingEffectEndPoint.OnValueChanged += HandleNetMovingEffectEndPointChanged;
+			ApplyRemoteMovingEffectState();
 			return;
 		}
 
@@ -220,7 +236,16 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void Update()
 	{
-		if (!IsOwner || !m_IsMatchActionEnabled)
+		if (!IsOwner)
+		{
+			if (IsSpawned && m_NetIsMovingEffectActive.Value)
+			{
+				UpdateRemoteMovingEffectPositions();
+			}
+			return;
+		}
+
+		if (!m_IsMatchActionEnabled)
 		{
 			return;
 		}
@@ -611,6 +636,15 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_MovingEffect.SetActive(true);
 		}
 		UpdateMovingEffectPositions(targetPoint);
+
+		if (IsSpawned && IsOwner)
+		{
+			m_NetMovingEffectEndPoint.Value = targetPoint;
+			if (!m_NetIsMovingEffectActive.Value)
+			{
+				m_NetIsMovingEffectActive.Value = true;
+			}
+		}
 	}
 
 	private void UpdateMovingEffectPositions(Vector3 targetPoint)
@@ -623,6 +657,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		{
 			m_EndPoint.position = targetPoint;
 		}
+
+		if (IsSpawned && IsOwner && (m_NetMovingEffectEndPoint.Value - targetPoint).sqrMagnitude > 0.0001f)
+		{
+			m_NetMovingEffectEndPoint.Value = targetPoint;
+		}
 	}
 
 	private void DeactivateMovingEffect()
@@ -630,6 +669,57 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (m_MovingEffect != null)
 		{
 			m_MovingEffect.SetActive(false);
+		}
+
+		if (IsSpawned && IsOwner && m_NetIsMovingEffectActive.Value)
+		{
+			m_NetIsMovingEffectActive.Value = false;
+		}
+	}
+
+	private void HandleNetMovingEffectActiveChanged(bool previousValue, bool newValue)
+	{
+		if (IsOwner)
+		{
+			return;
+		}
+
+		ApplyRemoteMovingEffectState();
+	}
+
+	private void HandleNetMovingEffectEndPointChanged(Vector3 previousValue, Vector3 newValue)
+	{
+		if (IsOwner || !m_NetIsMovingEffectActive.Value)
+		{
+			return;
+		}
+
+		UpdateRemoteMovingEffectPositions();
+	}
+
+	private void ApplyRemoteMovingEffectState()
+	{
+		bool isActive = m_NetIsMovingEffectActive.Value;
+		if (m_MovingEffect != null && m_MovingEffect.activeSelf != isActive)
+		{
+			m_MovingEffect.SetActive(isActive);
+		}
+
+		if (isActive)
+		{
+			UpdateRemoteMovingEffectPositions();
+		}
+	}
+
+	private void UpdateRemoteMovingEffectPositions()
+	{
+		if (m_StartPoint != null)
+		{
+			m_StartPoint.position = transform.position;
+		}
+		if (m_EndPoint != null)
+		{
+			m_EndPoint.position = m_NetMovingEffectEndPoint.Value;
 		}
 	}
 
@@ -1271,6 +1361,17 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	public override void OnNetworkDespawn()
 	{
+		if (!IsOwner)
+		{
+			m_NetIsMovingEffectActive.OnValueChanged -= HandleNetMovingEffectActiveChanged;
+			m_NetMovingEffectEndPoint.OnValueChanged -= HandleNetMovingEffectEndPointChanged;
+			if (m_MovingEffect != null)
+			{
+				m_MovingEffect.SetActive(false);
+			}
+			return;
+		}
+
 		if (IsOwner)
 		{
 			if (m_GravityMover != null)

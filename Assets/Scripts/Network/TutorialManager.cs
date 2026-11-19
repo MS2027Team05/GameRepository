@@ -157,7 +157,7 @@ public class TutorialManager : NetworkBehaviour
 
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
 		{
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, LoadSceneMode.Single);
 		}
 	}
 }

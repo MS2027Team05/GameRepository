@@ -843,7 +843,7 @@ public class MatchManager : NetworkBehaviour
 
 		if (NetworkManager != null && NetworkManager.SceneManager != null)
 		{
-			NetworkManager.SceneManager.LoadScene(targetScene, UnityEngine.SceneManagement.LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, UnityEngine.SceneManagement.LoadSceneMode.Single);
 		}
 		else
 		{

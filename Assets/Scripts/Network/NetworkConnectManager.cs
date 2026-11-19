@@ -58,10 +58,19 @@ public class NetworkConnectManager : NetworkBehaviour
 	// 観戦者として接続したかどうかのローカルフラグ
 	public static bool IsSpectatorClient { get; private set; }
 
+	/// <summary>
+	/// 他モジュール(ロビー同期等)からローカル観戦クライアント状態をサーバー確定値へ同期します。
+	/// </summary>
+	public static void SetSpectatorClientState(bool isSpectator)
+	{
+		IsSpectatorClient = isSpectator;
+	}
+
 	private UnityTransport m_UnityTransport;
 	private readonly StringBuilder m_StatusBuilder = new StringBuilder();
 	private readonly StringBuilder m_MemberInfoBuilder = new StringBuilder();
 	private string m_CachedHostIp = "127.0.0.1";
+	private bool m_PendingInitialSpectatorSync;
 
 	// 接続参加者のリアルタイム同期リスト
 	private readonly NetworkList<LobbyPlayerData> m_ConnectedPlayers = new NetworkList<LobbyPlayerData>();
@@ -119,8 +128,16 @@ public class NetworkConnectManager : NetworkBehaviour
 			NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnectedFromServer;
 
 			ShowConnectedPanels(isHost: false);
+
+			// 観戦者クライアントとして接続した場合は、即座にサーバーへ観戦チーム所属を通知して同期
+			if (IsSpectatorClient)
+			{
+				m_PendingInitialSpectatorSync = true;
+				RequestJoinTeamServerRpc(NetworkManager.Singleton.LocalClientId, ETeamType.Spectator);
+			}
 		}
 
+		SyncLocalTeamFromConnectedPlayers();
 		UpdateGeneralPanelUI();
 	}
 
@@ -280,6 +297,7 @@ public class NetworkConnectManager : NetworkBehaviour
 
 		IsPlayerHost = asPlayer;
 		IsSpectatorClient = false;
+		m_PendingInitialSpectatorSync = false;
 		if (asPlayer && LocalPlayerProfilePreferences.GetAssignedTeam() == ETeamType.Spectator)
 		{
 			LocalPlayerProfilePreferences.SetAssignedTeam(ETeamType.None);
@@ -326,6 +344,7 @@ public class NetworkConnectManager : NetworkBehaviour
 
 		IsPlayerHost = false;
 		IsSpectatorClient = asSpectator;
+		m_PendingInitialSpectatorSync = asSpectator;
 
 		if (asSpectator)
 		{
@@ -443,20 +462,46 @@ public class NetworkConnectManager : NetworkBehaviour
 
 	private void HandlePlayersListChanged(NetworkListEvent<LobbyPlayerData> changeEvent)
 	{
-		if (NetworkManager.Singleton != null)
+		SyncLocalTeamFromConnectedPlayers();
+		UpdateGeneralPanelUI();
+	}
+
+	/// <summary>
+	/// サーバーから同期された確定済みチーム情報をもとに、ローカルの観戦フラグおよび保存設定を更新します。
+	/// 満員等でサーバー側が変更を拒否した場合でもローカル状態がサーバーと食い違わないようにします。
+	/// </summary>
+	private void SyncLocalTeamFromConnectedPlayers()
+	{
+		if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
 		{
-			ulong localClientId = NetworkManager.Singleton.LocalClientId;
-			for (int i = 0; i < m_ConnectedPlayers.Count; i++)
-			{
-				if (m_ConnectedPlayers[i].ClientId == localClientId)
-				{
-					LocalPlayerProfilePreferences.SetAssignedTeam(m_ConnectedPlayers[i].Team);
-					break;
-				}
-			}
+			return;
 		}
 
-		UpdateGeneralPanelUI();
+		ulong localClientId = NetworkManager.Singleton.LocalClientId;
+		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		{
+			if (m_ConnectedPlayers[i].ClientId != localClientId)
+			{
+				continue;
+			}
+
+			ETeamType syncedTeam = m_ConnectedPlayers[i].Team;
+
+			// 観戦接続直後のサーバー確定待ちの間は、初期状態のNone通知でローカル観戦フラグを上書きしない
+			if (m_PendingInitialSpectatorSync)
+			{
+				if (syncedTeam != ETeamType.Spectator)
+				{
+					return;
+				}
+
+				m_PendingInitialSpectatorSync = false;
+			}
+
+			IsSpectatorClient = (syncedTeam == ETeamType.Spectator);
+			LocalPlayerProfilePreferences.SetAssignedTeam(syncedTeam);
+			return;
+		}
 	}
 
 	private void UpdateGeneralPanelUI()
@@ -464,7 +509,11 @@ public class NetworkConnectManager : NetworkBehaviour
 		int count = 0;
 		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
 		{
-			if (m_ConnectedPlayers[i].Team != ETeamType.Spectator) count++;
+			ETeamType team = m_ConnectedPlayers[i].Team;
+			if (team == ETeamType.Red || team == ETeamType.Blue)
+			{
+				count++;
+			}
 		}
 
 		if (m_PlayerCountText != null)
@@ -518,7 +567,8 @@ public class NetworkConnectManager : NetworkBehaviour
 		if (NetworkManager.Singleton == null) return;
 		ulong localId = NetworkManager.Singleton.LocalClientId;
 
-		LocalPlayerProfilePreferences.SetAssignedTeam(team);
+		// ユーザー自身がチーム変更を明示操作した場合は初期観戦同期の保護を解除し、サーバー確定値に従う
+		m_PendingInitialSpectatorSync = false;
 
 		if (team == ETeamType.None)
 		{
@@ -535,16 +585,19 @@ public class NetworkConnectManager : NetworkBehaviour
 	{
 		if (targetTeam == ETeamType.None) return;
 
-		int count = 0;
-		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+		if (targetTeam != ETeamType.Spectator)
 		{
-			if (m_ConnectedPlayers[i].Team == targetTeam) count++;
-		}
+			int count = 0;
+			for (int i = 0; i < m_ConnectedPlayers.Count; i++)
+			{
+				if (m_ConnectedPlayers[i].Team == targetTeam) count++;
+			}
 
-		// 各チーム最大2名
-		if (count >= LobbyManager.MaxTeamMembers)
-		{
-			return;
+			// 各チーム最大2名(観戦者は人数制限なし)
+			if (count >= LobbyManager.MaxTeamMembers)
+			{
+				return;
+			}
 		}
 
 		for (int i = 0; i < m_ConnectedPlayers.Count; i++)
@@ -640,7 +693,7 @@ public class NetworkConnectManager : NetworkBehaviour
 		string targetScene = !string.IsNullOrEmpty(m_LobbySceneName) ? m_LobbySceneName : "LobbyScene";
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
 		{
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, LoadSceneMode.Single);
 		}
 	}
 
@@ -649,6 +702,10 @@ public class NetworkConnectManager : NetworkBehaviour
 	/// </summary>
 	public void DisconnectClientAndReturnToJoinPanel()
 	{
+		m_PendingInitialSpectatorSync = false;
+		IsSpectatorClient = false;
+		IsPlayerHost = false;
+
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
 		{
 			NetworkManager.Singleton.Shutdown();
@@ -663,6 +720,10 @@ public class NetworkConnectManager : NetworkBehaviour
 	/// </summary>
 	public void ShutdownHostAndReturnToJoinPanel()
 	{
+		m_PendingInitialSpectatorSync = false;
+		IsSpectatorClient = false;
+		IsPlayerHost = false;
+
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
 		{
 			NetworkManager.Singleton.Shutdown();
