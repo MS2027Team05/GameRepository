@@ -105,8 +105,9 @@ GameRepository/
 │   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1管理・診断・統計ページ・インゲーム操作
 │   │   │   ├── GameSessionResetCoordinator.cs # [EntryPoint] 終了時オブジェクト破棄・セッション初期化
 │   │   │   ├── TutorialManager.cs           # [EntryPoint] チュートリアル進捗監視・同期遷移
+│   │   │   ├── NetworkSceneTimeoutController.cs # ネットワークシーン遷移時のLoadSceneTimeOut動的切替・復元
 │   │   │   └── NetworkConnectSample.cs      # 接続テスト用サンプルUI
-│   │   ├── Shader/                  # シェーダー連携・描画制御 (PlayerOutline/PlayerSilhouette/ToolSilhouette)
+│   │   ├── Shader/                  # シェーダー連携・描画制御 (PlayerOutline/PlayerSilhouette/ToolSilhouette/ShaderPrewarmController)
 │   │   ├── Stage/                   # ステージ・地形・ギミック管理
 │   │   │   ├── StageSymmetricSynchronizer.cs # [EntryPoint] ステージ点対称同期設定
 │   │   │   ├── StageRailRingBuilder.cs      # [EntryPoint] 外周レール・往復キューブ・足場一括生成

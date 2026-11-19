@@ -693,7 +693,7 @@ public class NetworkConnectManager : NetworkBehaviour
 		string targetScene = !string.IsNullOrEmpty(m_LobbySceneName) ? m_LobbySceneName : "LobbyScene";
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
 		{
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, LoadSceneMode.Single);
 		}
 	}
 

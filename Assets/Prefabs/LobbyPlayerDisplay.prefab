@@ -64,7 +64,7 @@ MonoBehaviour:
   m_TeamColorRenderers:
   - {fileID: 6552220763436588910}
   - {fileID: 801248141653439951}
-  m_EffectColorSource: 0
+  m_EffectColorSource: 1
   m_UseDebugAppearance: 1
   m_DebugCharacterType: 0
   m_DebugColor: 0
@@ -336,6 +336,10 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
+    - target: {fileID: 4047744587175770775, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 0ac0df477b446ca438f85afb1de7be52, type: 2}
     - target: {fileID: 5866666021909216657, guid: 1156f2f6cb2c68944aa0912db7044e21, type: 3}
       propertyPath: m_Controller
       value: 
@@ -460,6 +464,10 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4047744587175770775, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 0ac0df477b446ca438f85afb1de7be52, type: 2}
     - target: {fileID: 5866666021909216657, guid: 63a5c5adb15e6db4bb3dba6ab3c3c827, type: 3}
       propertyPath: m_Controller
       value: 

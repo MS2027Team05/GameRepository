@@ -953,7 +953,7 @@ public class LobbyManager : NetworkBehaviour
 
 			// 全端末(ホストおよび全クライアント)へ即座にロード中UIの表示を通知
 			NotifyGameSceneLoadStartedRpc();
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, LoadSceneMode.Single);
 		}
 		else
 		{

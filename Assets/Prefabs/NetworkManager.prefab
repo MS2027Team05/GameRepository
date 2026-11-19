@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 7349481855620521779}
   - component: {fileID: 2232600748467641515}
   - component: {fileID: 6347427552829375116}
+  - component: {fileID: 3703458382660267538}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -96,7 +97,7 @@ MonoBehaviour:
   m_HeartbeatTimeoutMS: 500
   m_ConnectTimeoutMS: 1000
   m_MaxConnectAttempts: 60
-  m_DisconnectTimeoutMS: 30000
+  m_DisconnectTimeoutMS: 15000
   ConnectionData:
     Address: 127.0.0.1
     Port: 7777
@@ -107,3 +108,20 @@ MonoBehaviour:
     PacketDelayMS: 0
     PacketJitterMS: 0
     PacketDropRate: 0
+--- !u!114 &3703458382660267538
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2767991359300234863}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a24f2f024df467499cb5e5f18522113, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkSceneTimeoutController
+  m_DefaultLoadSceneTimeoutSeconds: 45
+  m_HeavyLoadSceneTimeoutSeconds: 120
+  m_ExtendedTimeoutSceneNames:
+  - GameScene
+  - LevelDesignScene

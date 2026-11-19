@@ -370,7 +370,7 @@ public class ResultUIController : MonoBehaviour
 			SessionPlayerDataStore.Instance?.ResetAllReadyStates();
 			PlayerInputReceiver.SetAllPaused(false);
 			PlayerInputReceiver.SetCursorLocked(false);
-			NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, LoadSceneMode.Single);
 			return;
 		}
 
