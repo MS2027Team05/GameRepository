@@ -1,5 +1,6 @@
 ﻿using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// プレイヤー側のボール所持処理を担当します。
@@ -18,10 +19,26 @@ public class PlayerBallCarrier :
 	IBallCarrier
 {
 	[Header("ボール所持位置")]
-	[SerializeField] private Transform m_BallHoldPoint;
+	[Tooltip("男性モデルのRig:Human_Ball_Jointを指定します。描画は位置・回転のオフセットなしで追従します。")]
+	[FormerlySerializedAs("m_BallHoldPoint")]
+	[SerializeField] private Transform m_ManBallHoldPoint;
+	[Tooltip("女性モデルのRig:Human_Ball_Jointを指定します。描画は位置・回転のオフセットなしで追従します。")]
+	[SerializeField] private Transform m_WomanBallHoldPoint;
+
+	private const float m_PickupRetryInterval = 0.10f;
+
+	[Header("追尾パス設定")]
+	[Tooltip("追尾パスのチャージ完了に必要な時間です(秒)。")]
+	[SerializeField] private float m_PassChargeDuration;
 
 	private PlayerController m_PlayerController;
+	private PlayerResourceController m_PlayerResourceController;
+	private PlayerAppearance m_PlayerAppearance;
+	private PlayerNetworkProfile m_PlayerNetworkProfile;
 	private bool m_HasBall;
+	private bool m_IsPassCharging;
+	private float m_PassChargeRatio;
+	private float m_NextPickupRetryTime;
 
 	/// <summary>
 	/// このプレイヤーが現在ボールを所持しているか取得します。
@@ -35,13 +52,63 @@ public class PlayerBallCarrier :
 	}
 
 	/// <summary>
-	/// ボールを所持中に配置する位置を取得します。
+	/// 追尾パスの長押しチャージ中であるか取得します。
+	/// </summary>
+	public bool IsPassCharging
+	{
+		get
+		{
+			return m_IsPassCharging;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスのチャージ進捗率(0.0〜1.0)を取得します。
+	/// </summary>
+	public float PassChargeRatio
+	{
+		get
+		{
+			return m_PassChargeRatio;
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスのチャージが満タンに達しているか取得します。
+	/// </summary>
+	public bool IsPassChargeFull
+	{
+		get
+		{
+			return m_PassChargeRatio >= 1.0f;
+		}
+	}
+
+	/// <summary>
+	/// 表示中の男女モデルに対応する所持ジョイントを取得します。
+	/// 外見の初期反映前は、同期済みのキャラクター種別を使用します。
 	/// </summary>
 	public Transform BallHoldPoint
 	{
 		get
 		{
-			return m_BallHoldPoint;
+			ECharacterType characterType = ECharacterType.Man;
+			if (m_PlayerAppearance != null && m_PlayerAppearance.HasAppliedCharacterType)
+			{
+				characterType = m_PlayerAppearance.CurrentCharacterType;
+			}
+			else if (m_PlayerNetworkProfile != null)
+			{
+				characterType = m_PlayerNetworkProfile.CharacterType;
+			}
+
+			// 未登録の場合は、非表示側のモデルへ装着せず取得を拒否します。
+			return characterType switch
+			{
+				ECharacterType.Man => m_ManBallHoldPoint,
+				ECharacterType.Woman => m_WomanBallHoldPoint,
+				_ => null
+			};
 		}
 	}
 
@@ -52,6 +119,9 @@ public class PlayerBallCarrier :
 	{
 		m_PlayerController =
 			GetComponent<PlayerController>();
+		m_PlayerResourceController = GetComponent<PlayerResourceController>();
+		m_PlayerAppearance = GetComponent<PlayerAppearance>();
+		m_PlayerNetworkProfile = GetComponent<PlayerNetworkProfile>();
 	}
 
 	/// <summary>
@@ -64,12 +134,48 @@ public class PlayerBallCarrier :
 	private void OnTriggerEnter(
 		Collider other)
 	{
-		if (!IsOwner)
+		TryRequestPickup(
+			other,
+			true);
+	}
+
+	/// <summary>
+	/// 再取得禁止時間中にキャッチ範囲へ入り続けていた場合も、
+	/// 範囲外へ出ることなく一定間隔で再取得を試します。
+	/// </summary>
+	/// <param name="other">
+	/// 接触中のColliderです。
+	/// </param>
+	private void OnTriggerStay(
+		Collider other)
+	{
+		TryRequestPickup(
+			other,
+			false);
+	}
+
+	/// <summary>
+	/// Owner側から指定ColliderのBall取得を要求します。
+	/// </summary>
+	/// <param name="other">
+	/// 接触対象のColliderです。
+	/// </param>
+	/// <param name="ignoreRetryInterval">
+	/// Triggerへ入った瞬間など、再試行間隔を無視する場合はtrueです。
+	/// </param>
+	private void TryRequestPickup(
+		Collider other,
+		bool ignoreRetryInterval)
+	{
+		if (!IsOwner ||
+			m_HasBall)
 		{
 			return;
 		}
 
-		if (m_HasBall)
+		if (!ignoreRetryInterval &&
+			Time.time <
+				m_NextPickupRetryTime)
 		{
 			return;
 		}
@@ -95,6 +201,10 @@ public class PlayerBallCarrier :
 		{
 			return;
 		}
+
+		m_NextPickupRetryTime =
+			Time.time +
+			m_PickupRetryInterval;
 
 		RequestPickupServerRpc(
 			ballController.NetworkObjectId);
@@ -129,6 +239,30 @@ public class PlayerBallCarrier :
 		ballController.TrySetHolder(
 			OwnerClientId,
 			NetworkObjectId);
+	}
+
+	/// <summary>
+	/// Hostが味方からのパス受取を確認したときに、対象Ownerへボーナス付与を通知します。
+	/// </summary>
+	public void NotifyFriendlyPassReceivedServer()
+	{
+		if (!IsServer || !IsSpawned)
+		{
+			return;
+		}
+
+		ReceiveFriendlyPassBonusOwnerRpc();
+	}
+
+	[Rpc(SendTo.Owner)]
+	private void ReceiveFriendlyPassBonusOwnerRpc()
+	{
+		if (!IsOwner)
+		{
+			return;
+		}
+
+		m_PlayerResourceController?.ApplyFriendlyPassBonus();
 	}
 
 	/// <summary>
@@ -326,6 +460,11 @@ public class PlayerBallCarrier :
 
 		m_HasBall = hasBall;
 
+		if (!hasBall)
+		{
+			CancelPassCharge();
+		}
+
 		// 移動速度などプレイヤー固有の変更は、
 		// そのプレイヤーを操作するOwner側だけに通知します。
 		if (!IsOwner)
@@ -341,4 +480,205 @@ public class PlayerBallCarrier :
 		m_PlayerController.NotifyBallStateChanged(
 			hasBall);
 	}
+
+	// =========================================================================
+	// 追尾パスアクション用インターフェース窓口 (PG3担当: 本実装対象)
+	// =========================================================================
+
+	/// <summary>
+	/// 長押しによる追尾パスチャージおよびキャンセル案内UIの表示を開始します(PG3本実装対象)。
+	/// </summary>
+	public void BeginPassCharge()
+	{
+		if (!IsOwner || !m_HasBall)
+		{
+			return;
+		}
+
+		m_IsPassCharging = true;
+		m_PassChargeRatio = 0.0f;
+
+		Debug.Log("[PlayerBallCarrier] パスチャージ開始");
+	}
+
+	/// <summary>
+	/// 追尾パスチャージの状態を毎フレーム更新します(PG3本実装対象)。
+	/// </summary>
+	/// <param name="deltaTime">経過時間(秒)</param>
+	public void UpdatePassCharge(float deltaTime)
+	{
+		if (!IsOwner || !m_IsPassCharging || !m_HasBall)
+		{
+			return;
+		}
+
+		// チャージ時間が0以下の場合は即座に満タン
+		if (m_PassChargeDuration <= 0.0f)
+		{
+			m_PassChargeRatio = 1.0f;
+			return;
+		}
+
+		// チャージ進捗を更新
+		m_PassChargeRatio += deltaTime / m_PassChargeDuration;
+
+		// 0～1の範囲に制限
+		m_PassChargeRatio = Mathf.Clamp01(m_PassChargeRatio);
+	}
+
+	/// <summary>
+	/// 追尾パスチャージをキャンセルし、関連UIを非表示にします(PG3本実装対象)。
+	/// </summary>
+	public void CancelPassCharge()
+	{
+		if (!m_IsPassCharging)
+		{
+			return;
+		}
+
+		m_IsPassCharging = false;
+		m_PassChargeRatio = 0.0f;
+
+		Debug.Log("[PlayerBallCarrier] パスチャージキャンセル");
+	}
+
+	/// <summary>
+	/// ロックオン対象(味方プレイヤーまたは相手ゴール)へ向けて追尾パスを射出します。
+	/// 味方はNetworkObject、ゴールは座標で指定します。
+	/// </summary>
+	/// <param name="targetObject">追尾対象のGameObject</param>
+	/// <param name="targetType">追尾対象の種類</param>
+	public void ShootHoming(
+		GameObject targetObject,
+		ELockOnTargetType targetType)
+	{
+		CancelPassCharge();
+
+		if (!IsOwner || !HasBall || targetObject == null)
+		{
+			return;
+		}
+
+		// ---------------------------------
+		// ゴールの場合は座標で追尾する
+		// ---------------------------------
+		if (targetType == ELockOnTargetType.EnemyGoal)
+		{
+			Vector3 targetPosition =
+				targetObject.transform.position;
+
+			Debug.Log(
+				$"[PlayerBallCarrier] ゴールへの追尾パス要求: " +
+				$"{targetObject.name} / Position={targetPosition}"
+			);
+
+			RequestHomingPassToPositionServerRpc(
+				targetPosition
+			);
+
+			return;
+		}
+
+		// ---------------------------------
+		// 味方プレイヤーはNetworkObjectで追尾
+		// ---------------------------------
+		NetworkObject targetNetworkObject =
+			targetObject.GetComponentInParent<NetworkObject>();
+
+		if (targetNetworkObject == null)
+		{
+			Debug.LogWarning(
+				"[PlayerBallCarrier] 味方プレイヤーにNetworkObjectがありません。",
+				targetObject
+			);
+
+			return;
+		}
+
+		RequestHomingPassServerRpc(
+			targetNetworkObject.NetworkObjectId
+		);
+	}
+
+
+	/// <summary>
+	/// サーバーに追尾パスの開始を要求する。
+	/// </summary>
+	[ServerRpc]
+	private void RequestHomingPassServerRpc(ulong targetNetworkObjectId)
+	{
+		if (!IsServer || !HasBall)
+		{
+			return;
+		}
+
+		if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+			targetNetworkObjectId,
+			out NetworkObject targetNetworkObject))
+		{
+			Debug.LogWarning(
+				"[PlayerBallCarrier] パス対象のNetworkObjectが見つかりません。");
+			return;
+		}
+
+		if (!TryGetOwnedBallServer(out BallController ballController))
+		{
+			Debug.LogWarning(
+				"[PlayerBallCarrier] 所持しているボールが見つかりません。");
+			return;
+		}
+
+		bool success = ballController.TryStartHomingPass(
+			targetNetworkObject.transform);
+
+		if (!success)
+		{
+			Debug.LogWarning(
+				"[PlayerBallCarrier] 追尾パスを開始できませんでした。");
+		}
+	}
+
+
+
+	/// <summary>
+	/// ゴールの座標を指定して追尾パスを開始する。
+	/// </summary>
+	[ServerRpc]
+	private void RequestHomingPassToPositionServerRpc(
+		Vector3 targetPosition)
+	{
+		if (!IsServer || !HasBall)
+		{
+			return;
+		}
+
+		if (!TryGetOwnedBallServer(
+			out BallController ballController))
+		{
+			Debug.LogWarning(
+				"[PlayerBallCarrier] 所持しているボールが見つかりません。"
+			);
+
+			return;
+		}
+
+		bool success =
+			ballController.TryStartHomingPass(targetPosition);
+
+		if (!success)
+		{
+			Debug.LogWarning(
+				"[PlayerBallCarrier] ゴールへの追尾パスを開始できませんでした。"
+			);
+		}
+		else
+		{
+			Debug.Log(
+				"[PlayerBallCarrier] ゴールへの追尾パス開始成功"
+			);
+		}
+	}
+
+
+
 }

@@ -13,6 +13,29 @@ public class SessionPlayerDataStore : MonoBehaviour
 
 	// サーバー上で各ClientIdの設定データを保持するキャッシュ
 	private readonly Dictionary<ulong, LobbyPlayerData> m_PlayerDataCache = new Dictionary<ulong, LobbyPlayerData>();
+	private readonly List<PlayerMatchSummary> m_LatestMatchSummaries = new List<PlayerMatchSummary>();
+	private MatchResultData m_LatestMatchResult;
+	private ExhibitionStatsSnapshot m_LatestExhibitionStats;
+	private bool m_HasExhibitionStats;
+
+	public MatchResultData LatestMatchResult => m_LatestMatchResult;
+	public ExhibitionStatsSnapshot LatestExhibitionStats => m_LatestExhibitionStats;
+	public bool HasExhibitionStats => m_HasExhibitionStats;
+	public IReadOnlyList<PlayerMatchSummary> LatestMatchSummaries => m_LatestMatchSummaries;
+
+	/// <summary>
+	/// 必要に応じてクライアント側にも永続ストアのインスタンスを確保します。
+	/// </summary>
+	public static SessionPlayerDataStore EnsureInstance()
+	{
+		if (Instance != null)
+		{
+			return Instance;
+		}
+
+		var storeObj = new GameObject("SessionPlayerDataStore");
+		return storeObj.AddComponent<SessionPlayerDataStore>();
+	}
 
 	private bool IsServer { get => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer; }
 
@@ -51,7 +74,10 @@ public class SessionPlayerDataStore : MonoBehaviour
 
 	private void HandleClientDisconnected(ulong clientId)
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		m_PlayerDataCache.Remove(clientId);
 	}
@@ -61,7 +87,10 @@ public class SessionPlayerDataStore : MonoBehaviour
 	/// </summary>
 	public void SavePlayerData(LobbyPlayerData data)
 	{
-		if (!IsServer) return;
+		if (!IsServer)
+		{
+			return;
+		}
 
 		m_PlayerDataCache[data.ClientId] = data;
 	}
@@ -83,8 +112,8 @@ public class SessionPlayerDataStore : MonoBehaviour
 			clientId,
 			defaultName,
 			ETeamType.None,
-			ECharacterType.ModelA,
-			EHighlightColor.Default,
+			ECharacterType.Man,
+			EHighlightColor.Black,
 			false);
 
 		if (IsServer)
@@ -121,10 +150,111 @@ public class SessionPlayerDataStore : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 全プレイヤーの準備完了(IsReady)状態を解除します(ゲーム終了後のホットロード用)。
+	/// </summary>
+	public void ResetAllReadyStates()
+	{
+		if (!IsServer)
+		{
+			return;
+		}
+
+		var keys = new List<ulong>(m_PlayerDataCache.Keys);
+		foreach (var clientId in keys)
+		{
+			var data = m_PlayerDataCache[clientId];
+			data.IsReady = false;
+			m_PlayerDataCache[clientId] = data;
+		}
+	}
+
+	/// <summary>
+	/// 試合結果(スコア・勝敗)を保存します。
+	/// </summary>
+	public void SetMatchResult(int redScore, int blueScore, ETeamType winnerTeam)
+	{
+		m_LatestMatchResult = new MatchResultData
+		{
+			m_RedScore = redScore,
+			m_BlueScore = blueScore,
+			m_WinnerTeam = winnerTeam,
+			m_HasResult = true,
+		};
+	}
+
+	/// <summary>
+	/// 試合終了時にサーバーから同期されたプレイヤーサマリー(称号含む)および展示統計を保存します。
+	/// </summary>
+	public void SetMatchAwardsAndStats(
+		IReadOnlyList<PlayerMatchSummary> summaries,
+		in ExhibitionStatsSnapshot exhibitionStats)
+	{
+		m_LatestMatchSummaries.Clear();
+		if (summaries != null)
+		{
+			for (int i = 0; i < summaries.Count; i++)
+			{
+				PlayerMatchSummary summary = summaries[i];
+				if (summary == null)
+				{
+					continue;
+				}
+
+				m_LatestMatchSummaries.Add(summary);
+				m_PlayerDataCache[summary.m_PlayerData.ClientId] = summary.m_PlayerData;
+			}
+		}
+
+		m_LatestExhibitionStats = exhibitionStats;
+		m_HasExhibitionStats = true;
+	}
+
+	/// <summary>
+	/// 指定ClientIdの確定サマリー(個人表彰含む)を取得します。
+	/// </summary>
+	public bool TryGetPlayerSummary(ulong clientId, out PlayerMatchSummary summary)
+	{
+		for (int i = 0; i < m_LatestMatchSummaries.Count; i++)
+		{
+			if (m_LatestMatchSummaries[i] != null && m_LatestMatchSummaries[i].m_PlayerData.ClientId == clientId)
+			{
+				summary = m_LatestMatchSummaries[i];
+				return true;
+			}
+		}
+
+		summary = null;
+		return false;
+	}
+
+	/// <summary>
+	/// 新規試合開始時に前回試合の表彰キャッシュのみをクリアします。
+	/// </summary>
+	public void ClearLatestMatchAwards()
+	{
+		m_LatestMatchSummaries.Clear();
+	}
+
+	/// <summary>
 	/// セッション終了時やロビー解散時に全キャッシュをクリアします。
 	/// </summary>
 	public void ClearAll()
 	{
 		m_PlayerDataCache.Clear();
+		m_LatestMatchSummaries.Clear();
+		m_LatestMatchResult = default;
+		m_LatestExhibitionStats = default;
+		m_HasExhibitionStats = false;
 	}
+}
+
+/// <summary>
+/// 試合終了時のスコアおよび勝敗結果を保持する構造体。
+/// </summary>
+public struct MatchResultData
+{
+	public int m_RedScore;
+	public int m_BlueScore;
+	public ETeamType m_WinnerTeam;
+	public bool m_HasResult;
 }

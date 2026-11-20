@@ -4,7 +4,7 @@ pr等々や、actions/templateによるci/cdについて、gitLFS
 ## はじめに
 
 > [!NOTE]
-> Unityのバージョン 6000.3.24f1
+> Unityのバージョン 6000.3.27f2
 > 記事内で記載しているコードは生成AIで作成したコードを含みます。
 
 ## PullRequest Templateについて

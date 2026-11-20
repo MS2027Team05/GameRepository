@@ -15,7 +15,7 @@ public interface IGravityMover
 	/// 指定された方向へ等速直線移動(落下)を開始します。
 	/// </summary>
 	/// <param name="direction">進行方向ベクトル</param>
-	void StartFalling(Vector3 direction);
+	bool StartFalling(Vector3 direction);
 
 	/// <summary>
 	/// 落下先の着地点と着地面の法線を設定します。

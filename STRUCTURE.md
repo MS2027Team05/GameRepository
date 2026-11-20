@@ -1,88 +1,164 @@
 # ディレクトリ構造 (STRUCTURE.md)
 
-本プロジェクトのディレクトリ構成およびスクリプト配置を記録するドキュメントです。各階層構造の責務と重要なエントリーポイントを記載します。
+本プロジェクトのディレクトリ構成および各階層・主要エントリーポイントの責務を定義します。
+
+## 全体アーキテクチャ・主要フロー
+
+### 1. 試合進行・リスタート・得点演出
+- **エントリーポイント**: `Game/MatchManager` がサーバー権限で試合状態 (`Waiting` / `PreparingRestart` / `Countdown` / `Playing` / `GoalCelebration` / `GoalReplay` / `Finished`)・制限時間・チーム得点を統括します。
+- **スポーンとリスタート**: `Network/PlayerSpawner` が陣営別スポーン地点 (`RedSpawn` / `BlueSpawn` は中央向きに180度対向配置) を保持し、試合開始および得点後の `PreparingRestart` で `PlayerController.PrepareForRestart` へ再配置を指示します。Owner 側は `PlayerController.Respawn` による姿勢・カメラ・アニメーション初期化に加えて `IPlayerResource.ResetToFull` で燃料を100%へ戻し、完了応答後に `Countdown` へ遷移します。
+- **得点演出とHUD**: `MatchManager.TryAddGoalScore` で得点確定後に全端末へ通知し、各端末の `GoalController` が配置済み ParticleSystem を再生します。全端末での粒子消滅完了を受けて次フェーズへ移行し、`UI/MatchHudController` が同期状態に応じた得点メッセージやカウントダウンを表示します。
+
+### 2. ゴールリプレイ・戦績・統計
+- **リプレイ記録・再生**: `Game/Replay/ReplayRecorder` がクライアント側リングバッファへプレイヤーおよびボール (`BallController.VisualTransform`) の座標・状態を記録し、`MatchManager` の設定 (`AfterEveryGoal` / `AfterMatchBestGoal` / `Both`) に応じて `ReplayPlayer` が表示専用アクターとゴールカメラ視点で再生します。ベストゴール評価は `IGoalHighlightEvaluator` に分離しています。
+- **行動統計・表彰・ログ**: `Game/Stats/MatchStatsTracker` がクライアント・サーバー双方の行動記録を集約し、`MatchAwardEvaluator` が個人表彰を選出して `SessionPlayerDataStore` 経由で `ResultUIController` へ引き継ぎます。展示用累計統計は `ExhibitionStatsStore`、1試合ごとの詳細統計は `MatchDebugStatsStore` がそれぞれ永続化します。
+- **ロビー復帰**: `ResultUIController` から `LobbyScene` へ戻る際は通信を維持したまま `SessionPlayerDataStore.ResetAllReadyStates()` とシーン同期遷移を実行し、`TitleScene` へ戻る場合のみ切断します。
+
+### 3. ボール制御・所持追従・場外復帰
+- **状態管理・物理**: `Ball/BallController` が所持・奪取・投球・パス判定をサーバー権限で管理し、物理挙動を `BallPhysicsController` 系へ委譲します。
+- **描画階層の追従**: `BallHoldAttachment` が描画専用階層 (`VisualRoot`) のみを `PlayerBallCarrier.BallHoldPoint` (表示中の男女モデルに応じたジョイント) へ付け替え・復元し、物理・通信用本体は `BallController` がサーバー側 `LateUpdate` で追従させます。
+- **場外復帰**: `BallOutOfBoundsRespawner` がサーバー上の未所持かつ試合進行中ボールの範囲外を検知し、試合再開時と共通の `BallController.RespawnAtInitialPosition()` で初期位置へ戻します。
+
+### 4. 電撃VFX・カラー連携
+- **共通基底とリソース**: `Assets/VFX/Lightning/VFXScripts/ALightningBolt` が共通マテリアル (`Resources/Lightning/`) の読込、線描画プールと差し替え Prefab 再生の切り替え、および所有者からの色同期を担当します。派生クラスは形状・接触検知・移動軌跡などの発生ロジックを担当します。
+- **色連動**: `PlayerAppearance.TryGetEffectColor` / `EffectColorChanged` が `EEffectColorSource` (選択色またはチーム色) に応じた色とパレット種別を提供し、ボール所持時は `BallHoldAttachment` が描画配下の電撃へ所有者を明示します。
+
+---
+
+## ディレクトリ構成
 
 ```text
 GameRepository/
-├── .agents/                     # AIエージェント設定およびカスタムスキル格納
-│   └── skills/                  # Unity公式AIエージェントSkills
+├── .agents/                         # AIエージェント設定およびカスタムスキル格納
+│   └── skills/                      # Unity公式AIエージェントSkills
 ├── Assets/
-│   ├── Audios/                  # 音声リソース格納 (AI学習対象外)
-│   ├── Fonts/                   # フォントリソース格納 (AI学習対象外)
-│   ├── haikei/                  # 背景モデル・マテリアル・テクスチャ・Prefab格納
-│   ├── Materials/               # マテリアル・シェーダー関連格納
-│   │   ├── Ball/                # ボール描画用マテリアル (通常・透過X-Ray等)
-│   │   └── Player/              # プレイヤー用マテリアル格納 (性別・チームカラー別)
-│   ├── Meshes/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
-│   ├── Models/                  # 3Dモデル・メッシュデータ格納 (AI学習対象外)
-│   ├── Plugins/                 # 外部プラグインライブラリ格納 (DOTween等)
-│   ├── Prefabs/                 # ゲーム内プレハブ格納
-│   ├── Resources/               # 動的読み込み用アセット格納
-│   ├── Scenes/                  # 各画面・遷移用シーン格納
-│   ├── Scripts/                 # プロジェクト固有のC#スクリプト
-│   │   ├── Ball/                # ボール物理・同期制御
-│   │   │   ├── BallController.cs        # [EntryPoint] ボール状態管理・所持・シュート制御
-│   │   │   ├── BallPhysicsController.cs # ボール物理補正・バウンド制御
-│   │   │   ├── BallBounce.cs            # ボールの跳ね返り挙動制御
-│   │   │   ├── BallSurfaceGravity.cs    # ボールの接地面重力・吸着制御
-│   │   │   ├── BallSurfaceSearch.cs     # ボール周辺の面探索制御
-│   │   │   ├── BallScreenIndicator.cs   # ボール位置表示用画面内・画面外インジケーターUI制御
-│   │   │   └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
-│   │   ├── Editor/              # エディタ拡張・開発支援ツール
-│   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換・Transform保持ツール
-│   │   │   └── StageSymmetricSynchronizerEditor.cs # [EntryPoint] ステージ地形の点対称(180度回転)同期・チーム別Prefab自動置換Inspector拡張
-│   │   ├── Network/             # 通信接続・同期制御
-│   │   │   ├── NetworkConnectManager.cs # [EntryPoint] 接続初期化・起動制御
-│   │   │   ├── LobbyManager.cs          # [EntryPoint] ロビー通信同期・ゲーム開始制御
-│   │   │   ├── LobbyUIController.cs     # ロビー画面UI表示・端末ロール別パネル制御
-│   │   │   ├── LobbyCharacterDisplayManager.cs # ロビー内3Dモデル表示・台座同期制御
-│   │   │   ├── LobbyPlayerData.cs       # ロビー参加プレイヤー同期データ構造体
-│   │   │   ├── SessionPlayerDataStore.cs# ロビー設定永続化・シーン間データ引継ぎ管理
-│   │   │   └── PlayerSpawner.cs         # 陣営別プレイヤースポーン制御
-│   │   ├── Shader/              # シェーダー連携・描画制御スクリプト
-│   │   │   ├── PlayerOutline.cs         # アウトライン描画制御
-│   │   │   ├── PlayerSilhouette.cs      # チーム別アウトライン・味方/観戦者向け遮蔽シルエット描画制御
-│   │   │   └── ToolSilhouette.cs        # ツール類遮蔽時シルエット描画制御
-│   │   ├── Stage/               # ステージ・地形管理スクリプト
-│   │   │   └── StageSymmetricSynchronizer.cs # [EntryPoint] ステージ地形の点対称同期設定・データ保持コンポーネント
-│   │   └── Player/              # プレイヤー制御・挙動ロジック
-│   │       ├── PlayerNetworkProfile.cs  # プレイヤープロファイル(名前・チーム・カラー等)同期制御
-│   │       ├── PlayerNamePlate.cs       # 頭上3Dネームプレート・Billboard追従・距離スケール補正・敵味方表示制御
-│   │       ├── Interfaces/      # 各サブモジュール用インターフェース
-│   │       │   ├── IAimGuide.cs         # エイム・ガイド表示制御インターフェース
-│   │       │   ├── IBallCarrier.cs      # ボール所持・操作インターフェース
-│   │       │   ├── ICameraEffect.cs     # カメラ演出・移動基準基底提供用インターフェース
-│   │       │   ├── IGravityMover.cs     # 等速直線移動(落下)・ホバリング制御インターフェース
-│   │       │   ├── IGroundDetector.cs   # 接地検知・法線計測インターフェース
-│   │       │   ├── ISurfaceMover.cs     # 地上・曲面歩行移動インターフェース
-│   │       │   └── IPlayerRespawnHandler.cs # 場外復帰要求の受け口インターフェース
-│   │       ├── GravityMover.cs          # 等速直線移動(落下)・空中ホバリング・着地衝突制御
-│   │       ├── LandingMarkerEffect.cs   # 着地予測マーカーの描画・アニメーション演出制御
-│   │       ├── LockOnManager.cs         # ロックオン制御(ボール非所持時のボール照準・所持時の味方照準制御)
-│   │       ├── PlayerAimGuide.cs        # レティクル表示・軌道予測線の描画およびエイム照準制御
-│   │       ├── PlayerAnimationController.cs # 地上移動速度に基づくAnimator状態切り替え・移動状態の通信同期
-│   │       ├── PlayerAppearance.cs      # プレイヤー外見(性別モデル・マテリアル・カラー)管理制御
-│   │       ├── PlayerBallCarrier.cs     # プレイヤーのボール所持・キャッチ・投擲(シュート)制御
-│   │       ├── PlayerCameraEffect.cs    # 三人称視点カメラ旋回(接地面法線追従)・高速移動時FOV変更・カメラシェイク制御・視点リセット
-│   │       ├── PlayerEdgeDiagnostics.cs # 角部・接地境界脱落時の挙動解析・診断HUD描画制御
-│   │       ├── PlayerGroundDetector.cs  # 足元/角/壁面の接地・法線検知およびデバッグGizmo描画
-│   │       ├── PlayerInputReceiver.cs   # 入力検知・視点操作・カーソルロック管理
-│   │       ├── PlayerOutOfBoundsRespawner.cs # [EntryPoint] XYZ範囲外検知・初期スポーン地点への復帰要求
-│   │       ├── PlayerSurfaceMover.cs    # 地上/曲面歩行移動・運動量転送・ダウンフォース・姿勢回転制御
-│   │       └── PlayerController.cs      # [EntryPoint] プレイヤー状態統括・調停
-│   │   └── UI/                  # 汎用・共通UI制御
-│   │       ├── UIInputReceiver.cs       # UI系統入力検知・InputActionインスタンス分離制御
-│   │       ├── InGamePauseMenuController.cs # [EntryPoint] インゲームEscメニュー・設定パネル連携・IP表示・退出制御
-│   │       ├── SettingsPanelController.cs # 設定画面(音量・描画設定)開閉・UI制御
-│   │       └── SceneTransitionEffect.cs # 画面トランジション(水平ワイプ・暗転解除演出)制御
-│   ├── Settings/                # プロジェクト設定・URP描画設定
-│   ├── Shader/                  # カスタムシェーダー格納 (アウトライン・遮蔽シルエット等)
-│   ├── SkySeries Freebie/       # Skybox背景アセット格納
-│   ├── TextMesh Pro/            # TextMesh Pro関連リソース
-│   ├── Textures/                # テクスチャ・スプライト格納 (AI学習対象外)
-│   └── VFX/                     # VFX関連リソース
-├── docs/                        # 企画書・仕様書等の設計ドキュメント格納
-├── AGENTS.md                    # AI用ルール・規約定義
-├── player_structure.md          # プレイヤーモジュール仕様・連携手順書
-└── STRUCTURE.md                 # 本ドキュメント
+│   ├── Animation/                   # キャラクター・ボール・デバイスのAnimatorController格納
+│   ├── Audios/                      # 音声リソース格納 (AI学習対象外)
+│   ├── Effect/                      # エフェクト用プレハブ格納
+│   ├── Fonts/                       # フォントリソース格納 (AI学習対象外)
+│   ├── haikei/                      # 背景モデル・マテリアル・テクスチャ・Prefab格納
+│   ├── Materials/                   # マテリアル・シェーダー関連格納
+│   │   ├── Ball/                    # ボール描画用マテリアル (通常・透過X-Ray等)
+│   │   └── Player/                  # プレイヤー・デバイス用マテリアル格納
+│   ├── Meshes/                      # 3Dモデル・メッシュデータ格納 (AI学習対象外)
+│   │   └── Material/Models/         # キャラクター・ボール・デバイス3Dモデル(FBX) (AI学習対象外)
+│   ├── Plugins/                     # 外部プラグインライブラリ格納 (DOTween等)
+│   ├── Prefabs/                     # ゲーム内プレハブ格納
+│   ├── Resources/                   # 動的読み込み用アセット格納
+│   ├── Scenes/                      # 各画面・遷移用シーン格納
+│   ├── Scripts/                     # プロジェクト固有のC#スクリプト
+│   │   ├── Ball/                    # ボール制御・物理・Surface・UI・場外復帰
+│   │   │   ├── BallController.cs            # [EntryPoint] ボール所持・奪取・シュート・復帰統括
+│   │   │   ├── BallHoldAttachment.cs        # 描画専用階層(VisualRoot)の所持ジョイント付け替え・復元
+│   │   │   ├── BallOutOfBoundsRespawner.cs  # 未所持ボールのワールド範囲外検知・初期位置復帰
+│   │   │   ├── Physics/                     # Free Flight・Homing・Surface物理制御
+│   │   │   │   ├── BallPhysicsController.cs # [EntryPoint] ボール物理状態統括 (Air/Collision/Homing/Surface)
+│   │   │   │   ├── BallBounce.cs            # ボールの跳ね返り挙動制御
+│   │   │   │   └── Attraction/              # 疑似重力・Surface探索 (BallSurfaceGravity/Search)
+│   │   │   ├── Surface/                     # BallSurfaceのMesh解析・曲面上移動シミュレーション
+│   │   │   │   ├── BallSurfaceSource.cs     # [EntryPoint] MeshColliderからSurfaceデータを構築
+│   │   │   │   └── BallSurfaceSimulation.cs # Surface Physics進行処理 (Simulation/配下に形状別分割)
+│   │   │   ├── UI/
+│   │   │   │   ├── BallScreenIndicator.cs   # 画面内・画面外インジケーターUI制御
+│   │   │   │   └── BallSpectatorHighlight.cs# 観戦時の最小視認スケール維持・強調制御
+│   │   │   └── Debug/
+│   │   │       └── BallDebugRespawner.cs    # ボール位置リセット用デバッグ機能
+│   │   ├── Game/                    # 試合進行・ゴール判定・リプレイ・統計・観戦
+│   │   │   ├── MatchManager.cs              # [EntryPoint] 試合状態・制限時間・得点・遷移演出のサーバー管理
+│   │   │   ├── GoalController.cs            # ゴール構造管理・得点判定委譲・ゴール演出再生制御
+│   │   │   ├── GoalArea.cs                  # ゴール判定コライダー検知・GoalControllerへの通知
+│   │   │   ├── Replay/                      # ゴールリプレイ記録・評価・表示専用再生
+│   │   │   │   ├── GoalHighlightEvaluation.cs # ハイライト評価コンテキスト・IGoalHighlightEvaluator定義
+│   │   │   │   ├── ReplayFrameData.cs       # リプレイフレーム・クリップデータ構造体
+│   │   │   │   ├── ReplayRecorder.cs        # [EntryPoint] クライアント側リングバッファ記録・クリップ切り出し
+│   │   │   │   └── ReplayPlayer.cs          # [EntryPoint] 表示専用アクター制御・ゴールカメラ再生・復帰
+│   │   │   ├── Stats/                       # 行動統計・個人表彰・ログ永続化
+│   │   │   │   ├── MatchAwardData.cs        # 統計・称号・同期ペイロード定義
+│   │   │   │   ├── MatchAwardEvaluator.cs   # 個人表彰(最大3個)の選出・ラベル整形
+│   │   │   │   ├── ExhibitionStatsStore.cs  # 展示用累計統計・選択累計のJSON永続化
+│   │   │   │   ├── MatchDebugStatsStore.cs  # 試合別デバッグ統計のJSON出力
+│   │   │   │   └── MatchStatsTracker.cs     # [EntryPoint] クライアント/サーバー行動集計・確定処理
+│   │   │   └── Spectator/                   # 観戦カメラ・中継テロップ制御
+│   │   │       ├── SpectatorCameraDirector.cs # [EntryPoint] 定点・追従・ゴール前カメラの自動切替
+│   │   │       └── SpectatorOverlayUIController.cs # 観戦中継テロップ表示制御
+│   │   ├── Editor/                  # エディタ拡張・ステージ配置/メニュー構築ツール
+│   │   │   ├── SetupResultAndStaffMenu.cs   # [EntryPoint] スタッフメニュー・ResultScene生成ツール
+│   │   │   ├── StageObjectBilateralPlacerEditor.cs
+│   │   │   ├── StagePrefabReplacerWindow.cs # [EntryPoint] Model PrefabからPrefab Variantへの一括置換
+│   │   │   ├── StageRailPatternSwitcherEditor.cs
+│   │   │   ├── StageRailRingBuilderEditor.cs
+│   │   │   └── StageSymmetricSynchronizerEditor.cs
+│   │   ├── Network/                 # 通信接続・ロビー・スポーン・セッション管理
+│   │   │   ├── NetworkConnectManager.cs     # [EntryPoint] 接続初期化・起動制御
+│   │   │   ├── ClientNetworkTransform.cs    # Owner権限でのTransform同期
+│   │   │   ├── LobbyManager.cs              # [EntryPoint] ロビー通信同期・ゲーム開始制御
+│   │   │   ├── LobbyUIController.cs         # ロビーUI表示・ロール別パネル制御
+│   │   │   ├── LobbyAppearancePickerUI.cs   # ロビー内キャラ・カラー選択UI制御
+│   │   │   ├── LobbyCharacterDisplayManager.cs # ロビー内3Dモデル表示・台座同期
+│   │   │   ├── LobbyPlayerDisplay.cs        # 表示特化キャラクター外見・頭上ネーム・リプレイアニメ制御
+│   │   │   ├── LobbyPlayerData.cs           # ロビー参加プレイヤー同期データ構造体
+│   │   │   ├── LocalPlayerProfilePreferences.cs # 端末別設定(キャラ・色・チーム・IP・感度)永続化
+│   │   │   ├── SessionPlayerDataStore.cs    # ロビー設定・試合結果/個人表彰のシーン間引継ぎ管理
+│   │   │   ├── PlayerSpawner.cs             # [EntryPoint] 陣営別プレイヤースポーン・リスタート統括
+│   │   │   ├── SpectatorDisplayManager.cs   # Display 1/2 観戦カメラ・UI出力統括
+│   │   │   ├── TitleOverlayController.cs    # [EntryPoint] タイトル画面演出・個別開始制御
+│   │   │   ├── StaffInspectionMenuController.cs # [EntryPoint] F1管理・診断・統計ページ・インゲーム操作
+│   │   │   ├── GameSessionResetCoordinator.cs # [EntryPoint] 終了時オブジェクト破棄・セッション初期化
+│   │   │   ├── TutorialManager.cs           # [EntryPoint] チュートリアル進捗監視・同期遷移
+│   │   │   ├── NetworkSceneTimeoutController.cs # ネットワークシーン遷移時のLoadSceneTimeOut動的切替・復元
+│   │   │   └── NetworkConnectSample.cs      # 接続テスト用サンプルUI
+│   │   ├── Shader/                  # シェーダー連携・描画制御 (PlayerOutline/PlayerSilhouette/ToolSilhouette/ShaderPrewarmController)
+│   │   ├── Stage/                   # ステージ・地形・ギミック管理
+│   │   │   ├── StageSymmetricSynchronizer.cs # [EntryPoint] ステージ点対称同期設定
+│   │   │   ├── StageRailRingBuilder.cs      # [EntryPoint] 外周レール・往復キューブ・足場一括生成
+│   │   │   ├── StageRailPatternSwitcher.cs  # 外周レールx足場パターン切替・マルチ同期
+│   │   │   ├── StageShuttleBlock.cs         # レール区間往復ブロック制御
+│   │   │   └── StageObjectBilateralPlacer.cs# 等間隔両端配置コンポーネント
+│   │   ├── Player/                  # プレイヤー制御・入力・物理・外見・リソース
+│   │   │   ├── PlayerController.cs          # [EntryPoint] プレイヤー状態統括・アクション調停・RPC窓口
+│   │   │   ├── Interfaces/                  # モジュール間インターフェース群 (IAimGuide, IBallCarrier, ICameraEffect, IElectricAction, IGravityMover, IGroundDetector, ILockOnProvider, IMovingSurface, IPlayerResource, IPlayerRespawnHandler, ISurfaceMover)
+│   │   │   ├── PlayerNetworkProfile.cs      # プレイヤープロファイル同期
+│   │   │   ├── PlayerAppearance.cs          # 外見(性別モデル・12色・チーム色・電流色ソース)管理
+│   │   │   ├── PlayerAppearanceCatalog.cs   # 外見マテリアル・プレビュー色管理ScriptableObject
+│   │   │   ├── EEffectColorSource.cs        # 電流色取得元(選択色/チーム色)Enum
+│   │   │   ├── PlayerNamePlate.cs           # 頭上3Dネームプレート・敵味方表示制御
+│   │   │   ├── PlayerInputReceiver.cs       # InputSystem入力・視点操作(マウス/PAD感度)・カーソル管理
+│   │   │   ├── PlayerCameraEffect.cs        # 三人称カメラ旋回(法線追従)・FOV・シェイク・視点リセット
+│   │   │   ├── GravityMover.cs              # 等速直線移動・空中ホバリング・着地衝突
+│   │   │   ├── PlayerSurfaceMover.cs        # 地上/曲面歩行・運動量転送・姿勢回転
+│   │   │   ├── PlayerGroundDetector.cs      # 接地検知・法線計測
+│   │   │   ├── PlayerAimGuide.cs            # 常時レティクル・地上予備浮上・着地点追跡
+│   │   │   ├── LandingMarkerEffect.cs       # 着地予測マーカー演出
+│   │   │   ├── LockOnManager.cs             # 優先度付きロックオン検索・捕捉
+│   │   │   ├── PlayerBallCarrier.cs         # ボール所持・男女別ジョイント提供・パス/シュート
+│   │   │   ├── ElectricAction.cs            # 電撃チャージ・発射・奪取/スタン命中処理
+│   │   │   ├── PlayerResourceController.cs  # [EntryPoint] Owner側リソース消費・回復・パスボーナス・100%リセット
+│   │   │   ├── PlayerRecoveryEffectController.cs # 回復・パスボーナスVFX再生および同期
+│   │   │   ├── PlayerAnimationController.cs # Animator状態切替・移動状態同期
+│   │   │   ├── PlayerOutOfBoundsRespawner.cs# [EntryPoint] 範囲外検知・復帰要求
+│   │   │   └── PlayerEdgeDiagnostics.cs     # 接地境界脱落時の診断HUD描画
+│   │   └── UI/                      # 汎用・画面別UI制御
+│   │       ├── UIInputReceiver.cs           # UI系統入力検知・InputAction分離
+│   │       ├── UIFocusGlowOutline.cs        # 汎用UIフォーカス発光枠線制御
+│   │       ├── PlayerResourceGaugeUI.cs     # リソースゲージ表示更新
+│   │       ├── InGamePauseMenuController.cs # [EntryPoint] Escメニュー・設定連携・ロビー復帰
+│   │       ├── MatchHudController.cs        # 試合時間・得点・状態メッセージ表示
+│   │       ├── ResultAwardItemUI.cs         # リザルト個人表彰1項目表示
+│   │       ├── ResultUIController.cs        # [EntryPoint] リザルト画面制御・外見/表彰表示・復帰制御
+│   │       ├── SettingsPanelController.cs   # 設定画面(感度・音量・描画設定)制御
+│   │       └── SceneTransitionEffect.cs     # 画面トランジション演出制御
+│   ├── Settings/                    # プロジェクト設定・URP描画設定
+│   ├── Shader/                      # カスタムシェーダー格納 (アウトライン・遮蔽シルエット等)
+│   ├── SkySeries Freebie/           # Skybox背景アセット格納
+│   ├── TextMesh Pro/                # TextMesh Pro関連リソース
+│   ├── Textures/                    # テクスチャ・スプライト格納 (AI学習対象外)
+│   └── VFX/                         # VFX関連リソース
+│       └── Lightning/
+│           ├── Resources/Lightning/ # 全電撃共通マテリアル格納
+│           └── VFXScripts/          # ALightningBolt基底・派生電撃・Prefab色/再生連携スクリプト群
+├── Tools/                           # 開発・展示運用・ネットワーク支援ツール
+│   └── Firewall/                    # 展示用ファイアウォールポート開放・解除バッチ
+├── docs/                            # 企画書・仕様書等の設計ドキュメント格納
+├── AGENTS.md                        # AI用ルール・規約定義
+└── STRUCTURE.md                     # 本ドキュメント
 ```

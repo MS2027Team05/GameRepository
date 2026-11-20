@@ -19,6 +19,11 @@ public interface ICameraEffect
 	void RestoreFOV();
 
 	/// <summary>
+	/// 復帰先へカメラを即時配置し、視点・追従・演出の状態を初期化します。
+	/// </summary>
+	void ResetForRespawn(Vector3 position, Quaternion rotation);
+
+	/// <summary>
 	/// 指定された接地法線に対して、上下角の特異点や反転を含まない移動用の前方・右方単位ベクトルを取得します。
 	/// </summary>
 	/// <param name="groundNormal">現在の接地法線ベクトル</param>

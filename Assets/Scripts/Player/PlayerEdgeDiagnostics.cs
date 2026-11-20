@@ -70,7 +70,7 @@ public class PlayerEdgeDiagnostics : MonoBehaviour
 	}
 
 	private readonly Queue<SnapshotData> m_HistoryBuffer = new Queue<SnapshotData>();
-	private const int MaxHistoryCount = 60; // 60フレーム分の履歴
+	private const int m_MaxHistoryCount = 60; // 60フレーム分の履歴
 
 	private bool m_WasGrounded = true;
 	private SnapshotData m_LastFalloffSnapshot;
@@ -112,7 +112,7 @@ public class PlayerEdgeDiagnostics : MonoBehaviour
 		m_WasGrounded = currentFrame.IsGrounded;
 
 		m_HistoryBuffer.Enqueue(currentFrame);
-		if (m_HistoryBuffer.Count > MaxHistoryCount)
+		if (m_HistoryBuffer.Count > m_MaxHistoryCount)
 		{
 			m_HistoryBuffer.Dequeue();
 		}

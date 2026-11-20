@@ -15,6 +15,7 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
     private bool m_HasPlayed;
 
     protected override bool ReusesDeactivatedBolts => false;
+    protected override bool KeepsPrefabParticlesAfterStop => true;
 
     public void Play()
     {
@@ -42,6 +43,14 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
     protected override bool CanSpawnBolt()
     {
         return m_HasPlayRequest;
+    }
+
+    protected override void UpdatePrefabEffectTransform(Transform effectTransform)
+    {
+        // プレハブのローカルY軸を接触面の法線に合わせます。
+        effectTransform.SetPositionAndRotation(
+            m_ActivationHit.point,
+            Quaternion.FromToRotation(Vector3.up, GetSurfaceNormal()));
     }
 
     protected override void InitializeBolt(BoltData bolt)
@@ -77,22 +86,26 @@ public sealed class SurfaceBurstLightningBolt : ALightningBolt
     {
     }
 
-    private void OnEnable()
+    protected override void OnEnable()
     {
+        base.OnEnable();
         if (m_ContactDetector != null)
         {
             m_ContactDetector.ContactEntered += Play;
             m_ContactDetector.ContactExited += ResetForNextContact;
+            Play();
         }
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         if (m_ContactDetector != null)
         {
             m_ContactDetector.ContactEntered -= Play;
             m_ContactDetector.ContactExited -= ResetForNextContact;
         }
+        ResetForNextContact();
     }
 
     private void ResetForNextContact()

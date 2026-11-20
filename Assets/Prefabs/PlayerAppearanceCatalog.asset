@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6ea2d9081bc2d34792cc7bf9cf22407, type: 3}
+  m_Name: PlayerAppearanceCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAppearanceCatalog
+  m_ColorEntries:
+  - m_ColorType: 0
+    m_PreviewColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: b0f5004f780757540876e802eb214cde, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: a3c003ee9858a4a43a0f095db30e7cd7, type: 2}
+  - m_ColorType: 1
+    m_PreviewColor: {r: 0.1176471, g: 0.5647059, b: 1, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 4d568bf5cbdf2854c96b7a77143d5dbc, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 3923653f3e5cb1246b3a431c75b93c8e, type: 2}
+  - m_ColorType: 2
+    m_PreviewColor: {r: 0.09803922, g: 0.09803922, b: 0.4392157, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: e9e13c98460be094682edab60bcdfd18, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 33c723aeefe98204eade86a459605c6d, type: 2}
+  - m_ColorType: 3
+    m_PreviewColor: {r: 0.5450981, g: 0, b: 0, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 99cc07e41812d63489b3dc78013e3c91, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: e4138a469c235844589e238387ba883f, type: 2}
+  - m_ColorType: 4
+    m_PreviewColor: {r: 0.2021627, g: 0.7264151, b: 0.2021627, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 5e7511cd28083404e8d0639dd6d9653a, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 05f71f8f98f9329498b0bf54a88c9704, type: 2}
+  - m_ColorType: 5
+    m_PreviewColor: {r: 0, g: 0.7490196, b: 1, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 192d64af4c6c51343b3ff7b88e4c3a01, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 465eda93800f1e7428dad57627fc80c0, type: 2}
+  - m_ColorType: 6
+    m_PreviewColor: {r: 0.4862745, g: 0.9882354, b: 0, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 6677280572bb5c44d855083fd3f98289, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: adba295a3645c8c48a36d8294fe251bd, type: 2}
+  - m_ColorType: 7
+    m_PreviewColor: {r: 1, g: 0.7119867, b: 0.18396229, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 4c0d2708625c83c4d825fcbe6a5c6f63, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 4764ddda46f7abf4ca702a29d3b0c9c1, type: 2}
+  - m_ColorType: 8
+    m_PreviewColor: {r: 0.627451, g: 0.1254902, b: 0.9411765, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 8c991cb18244d3044a1bc90504bb40b7, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: ffee396694de2b84780e40ffe2c4fc01, type: 2}
+  - m_ColorType: 9
+    m_PreviewColor: {r: 0.9372549, g: 0.27058825, b: 0.2901961, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: 8ed1bb7a238fc354db3030e44c40f525, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 9c0479ff6b427c8408d43ad888c8bfae, type: 2}
+  - m_ColorType: 10
+    m_PreviewColor: {r: 0.9, g: 0.9, b: 0.9, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: b24973c1e0b821a4c814ef605efdbc5a, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 71a7b239e56b11c4e8c3d78bb15a59c3, type: 2}
+  - m_ColorType: 11
+    m_PreviewColor: {r: 1, g: 0.907, b: 0.276, a: 1}
+    m_ManMaterial: {fileID: 2100000, guid: c5a6d39c19415464790edd67ec85aabb, type: 2}
+    m_WomanMaterial: {fileID: 2100000, guid: 450c097ef4df4724da2bcb0c27009e98, type: 2}
+  m_RedTeamMaterial: {fileID: 2100000, guid: 7340e023a7497d4418a61add8538555c, type: 2}
+  m_BlueTeamMaterial: {fileID: 2100000, guid: 3f4aba630f13053419b234b7768eca15, type: 2}
+  m_RedTeamDisplayColor: {r: 1, g: 0, b: 0, a: 1}
+  m_BlueTeamDisplayColor: {r: 0, g: 0, b: 1, a: 1}
+  m_DefaultTeamDisplayColor: {r: 0, g: 0, b: 0, a: 0}
