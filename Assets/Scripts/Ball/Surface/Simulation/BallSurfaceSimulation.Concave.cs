@@ -322,7 +322,8 @@ public sealed partial class BallSurfaceSimulation
 				crossedEdgeIndex =
 					ResolveSimultaneousVertexEdge(
 						crossedEdgeIndex,
-						simultaneousEdgeIndex);
+						simultaneousEdgeIndex,
+						currentSurfaceVelocity);
 			}
 
 			BallSurfaceMeshData.EEdgeType edgeType =

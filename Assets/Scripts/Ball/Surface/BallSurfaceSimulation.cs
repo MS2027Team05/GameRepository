@@ -53,13 +53,14 @@ public sealed partial class BallSurfaceSimulation
 	private const float m_MaximumCoupledStepTime = 0.005f;
 
 	/// <summary>
-	/// Sharp Convex Edgeへ入った瞬間に残すSurface速度の割合です。
+	/// Sharp Convex Edgeへ入った瞬間に残すWorld速度の割合です。
 	/// </summary>
 	/// <remarks>
 	/// 円弧を回っている最中に毎Frame減速するのではなく、
 	/// Convex Edgeへ入った瞬間に1回だけ適用します。
 	///
-	/// 0.85なら、角へ入る直前のSurface速度の85%を残します。
+	/// World速度全体へ同じ倍率を掛けるため、進行方向は変えず、
+	/// 角へ入った瞬間の運動エネルギーだけを減らします。
 	/// </remarks>
 	private const float m_ConvexEdgeSpeedRetention = 0.65f;
 
@@ -428,7 +429,7 @@ public sealed partial class BallSurfaceSimulation
 				m_MinimumCalculationValue &&
 			triangleSurfaceVelocity.sqrMagnitude >
 				m_MinimumCalculationValue *
-				m_MinimumCalculationValue)
+					m_MinimumCalculationValue)
 		{
 			m_SurfaceVelocity =
 				triangleSurfaceVelocity.normalized *
@@ -462,6 +463,13 @@ public sealed partial class BallSurfaceSimulation
 		HandleSurfaceImpact(
 			impactSpeed);
 
+		if (!RefreshWorldStateFromCurrentTraversal())
+		{
+			Reset();
+
+			return false;
+		}
+
 		return true;
 	}
 
@@ -472,7 +480,6 @@ public sealed partial class BallSurfaceSimulation
 		float deltaTime)
 	{
 		ClearLastEdge();
-
 
 		if (!m_IsInitialized ||
 			m_SurfaceSource == null ||
@@ -504,7 +511,8 @@ public sealed partial class BallSurfaceSimulation
 
 				EAdvanceResult concaveResult =
 					AdvanceConcaveAirborneTransfer(
-						concaveStepTime);
+						concaveStepTime,
+						out float unusedConcaveTime);
 
 				if (concaveResult !=
 					EAdvanceResult.Moved)
@@ -512,18 +520,27 @@ public sealed partial class BallSurfaceSimulation
 					return concaveResult;
 				}
 
+				float consumedConcaveTime =
+					Mathf.Clamp(
+						concaveStepTime -
+							unusedConcaveTime,
+						0.0f,
+						concaveStepTime);
+
 				remainingTime -=
-					concaveStepTime;
+					consumedConcaveTime;
+
+				// Concaveから別Traversalへ切り替わった場合は、
+				// 未消費時間を新Traversalで続けて処理します。
+				if (unusedConcaveTime >
+					m_MinimumCalculationValue)
+				{
+					continue;
+				}
 
 				continue;
 			}
 
-			// Heightが変化している最中、またはSharp Convex Edgeを
-			// 回り込んでいる最中だけ内部Stepを細かくします。
-			//
-			// 接地して普通にSurface上を進んでいるだけなら
-			// FixedUpdate全体を1回で処理するため、
-			// 常時4倍の計算量にはなりません。
 			bool requiresCoupledStep =
 				m_Height >
 					m_MinimumHeight ||
@@ -540,12 +557,6 @@ public sealed partial class BallSurfaceSimulation
 						m_MaximumCoupledStepTime)
 					: remainingTime;
 
-			// 同じ短い時間幅で
-			// Height方向 → Surface方向の順に進めます。
-			//
-			// これによりSharp Edgeの円弧半径
-			// (BallRadius + Height)が、その時刻のHeightに
-			// 近い値を使用するようになります。
 			AdvanceVerticalMotion(
 				stepTime);
 
@@ -560,6 +571,11 @@ public sealed partial class BallSurfaceSimulation
 			EAdvanceResult surfaceResult =
 				AdvanceSurfaceMotion(
 					stepTime);
+
+			if (!RefreshWorldStateFromCurrentTraversal())
+			{
+				return EAdvanceResult.InvalidGeometry;
+			}
 
 			if (surfaceResult !=
 				EAdvanceResult.Moved)
@@ -978,55 +994,15 @@ public sealed partial class BallSurfaceSimulation
 		ballCenterOffset =
 			Vector3.zero;
 
-		if (!m_IsInitialized)
+		if (!m_IsInitialized ||
+			!m_HasWorldState)
 		{
 			return false;
 		}
-
-		if (m_IsConcaveAirborneTransfer)
-		{
-			ballCenterOffset =
-				m_ConcaveBallCenter -
-					m_SurfacePoint;
-
-			return true;
-		}
-
-		if (m_IsConvexVertexSpherePatch)
-		{
-			ballCenterOffset =
-				GetConvexVertexSphereBallCenterOffset();
-
-			return ballCenterOffset.sqrMagnitude >
-				m_MinimumCalculationValue *
-					m_MinimumCalculationValue;
-		}
-
-		if (m_IsConvexEdgeTransition)
-		{
-			ballCenterOffset =
-				GetConvexBallCenterOffset();
-
-			return ballCenterOffset.sqrMagnitude >
-				m_MinimumCalculationValue *
-					m_MinimumCalculationValue;
-		}
-
-		if (!TryGetCurrentSurfaceNormal(
-			out Vector3 surfaceNormal))
-		{
-			return false;
-		}
-
-		float offsetDistance =
-			Mathf.Max(
-				m_BallRadius +
-					m_Height,
-				m_MinimumCalculationValue);
 
 		ballCenterOffset =
-			surfaceNormal *
-			offsetDistance;
+			m_WorldCenter -
+			m_SurfacePoint;
 
 		return true;
 	}
@@ -1151,12 +1127,13 @@ public sealed partial class BallSurfaceSimulation
 		m_IsInitialized =
 			false;
 
-
 		ResetConcaveAirborneTransfer();
 
 		ResetConvexEdgeTransition();
 
 		ResetConvexVertexSpherePatch();
+
+		ResetWorldState();
 
 		ClearLastEdge();
 	}
