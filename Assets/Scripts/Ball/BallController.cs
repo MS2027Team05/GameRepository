@@ -991,6 +991,19 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public bool RespawnAtInitialPosition()
 	{
+		return RespawnAtPosition(
+			m_InitialPosition);
+	}
+
+	/// <summary>
+	/// 試合の停止状態を維持し、所持・投球・物理状態を初期化して指定位置へ戻します。
+	/// </summary>
+	/// <param name="respawnPosition">
+	/// ボールを復帰させるWorld座標です。
+	/// </param>
+	public bool RespawnAtPosition(
+		Vector3 respawnPosition)
+	{
 		if (!IsServer || !IsSpawned)
 		{
 			return false;
@@ -1025,7 +1038,7 @@ public class BallController : NetworkBehaviour
 		m_RepickupUnlockTime = 0f;
 		m_CurrentHolderId.Value = 0;
 		ClearHolderAttachment();
-		m_LastReleaseOrigin = m_InitialPosition;
+		m_LastReleaseOrigin = respawnPosition;
 		m_WasFriendlyPassAssisted = false;
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
@@ -1033,9 +1046,32 @@ public class BallController : NetworkBehaviour
 		m_Rigidbody.useGravity = false;
 		m_Rigidbody.linearVelocity = Vector3.zero;
 		m_Rigidbody.angularVelocity = Vector3.zero;
-		m_NetworkTransform.Teleport(m_InitialPosition, m_InitialRotation, transform.localScale);
+		m_NetworkTransform.Teleport(
+			respawnPosition,
+			m_InitialRotation,
+			transform.localScale);
 		SetMatchPaused(IsMatchPaused);
 		return true;
+	}
+
+	/// <summary>
+	/// 場外復帰時にSurfaceから離すためのボール物理Collider半径を取得します。
+	/// </summary>
+	public float GetPhysicsColliderWorldRadius()
+	{
+		if (m_PhysicsCollider == null)
+		{
+			return 0.0f;
+		}
+
+		Vector3 extents =
+			m_PhysicsCollider.bounds.extents;
+
+		return Mathf.Max(
+			extents.x,
+			Mathf.Max(
+				extents.y,
+				extents.z));
 	}
 
 	/// <summary>

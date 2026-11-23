@@ -18,9 +18,24 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 	[Tooltip("ボールが移動できるX、Y、Z座標の上限です。")]
 	[SerializeField] private Vector3 m_MaxBounds;
 
+	[Header("場外復帰先")]
+	[Tooltip("場外復帰先として探索するGroundのLayerです。")]
+	[SerializeField] private LayerMask m_RespawnGroundMask;
+
+	[Tooltip("最後に場内だった位置からGroundを探索する半径です。")]
+	[SerializeField] private float m_GroundSearchRadius;
+
+	private const int m_MaxGroundCandidateCount =
+		64;
+
+	private readonly Collider[] m_GroundCandidates =
+		new Collider[m_MaxGroundCandidateCount];
+
 	private BallController m_BallController;
 	private bool m_AreBoundsValid;
 	private bool m_IsRespawnRequested;
+	private Vector3 m_LastValidPosition;
+	private bool m_HasLastValidPosition;
 
 	private void Awake()
 	{
@@ -36,6 +51,18 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 
 		m_IsRespawnRequested = false;
 		m_AreBoundsValid = AreBoundsValid() && !IsOutsideBounds(transform.position);
+		m_LastValidPosition = transform.position;
+		m_HasLastValidPosition = m_AreBoundsValid;
+
+		if (m_IsRespawnEnabled &&
+			(m_RespawnGroundMask.value == 0 ||
+			m_GroundSearchRadius <= 0.0f))
+		{
+			Debug.LogWarning(
+				"[BallOutOfBoundsRespawner] Ground LayerまたはGround Search Radiusが未設定のため、Groundが見つからない場合は初期スポーン地点へ戻します。",
+				this);
+		}
+
 		if (m_IsRespawnEnabled && !m_AreBoundsValid)
 		{
 			Debug.LogError(
@@ -54,6 +81,12 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 
 		if (!IsOutsideBounds(transform.position))
 		{
+			m_LastValidPosition =
+				transform.position;
+
+			m_HasLastValidPosition =
+				true;
+
 			m_IsRespawnRequested = false;
 			return;
 		}
@@ -64,10 +97,167 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 		}
 
 		m_IsRespawnRequested = true;
-		if (!m_BallController.RespawnAtInitialPosition())
+
+		bool respawnSucceeded =
+			false;
+
+		if (m_HasLastValidPosition &&
+			TryFindNearestGroundRespawnPosition(
+				m_LastValidPosition,
+				out Vector3 respawnPosition))
 		{
-			Debug.LogWarning("[BallOutOfBoundsRespawner] ボールの場外復帰に失敗しました。", this);
+			respawnSucceeded =
+				m_BallController.RespawnAtPosition(
+					respawnPosition);
 		}
+		else
+		{
+			Debug.LogWarning(
+				"[BallOutOfBoundsRespawner] 近くのGroundを取得できなかったため、初期スポーン地点へ戻します。",
+				this);
+
+			respawnSucceeded =
+				m_BallController.RespawnAtInitialPosition();
+		}
+
+		if (!respawnSucceeded)
+		{
+			Debug.LogWarning(
+				"[BallOutOfBoundsRespawner] ボールの場外復帰に失敗しました。",
+				this);
+		}
+	}
+
+	/// <summary>
+	/// 最後に場内だった位置の周囲から最も近いGroundを探し、
+	/// Ball ColliderがGroundへ埋まらない復帰座標を取得します。
+	/// </summary>
+	private bool TryFindNearestGroundRespawnPosition(
+		Vector3 referencePosition,
+		out Vector3 respawnPosition)
+	{
+		respawnPosition =
+			default;
+
+		if (m_GroundSearchRadius <=
+				0.0f ||
+			m_RespawnGroundMask.value ==
+				0)
+		{
+			return false;
+		}
+
+		int candidateCount =
+			Physics.OverlapSphereNonAlloc(
+				referencePosition,
+				m_GroundSearchRadius,
+				m_GroundCandidates,
+				m_RespawnGroundMask,
+				QueryTriggerInteraction.Ignore);
+
+		if (candidateCount <=
+			0)
+		{
+			return false;
+		}
+
+		float ballRadius =
+			Mathf.Max(
+				m_BallController.GetPhysicsColliderWorldRadius(),
+				0.0f);
+
+		float surfaceClearance =
+			ballRadius +
+			Mathf.Max(
+				Physics.defaultContactOffset,
+				0.0f);
+
+		float nearestDistanceSquared =
+			float.PositiveInfinity;
+
+		bool hasRespawnPosition =
+			false;
+
+		for (int candidateIndex = 0;
+			candidateIndex < candidateCount;
+			candidateIndex++)
+		{
+			Collider groundCollider =
+				m_GroundCandidates[candidateIndex];
+
+			if (groundCollider == null ||
+				!groundCollider.enabled ||
+				!groundCollider.gameObject.activeInHierarchy)
+			{
+				continue;
+			}
+
+			Vector3 closestPoint =
+				groundCollider.ClosestPoint(
+					referencePosition);
+
+			Vector3 toSurface =
+				closestPoint -
+				referencePosition;
+
+			float surfaceDistanceSquared =
+				toSurface.sqrMagnitude;
+
+			if (surfaceDistanceSquared <=
+					Mathf.Epsilon ||
+				surfaceDistanceSquared >=
+					nearestDistanceSquared)
+			{
+				continue;
+			}
+
+			float surfaceDistance =
+				Mathf.Sqrt(
+					surfaceDistanceSquared);
+
+			Vector3 surfaceDirection =
+				toSurface /
+				surfaceDistance;
+
+			if (!groundCollider.Raycast(
+				new Ray(
+					referencePosition,
+					surfaceDirection),
+				out RaycastHit groundHit,
+				surfaceDistance +
+					surfaceClearance))
+			{
+				continue;
+			}
+
+			if (groundHit.normal.sqrMagnitude <=
+				Mathf.Epsilon)
+			{
+				continue;
+			}
+
+			Vector3 candidateRespawnPosition =
+				groundHit.point +
+				groundHit.normal.normalized *
+					surfaceClearance;
+
+			if (IsOutsideBounds(
+				candidateRespawnPosition))
+			{
+				continue;
+			}
+
+			nearestDistanceSquared =
+				surfaceDistanceSquared;
+
+			respawnPosition =
+				candidateRespawnPosition;
+
+			hasRespawnPosition =
+				true;
+		}
+
+		return hasRespawnPosition;
 	}
 
 	/// <summary>

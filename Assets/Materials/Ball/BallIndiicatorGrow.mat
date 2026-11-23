@@ -102,13 +102,13 @@ Material:
     - _Glossiness: 0
     - _GlossyReflections: 0
     - _GlowIntensity: 4
-    - _GlowSoftness: 0.718
-    - _GlowWidth: 8
+    - _GlowSoftness: 1
+    - _GlowWidth: 6.73
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
-    - _PulseAmount: 0.934
-    - _PulseSpeed: 4.52
+    - _PulseAmount: 0.928
+    - _PulseSpeed: 7.14
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _Smoothness: 0.5

@@ -60,6 +60,13 @@ public class BallScreenIndicator : MonoBehaviour
 	[Tooltip("画面外インジケーターの向きを補正する角度です。")]
 	[SerializeField] private float m_ArrowAngleOffset;
 
+	[Header("チームカラー")]
+	[Tooltip("Red Teamがボールを所持しているときにIndicatorへ適用する色です。")]
+	[SerializeField] private Color m_RedTeamColor = Color.red;
+
+	[Tooltip("Blue Teamがボールを所持しているときにIndicatorへ適用する色です。")]
+	[SerializeField] private Color m_BlueTeamColor = Color.blue;
+
 	private Camera m_TargetCamera;
 	private Canvas m_Canvas;
 	private RectTransform m_CanvasRectTransform;
@@ -489,12 +496,12 @@ public class BallScreenIndicator : MonoBehaviour
 		{
 			case ETeamType.Red:
 				teamColor =
-					Color.red;
+					m_RedTeamColor;
 				break;
 
 			case ETeamType.Blue:
 				teamColor =
-					Color.blue;
+					m_BlueTeamColor;
 				break;
 
 			default:
