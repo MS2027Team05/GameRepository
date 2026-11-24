@@ -303,6 +303,11 @@ public partial class BallPhysicsController : NetworkBehaviour
 	}
 
 	/// <summary>
+	/// 追尾パス状態(Homing)で飛行中か取得します。
+	/// </summary>
+	public bool IsHoming => m_MotionState == EBallMotionState.Homing;
+
+	/// <summary>
 	/// 通常飛行中に維持する進行方向です。
 	/// </summary>
 	private Vector3 m_FlightDirection;
