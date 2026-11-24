@@ -75,6 +75,7 @@ public class LobbyManager : NetworkBehaviour
 	public int ConnectedPlayerCount { get => m_LobbyPlayers.Count; }
 	public int RequiredPlayerCount { get => m_CurrentRequiredPlayers; }
 	public bool UseLevelDesignScene { get => m_UseLevelDesignScene; }
+	public bool IsGameStarting { get => m_IsGameStarting; }
 	public string HostIpAddress { get => m_CachedHostIp; }
 
 	public string TargetSceneName

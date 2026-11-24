@@ -75,6 +75,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	private PlayerInputReceiver m_InputReceiver;
 	private IGroundDetector m_GroundDetector;
 	private IGravityMover m_GravityMover;
+	private IAimAssist m_AimAssist;
 	private NetworkObject m_NetworkObject;
 	private PlayerController m_PlayerController;
 	private Vector3 m_InitialCameraLocalPosition;
@@ -127,6 +128,7 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		m_InputReceiver = GetComponent<PlayerInputReceiver>();
 		m_GroundDetector = GetComponent<IGroundDetector>();
 		m_GravityMover = GetComponent<IGravityMover>();
+		m_AimAssist = GetComponent<IAimAssist>();
 		m_NetworkObject = GetComponent<NetworkObject>();
 		m_PlayerController = GetComponent<PlayerController>();
 
@@ -383,13 +385,28 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			if (m_InputReceiver != null && Cursor.lockState == CursorLockMode.Locked)
 			{
 				Vector2 look = m_InputReceiver.LookInput;
+				float slowdownMultiplier = 1.0f;
+				float assistYawDelta = 0.0f;
+				float assistPitchDelta = 0.0f;
+
+				m_AimAssist?.EvaluateAimAssist(
+					m_CinemachineCamera != null ? m_CinemachineCamera.transform : null,
+					m_CurrentUp,
+					look,
+					m_InputReceiver.MoveInput,
+					m_InputReceiver.IsUsingGamepad,
+					Time.deltaTime,
+					out slowdownMultiplier,
+					out assistYawDelta,
+					out assistPitchDelta);
 
 				// 水平旋回: 現在のUp(法線)を軸として接平面上の前方ベクトルを回転
-				float yawAngle = look.x * m_MouseSensitivity;
+				float yawAngle = look.x * m_MouseSensitivity * slowdownMultiplier + assistYawDelta;
 				m_PlanarForward = (Quaternion.AngleAxis(yawAngle, m_CurrentUp) * m_PlanarForward).normalized;
 
 				// 垂直仰角: 子カメラのローカルオフセット角を加味して実効仰角を設定範囲内へクランプ
-				m_Pitch -= look.y * m_MouseSensitivity;
+				m_Pitch -= look.y * m_MouseSensitivity * slowdownMultiplier;
+				m_Pitch += assistPitchDelta;
 				m_Pitch = ClampPitchWithOffset(m_Pitch);
 			}
 		}

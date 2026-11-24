@@ -44,6 +44,18 @@ public interface ILockOnProvider
 	bool HasValidTarget { get; }
 
 	/// <summary>
+	/// ロックオン検索範囲の画面短辺に対する正規化半径を取得します。
+	/// </summary>
+	float ReticleSearchRadius { get; }
+
+	/// <summary>
+	/// 現在捕捉しているロックオン対象のワールド座標を取得します。
+	/// </summary>
+	/// <param name="worldPosition">取得された対象のワールド座標</param>
+	/// <returns>有効な対象が存在し座標を取得できた場合はtrue</returns>
+	bool TryGetCurrentTargetWorldPosition(out Vector3 worldPosition);
+
+	/// <summary>
 	/// 検索モード(非所持: ボール優先+敵 / 所持: 味方+相手ゴール)を設定します。
 	/// </summary>
 	/// <param name="mode">適用する検索モード</param>
