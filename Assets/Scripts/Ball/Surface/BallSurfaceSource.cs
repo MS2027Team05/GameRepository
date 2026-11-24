@@ -1,19 +1,18 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallSurface Physicsで使用する
-/// 1つの惑星・Ground Surfaceを表します。
+/// 1つのStatic MeshColliderをBallSurface Physicsで利用できるSurfaceとして公開します。
 /// </summary>
 /// <remarks>
-/// 同じGameObjectに存在するMeshColliderから
-/// Triangle構造を読み取り、Surface Physics用の
-/// BallSurfaceMeshDataを生成して保持します。
+/// 主な処理の流れ:
+/// 1. 同じGameObjectのNon-Convex MeshColliderから共有Meshを取得します。
+/// 2. BallSurfaceMeshDataを生成し、TriangleとEdgeのTopologyを事前解析します。
+/// 3. 接触点付近へのRaycastからMeshColliderのtriangleIndexを特定します。
+/// 4. 通常Rayで取得できない場合は両側からのFallback探索を行います。
+/// 5. Surface追跡では現在位置に最も近いTriangleとSurface点を取得します。
 ///
-/// Ball側はColliderそのものではなく、
-/// このComponentを1つのSurfaceとして扱います。
-///
-/// 現在は移動・変形しないStaticかつ
-/// Non-ConvexなMeshColliderを対象とします。
+/// Ball側はMeshCollider単体ではなく、このComponentを1つのBallSurfaceとして扱います。
+/// 現在は移動・変形しないStaticなNon-Convex MeshColliderを前提とします。
 /// </remarks>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(MeshCollider))]

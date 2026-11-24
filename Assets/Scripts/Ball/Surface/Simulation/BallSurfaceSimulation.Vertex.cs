@@ -1,25 +1,19 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// 複数Edgeへほぼ同時到達したVertexでの
-/// 決定論的なタイブレークと球面パッチ移動を担当します。
+/// 複数Edgeへほぼ同時到達するConvex Vertexの決定論的な選択と、
+/// Vertex中心の球面パッチ移動を担当します。
 /// </summary>
 /// <remarks>
-/// Vertexでは実Surfaceの3面を無理に1枚へ決めず、
-/// Ball中心だけをVertex中心の球面上で移動させます。
+/// 主な処理の流れ:
+/// 1. 同時到達したEdge候補を進行方向・Edge種別・EdgeIndexから決定論的に選択します。
+/// 2. Convex Vertexでは実Surfaceの1面へ無理に固定せず、Ball中心をVertex中心の球面上へ移します。
+/// 3. SurfaceSpeedから球面上の移動距離を求め、半径から回転角へ変換します。
+/// 4. 球面パッチ境界へ到達したら接続可能なConvex EdgeまたはTriangleを選びます。
+/// 5. Edgeへ戻る場合はConvex遷移へ連続して引き継ぎます。
 ///
-/// 球面上の移動距離は
-///
-/// SurfaceSpeed * deltaTime
-///
-/// から求め、
-///
-/// 回転角 = 移動距離 / (BallRadius + Height)
-///
-/// として進めます。
-///
-/// そのためNormalのLerp時間による追加移動は発生せず、
-/// Vertex処理そのものがSurface速度を増加させない構造です。
+/// 浮動小数点誤差によってFrameごとに遷移先が変わらないよう、
+/// Vertexでのタイブレーク規則を明示的に固定しています。
 /// </remarks>
 public sealed partial class BallSurfaceSimulation
 {

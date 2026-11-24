@@ -1,8 +1,19 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Triangle境界の検出とEdge種別ごとの処理振り分けを担当します。
+/// Surface移動中のTriangle境界検出と、Edge種別ごとの遷移処理の振り分けを担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. 現在Triangle内でSurfaceVelocityによる移動先を計算します。
+/// 2. Barycentric座標から最初に交差するEdgeと交差時刻を求めます。
+/// 3. Edge種別を確認し、Flat・Smooth・Convex・Concave・Boundaryへ処理を振り分けます。
+/// 4. 1Step内に時間が残っていれば隣Triangle上で移動を継続します。
+/// 5. 過剰な連続遷移はTransition上限で停止し、不正な無限ループを防ぎます。
+/// 6. 複数Edgeへ同時到達するVertexケースはVertex処理へ渡します。
+///
+/// 各Edge固有の幾何計算は対応するpartialファイルへ分離しています。
+/// </remarks>
 public sealed partial class BallSurfaceSimulation
 {
 	/// <summary>

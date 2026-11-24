@@ -1,8 +1,19 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallPhysicsControllerの飛行・疑似重力・Surface探索処理を定義します。
+/// BallPhysicsControllerの空中移動とSurface探索を担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. シュート・強制解放を受けてFlyingまたはSurface探索を開始します。
+/// 2. Flying中は進行方向を維持しながら速度を減衰させます。
+/// 3. 一定速度以下になると周辺のAttachSurfaceを低コストで探索します。
+/// 4. Surfaceを発見するとAttractingSurfaceへ移行し、疑似重力を適用します。
+/// 5. 十分低速になった場合はSeekingSurfaceとして高精度探索を行います。
+/// 6. Surfaceへ十分近づくと停止・吸着状態へ移行します。
+///
+/// BallSurface上をTriangle単位で移動する処理はBallPhysicsController.Surface.csが担当します。
+/// </remarks>
 public partial class BallPhysicsController
 {
 	/// <summary>

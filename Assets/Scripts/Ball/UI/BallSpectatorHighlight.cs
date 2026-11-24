@@ -1,8 +1,18 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// 観戦カメラから見てボールが見失われないよう、強調表示・視認性向上を行うコンポーネント。
+/// 観戦Cameraからボールを見失いにくくするための強調Markerを管理します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. Markerの初期Scaleを保存し、SpectatorOnly Layerを子階層へ適用します。
+/// 2. 観戦Cameraが有効な間だけMarkerを表示します。
+/// 3. Cameraとボールの距離を計算します。
+/// 4. 距離に応じてMarkerのScaleを補正し、遠距離でも一定の視認性を保ちます。
+/// 5. 観戦終了時はMarkerを非表示にし、初期Scaleへ戻します。
+///
+/// 通常プレイヤー向けの画面端IndicatorはBallScreenIndicatorが担当します。
+/// </remarks>
 public class BallSpectatorHighlight : MonoBehaviour
 {
 	[Header("強調表示用マーカー(任意・未設定時は自動パルス)")]
@@ -19,6 +29,9 @@ public class BallSpectatorHighlight : MonoBehaviour
 	private Vector3 m_MarkerInitialLocalScale;
 	private bool m_HasMarkerInitialScale;
 
+	/// <summary>
+	/// Markerの初期Scaleを保存し、観戦専用Layerを子階層へ設定します。
+	/// </summary>
 	private void Awake()
 	{
 		if (m_HighlightMarker != null)
@@ -34,6 +47,9 @@ public class BallSpectatorHighlight : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// 観戦Cameraの有無と距離に応じてMarkerの表示状態とScaleを更新します。
+	/// </summary>
 	private void LateUpdate()
 	{
 		if (m_HighlightMarker == null) return;
@@ -62,6 +78,9 @@ public class BallSpectatorHighlight : MonoBehaviour
 		m_HighlightMarker.transform.localScale = m_MarkerInitialLocalScale * scaleMultiplier;
 	}
 
+	/// <summary>
+	/// 指定Transform以下のGameObjectへ同じLayerを再帰的に適用します。
+	/// </summary>
 	private static void ApplyLayerRecursively(Transform root, int layer)
 	{
 		root.gameObject.layer = layer;

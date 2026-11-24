@@ -1,8 +1,17 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallPhysicsControllerの追尾パス物理処理を定義します。
+/// パスやゴール方向へボールを追尾移動させるHoming状態を担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. Transformまたは固定World座標を追尾対象として登録します。
+/// 2. Homing開始時に他の自由移動状態を整理します。
+/// 3. FixedUpdateごとに対象方向へ一定速度で移動します。
+/// 4. 終了距離へ到達した場合はHomingを解除します。
+///
+/// 通常のFlying・Surface Physicsとは独立したMotionStateとして管理します。
+/// </remarks>
 public partial class BallPhysicsController
 {
 	[Header("追尾パス")]

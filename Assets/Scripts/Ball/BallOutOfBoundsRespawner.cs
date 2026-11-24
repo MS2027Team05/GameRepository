@@ -2,8 +2,19 @@
 using UnityEngine;
 
 /// <summary>
-/// 所持されていないボールの場外をサーバーで検知し、初期スポーン地点へ戻します。
+/// 未所持のボールが有効範囲外へ出た場合に、
+/// Host側で安全な場内位置へ復帰させます。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. 場内にいる間は最後に有効だったWorld位置を保存します。
+/// 2. 未所持のボールが範囲外へ出たことをHost側で検出します。
+/// 3. 最後の有効位置の周囲から、指定Ground Layer上の最も近い復帰候補を探します。
+/// 4. Ball Colliderの半径とContact Offsetを考慮してSurface外側へ配置します。
+/// 5. 近くに有効なGroundが見つからない場合は初期スポーン地点へ戻します。
+///
+/// 所持中のボールはプレイヤー側の移動に従うため、この自動復帰の対象外です。
+/// </remarks>
 [RequireComponent(typeof(BallController))]
 public class BallOutOfBoundsRespawner : NetworkBehaviour
 {
@@ -129,9 +140,14 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 最後に場内だった位置の周囲から最も近いGroundを探し、
-	/// Ball ColliderがGroundへ埋まらない復帰座標を取得します。
+	/// 最後に場内だった位置の周囲から最も近いGround Surfaceを探し、
+	/// Ball Colliderが埋まらない復帰World座標を取得します。
 	/// </summary>
+	/// <remarks>
+	/// OverlapSphereNonAllocで候補Colliderを列挙し、各ColliderのClosestPointから実SurfaceへRaycastします。
+	/// 最終位置はBall半径とPhysics.defaultContactOffsetの分だけSurface法線方向へ離します。
+	/// 範囲外になる候補は採用しません。
+	/// </remarks>
 	private bool TryFindNearestGroundRespawnPosition(
 		Vector3 referencePosition,
 		out Vector3 respawnPosition)

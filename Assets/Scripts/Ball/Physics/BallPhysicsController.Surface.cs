@@ -1,8 +1,25 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallPhysicsControllerのBallSurface Physics連携処理を定義します。
+/// BallPhysicsControllerとBallSurfaceSimulationを接続し、
+/// BallSurface上の移動・衝突・離脱をRigidbodyへ反映します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. BallSurfaceSourceへの接触地点から開始Triangleを取得します。
+/// 2. BallSurfaceSimulationを初期化し、RigidbodyをKinematicへ切り替えます。
+/// 3. FixedUpdateごとにSurfaceSimulationを進め、計算されたBall中心位置を反映します。
+/// 4. Surface移動経路はSphereCastで確認し、通常Colliderへのすり抜けを防ぎます。
+/// 5. 同一BallSurface内でも現在Triangleと直接隣接していないTriangleは別壁として扱います。
+/// 6. 同一Mesh内の別壁へ当たった場合はHit TriangleでSimulationを再初期化し、
+///    Flyingへ切り替えずSurface Physics用バウンドを継続します。
+/// 7. Surface端から離脱する場合は出口位置と速度を一度保留し、
+///    次のFixedUpdateでDynamic Rigidbodyへ戻してFlyingを再開します。
+/// 8. 不正なGeometryや再初期化失敗時は、貫通を避けるため安全停止します。
+///
+/// Surface中は通常のRigidbody衝突解決に任せず、
+/// BallSurfaceSimulationのWorld状態を物理挙動の基準として扱います。
+/// </remarks>
 public partial class BallPhysicsController
 {
 	private bool m_HasPendingSurfaceExit;
@@ -187,13 +204,18 @@ public partial class BallPhysicsController
 	}
 
 	/// <summary>
-	/// Surface Physics中のBall中心移動経路に、
-	/// Ball LayerのCollision Matrix上で衝突対象となる
-	/// 通常Colliderが存在するか確認します。
+	/// Surface Physicsで予定しているBall中心の移動経路をSphereCastし、
+	/// 経路上の障害物へ到達する前に衝突処理へ切り替えます。
 	/// </summary>
 	/// <remarks>
-	/// BallSurfaceSourceを持つColliderはSurface Physics側で扱うため、
-	/// この通常衝突処理から除外します。
+	/// 通常Colliderは既存のRigidbodyバウンド処理へ渡します。
+	///
+	/// BallSurfaceSourceへのHitは一律に無視しません。
+	/// 別BallSurfaceSourceはSurface乗り換え側の責務として無視しますが、
+	/// 現在と同じBallSurfaceSourceの非隣接Triangleは同一Mesh内の別壁として扱います。
+	///
+	/// これによりConvex Edgeの回り込み中などに、予定軌道上の別壁を
+	/// Kinematic Rigidbodyがすり抜けることを防ぎます。
 	/// </remarks>
 	private bool TryHandleSurfaceObstacleCollision(
 		Vector3 targetColliderCenter,
@@ -384,14 +406,13 @@ public partial class BallPhysicsController
 
 	/// <summary>
 	/// BallSurfaceSourceへのSphereCast Hitを、
-	/// Surface移動を止める障害物として扱うか取得します。
+	/// 同一Mesh内の別壁として衝突処理する必要があるか判定します。
 	/// </summary>
 	/// <remarks>
-	/// 別BallSurfaceSourceは従来通りSurface乗り換え側の責務として無視します。
+	/// 現在Triangle自身と直接隣接Triangleは通常のSurface移動で通過するため除外します。
+	/// 同じBallSurfaceSourceで、それ以外のTriangleへ空間的に接触した場合だけ障害物として扱います。
 	///
-	/// 同じBallSurfaceSourceの場合は、
-	/// 現在Triangleとその直接隣接Triangleだけ通常Surface移動として無視し、
-	/// それ以外のTriangleは同一Mesh内の別壁として障害物扱いします。
+	/// 別BallSurfaceSourceはこの処理では扱わず、Surface乗り換え機能側へ責務を残します。
 	/// </remarks>
 	private bool ShouldTreatSurfaceHitAsObstacle(
 		BallSurfaceSource hitSurfaceSource,
@@ -496,15 +517,18 @@ public partial class BallPhysicsController
 
 
 	/// <summary>
-	/// 同一BallSurface内の別Triangleへ衝突した際、
-	/// Hit Triangleを新しいSurfaceとしてSurface Physicsを継続します。
+	/// 同一BallSurface内の別壁へ衝突した場合に、
+	/// Hit TriangleへSurface Physicsを再接続してバウンドを継続します。
 	/// </summary>
 	/// <remarks>
-	/// 通常Collider用のApplyBounceVelocityは使用しません。
-	/// BallSurfaceSimulation.TryInitializeへ衝突直前のWorld速度を渡し、
-	/// Surface Physics専用のBounce設定で反射させます。
+	/// 通常Collider用のApplyBounceVelocityを使用するとSurfaceSimulationがResetされ、
+	/// RigidbodyがDynamicへ戻ってFlyingへ遷移します。
 	///
-	/// RigidbodyはKinematic、MotionStateはSurfaceのまま維持します。
+	/// このケースでは衝突直前のWorld速度をBallSurfaceSimulation.TryInitializeへ渡し、
+	/// Hit Triangle側でSurface Physics専用のバウンド計算を行います。
+	/// そのためRigidbodyはKinematic、MotionStateはSurfaceのまま維持されます。
+	///
+	/// triangleIndexを直接取得できない場合は接触点と法線から再取得します。
 	/// </remarks>
 	private bool TryContinueSameSurfaceBounce(
 		BallSurfaceSource surfaceSource,
@@ -698,7 +722,12 @@ public partial class BallPhysicsController
 	}
 
 	/// <summary>
-	/// SphereColliderの実ワールド半径を取得します。	/// </summary>
+	/// SphereColliderのScaleを考慮したWorld空間上の実半径を取得します。
+	/// </summary>
+	/// <remarks>
+	/// 非一様Scaleの場合でもColliderを内側へ小さく見積もらないよう、XYZの最大Scaleを使用します。
+	/// Surface Offset、SphereCast、場外復帰位置などの安全距離計算に使用します。
+	/// </remarks>
 	private float GetBallWorldRadius()
 	{
 		Vector3 lossyScale =

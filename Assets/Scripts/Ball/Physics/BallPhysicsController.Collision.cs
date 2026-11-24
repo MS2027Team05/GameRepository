@@ -1,8 +1,18 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallPhysicsControllerの通常衝突・バウンド処理を定義します。
+/// BallPhysicsControllerの通常CollisionとRigidbodyバウンドを担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. Surface状態以外でOnCollisionEnterを受け取ります。
+/// 2. BallSurfaceSourceへの接触ならSurface Physicsの初期化を優先します。
+/// 3. 従来のAttachSurfaceでは速度に応じてバウンドまたは吸着を選択します。
+/// 4. その他のColliderでは接触法線を使って通常の反射速度を計算します。
+/// 5. 反射速度をRigidbodyへ適用し、必要に応じてFlyingへ戻します。
+///
+/// Surface Physics中のSphereCast障害物判定はBallPhysicsController.Surface.cs側で処理します。
+/// </remarks>
 public partial class BallPhysicsController
 {
 	/// <summary>
