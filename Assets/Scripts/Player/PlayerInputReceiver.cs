@@ -74,6 +74,11 @@ public class PlayerInputReceiver : MonoBehaviour
 	/// <summary>新フロー: 移動アクション(マウス右クリック / ゲームパッドR1)押下イベント</summary>
 	public event Action OnMoveActionPressed;
 
+	/// <summary>
+	/// 新フロー: 移動アクション(マウス右クリック / ゲームパッドR1)離しイベント
+	/// </summary>
+	public event Action OnMoveActionReleased;
+
 	/// <summary>新フロー: 干渉サブアクション(マウス左クリック / ゲームパッドL1)押下開始イベント</summary>
 	public event Action OnSubActionStarted;
 
@@ -201,7 +206,11 @@ public class PlayerInputReceiver : MonoBehaviour
 		BindAction(m_LockOnAction, HandleLockOn);
 
 		// 新フロー用ボタン操作Actionを登録
-		BindAction(m_MoveTriggerAction, HandleMoveTrigger);
+		BindPressReleaseAction(
+			m_MoveTriggerAction,
+			HandleMoveTrigger,
+			HandleMoveTriggerCanceled
+		);
 		BindPressReleaseAction(m_SubAction, HandleSubActionStarted, HandleSubActionCanceled);
 
 		m_ActionsBound = true;
@@ -221,7 +230,11 @@ public class PlayerInputReceiver : MonoBehaviour
 			UnbindAction(m_ShootAction, HandleShoot);
 			UnbindAction(m_ViewResetAction, HandleViewReset);
 			UnbindAction(m_LockOnAction, HandleLockOn);
-			UnbindAction(m_MoveTriggerAction, HandleMoveTrigger);
+			UnbindPressReleaseAction(
+				m_MoveTriggerAction,
+				HandleMoveTrigger,
+				HandleMoveTriggerCanceled
+			);
 			UnbindPressReleaseAction(m_SubAction, HandleSubActionStarted, HandleSubActionCanceled);
 
 			// このクラスが有効化したActionを無効化
@@ -466,6 +479,14 @@ public class PlayerInputReceiver : MonoBehaviour
 		OnMoveActionPressed?.Invoke();
 	}
 
+	/// <summary>
+	/// 新フロー: 移動アクションのボタン解放を通知します。
+	/// </summary>
+	private void HandleMoveTriggerCanceled(InputAction.CallbackContext context)
+	{
+		OnMoveActionReleased?.Invoke();
+	}
+
 	private void HandleSubActionStarted(InputAction.CallbackContext context)
 	{
 		OnSubActionStarted?.Invoke();
@@ -483,7 +504,8 @@ public class PlayerInputReceiver : MonoBehaviour
 			return;
 		}
 
-		// 新フロー移動アクション: マウス右クリック または ゲームパッドR1
+		// 新フロー移動アクション:
+		// マウス右クリック または ゲームパッドR1
 		if (!HasAction(m_MoveTriggerAction))
 		{
 			bool moveActionPressed =
@@ -493,9 +515,21 @@ public class PlayerInputReceiver : MonoBehaviour
 				(Gamepad.current != null &&
 				 Gamepad.current.rightShoulder.wasPressedThisFrame);
 
+			bool moveActionReleased =
+				(Mouse.current != null &&
+				 Mouse.current.rightButton.wasReleasedThisFrame)
+				||
+				(Gamepad.current != null &&
+				 Gamepad.current.rightShoulder.wasReleasedThisFrame);
+
 			if (moveActionPressed)
 			{
 				OnMoveActionPressed?.Invoke();
+			}
+
+			if (moveActionReleased)
+			{
+				OnMoveActionReleased?.Invoke();
 			}
 		}
 

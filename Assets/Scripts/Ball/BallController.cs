@@ -77,6 +77,11 @@ public class BallController : NetworkBehaviour
 	private bool m_IsStealing;
 	private Coroutine m_ElectricStealCoroutine;
 
+	/// <summary>
+	/// 電撃によるボール奪取処理が進行中か取得します。
+	/// </summary>
+	public bool IsStealing => m_IsStealing;
+
 	// Host側で、最後の正常なシュートが味方パスとして受取可能か記録します。
 	private bool m_IsPassInFlight;
 	private ETeamType m_LastPasserTeam;
@@ -627,9 +632,6 @@ public class BallController : NetworkBehaviour
 				startPosition,
 				targetPosition,
 				smoothT);
-
-			Debug.Log(
-	$"[BallController] 引き寄せ中 Position: {transform.position}");
 
 			yield return null;
 		}
