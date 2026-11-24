@@ -131,7 +131,7 @@ public class BallScreenIndicator : MonoBehaviour
 		}
 
 		Vector3 ballPosition =
-			m_BallController.transform.position;
+			m_BallController.VisualTransform.position;
 
 		Vector3 viewportPosition =
 			m_TargetCamera.WorldToViewportPoint(

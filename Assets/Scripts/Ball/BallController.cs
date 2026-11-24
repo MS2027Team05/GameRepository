@@ -1,4 +1,4 @@
-// BallController.cs
+﻿// BallController.cs
 using System;
 using System.Collections;
 using Unity.Netcode;
@@ -1216,7 +1216,7 @@ public class BallController : NetworkBehaviour
 		bool parentSucceeded =
 			NetworkObject.TrySetParent(
 				holderNetworkObject,
-				false);
+				true);
 
 		if (!parentSucceeded)
 		{
@@ -1238,9 +1238,10 @@ public class BallController : NetworkBehaviour
 
 		if (m_NetworkTransform != null && m_NetworkTransform.CanCommitToTransform)
 		{
+			bool useLocalSpace = m_NetworkTransform.InLocalSpace;
 			m_NetworkTransform.Teleport(
-				transform.position,
-				transform.rotation,
+				useLocalSpace ? transform.localPosition : transform.position,
+				useLocalSpace ? transform.localRotation : transform.rotation,
 				transform.localScale);
 		}
 
