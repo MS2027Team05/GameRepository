@@ -671,9 +671,11 @@ public class LobbyManager : NetworkBehaviour
 				data.Team = targetTeam;
 				// 観戦者の場合は最初からReady状態として扱う
 				data.IsReady = (targetTeam == ETeamType.Spectator);
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_LobbyPlayers[i] = data;
-
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}
@@ -716,8 +718,11 @@ public class LobbyManager : NetworkBehaviour
 					data.HighlightColor = highlightColor;
 					data.Team = ETeamType.Spectator;
 					data.IsReady = true;
+					if (SessionPlayerDataStore.Instance != null)
+					{
+						data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+					}
 					m_LobbyPlayers[i] = data;
-					SessionPlayerDataStore.Instance?.SavePlayerData(data);
 					break;
 				}
 
@@ -734,8 +739,11 @@ public class LobbyManager : NetworkBehaviour
 					data.Team = assignedTeam;
 				}
 
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_LobbyPlayers[i] = data;
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}

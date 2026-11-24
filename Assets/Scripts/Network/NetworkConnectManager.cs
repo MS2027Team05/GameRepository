@@ -606,8 +606,11 @@ public class NetworkConnectManager : NetworkBehaviour
 			{
 				var data = m_ConnectedPlayers[i];
 				data.Team = targetTeam;
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_ConnectedPlayers[i] = data;
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}
@@ -622,8 +625,11 @@ public class NetworkConnectManager : NetworkBehaviour
 			{
 				var data = m_ConnectedPlayers[i];
 				data.Team = ETeamType.None;
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_ConnectedPlayers[i] = data;
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}

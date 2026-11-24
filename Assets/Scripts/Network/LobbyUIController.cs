@@ -50,6 +50,7 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private Button m_DebugToggleSceneButton;
 	[SerializeField] private TextMeshProUGUI m_DebugTargetSceneText;
 	[SerializeField] private Button m_DebugForceStartButton;
+	[SerializeField] private Toggle m_DebugModeToggle;
 
 	private void Awake()
 	{
@@ -294,6 +295,11 @@ public class LobbyUIController : MonoBehaviour
 			m_DebugCycleMinPlayersButton.gameObject.SetActive(active);
 		}
 
+		if (m_DebugModeToggle != null)
+		{
+			m_DebugModeToggle.gameObject.SetActive(active);
+		}
+
 		// デバッグパネル表示時も、兼任ホストの初期選択はREADYボタンにする
 		if (active)
 		{
@@ -508,6 +514,16 @@ public class LobbyUIController : MonoBehaviour
 		{
 			m_DebugForceStartButton.onClick.AddListener(() => m_LobbyManager?.ForceStartGameDebug());
 		}
+
+		if (m_DebugModeToggle != null)
+		{
+			m_DebugModeToggle.onValueChanged.AddListener(isOn =>
+			{
+				MatchManager.IsInfiniteTimeDebugEnabled = isOn;
+				MatchManager.IsInfiniteEnergyLobbyDebugEnabled = isOn;
+				PlayerResourceController.IsInfiniteEnergyDebugEnabled = isOn;
+			});
+		}
 	}
 
 	private void RefreshAllUI()
@@ -611,6 +627,12 @@ public class LobbyUIController : MonoBehaviour
 		if (m_DebugTargetSceneText != null)
 		{
 			m_DebugTargetSceneText.text = $"[Debug] 遷移先: {m_LobbyManager.TargetSceneName}";
+		}
+
+		if (m_DebugModeToggle != null)
+		{
+			bool isDebugMode = MatchManager.IsInfiniteTimeDebugEnabled && MatchManager.IsInfiniteEnergyLobbyDebugEnabled;
+			m_DebugModeToggle.SetIsOnWithoutNotify(isDebugMode);
 		}
 	}
 }

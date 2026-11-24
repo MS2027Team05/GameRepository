@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -13,6 +14,7 @@ public class SessionPlayerDataStore : MonoBehaviour
 
 	// サーバー上で各ClientIdの設定データを保持するキャッシュ
 	private readonly Dictionary<ulong, LobbyPlayerData> m_PlayerDataCache = new Dictionary<ulong, LobbyPlayerData>();
+	private readonly Dictionary<ulong, int> m_AssignedPlayerNumbers = new Dictionary<ulong, int>();
 	private readonly List<PlayerMatchSummary> m_LatestMatchSummaries = new List<PlayerMatchSummary>();
 	private MatchResultData m_LatestMatchResult;
 	private ExhibitionStatsSnapshot m_LatestExhibitionStats;
@@ -80,6 +82,7 @@ public class SessionPlayerDataStore : MonoBehaviour
 		}
 
 		m_PlayerDataCache.Remove(clientId);
+		m_AssignedPlayerNumbers.Remove(clientId);
 	}
 
 	/// <summary>
@@ -106,8 +109,8 @@ public class SessionPlayerDataStore : MonoBehaviour
 			return existingData;
 		}
 
-		// デフォルト生成: Player {clientId}
-		FixedString64Bytes defaultName = $"Player {clientId}";
+		// デフォルト生成: 観戦専用ホストはHost、実プレイヤーには空き番号(1〜4)を割り当て
+		FixedString64Bytes defaultName = ResolveInitialDefaultName(clientId);
 		var defaultData = new LobbyPlayerData(
 			clientId,
 			defaultName,
@@ -125,6 +128,101 @@ public class SessionPlayerDataStore : MonoBehaviour
 	}
 
 	/// <summary>
+	/// プレイヤーのチーム・観戦状態に応じてデフォルト表示名と1〜4の番号枠を正規化します。
+	/// ユーザーが手動設定したカスタム名は上書きしません。
+	/// </summary>
+	public LobbyPlayerData NormalizeDefaultPlayerName(LobbyPlayerData data)
+	{
+		if (!IsServer)
+		{
+			return data;
+		}
+
+		string currentName = data.PlayerName.ToString();
+		bool isDefaultName = IsSystemDefaultName(currentName);
+
+		if (IsSpectatorHostClient(data.ClientId))
+		{
+			m_AssignedPlayerNumbers.Remove(data.ClientId);
+			if (isDefaultName)
+			{
+				data.PlayerName = "Host";
+			}
+		}
+		else if (data.Team == ETeamType.Spectator)
+		{
+			m_AssignedPlayerNumbers.Remove(data.ClientId);
+			if (isDefaultName)
+			{
+				data.PlayerName = "Spectator";
+			}
+		}
+		else
+		{
+			int playerNumber = GetOrAssignPlayerNumber(data.ClientId);
+			if (isDefaultName)
+			{
+				data.PlayerName = $"Player {playerNumber}";
+			}
+		}
+
+		m_PlayerDataCache[data.ClientId] = data;
+		return data;
+	}
+
+	private FixedString64Bytes ResolveInitialDefaultName(ulong clientId)
+	{
+		if (IsSpectatorHostClient(clientId))
+		{
+			return "Host";
+		}
+
+		if (IsServer)
+		{
+			int playerNumber = GetOrAssignPlayerNumber(clientId);
+			return $"Player {playerNumber}";
+		}
+
+		return $"Player {clientId}";
+	}
+
+	private int GetOrAssignPlayerNumber(ulong clientId)
+	{
+		if (m_AssignedPlayerNumbers.TryGetValue(clientId, out int existingNumber))
+		{
+			return existingNumber;
+		}
+
+		int candidate = 1;
+		while (m_AssignedPlayerNumbers.ContainsValue(candidate))
+		{
+			candidate++;
+		}
+
+		m_AssignedPlayerNumbers[clientId] = candidate;
+		return candidate;
+	}
+
+	private static bool IsSpectatorHostClient(ulong clientId)
+	{
+		return NetworkManager.Singleton != null &&
+			clientId == NetworkManager.ServerClientId &&
+			!NetworkConnectManager.IsPlayerHost;
+	}
+
+	private static bool IsSystemDefaultName(string playerName)
+	{
+		if (string.IsNullOrWhiteSpace(playerName))
+		{
+			return true;
+		}
+
+		return string.Equals(playerName, "Host", StringComparison.Ordinal) ||
+			string.Equals(playerName, "Spectator", StringComparison.Ordinal) ||
+			playerName.StartsWith("Player ", StringComparison.Ordinal);
+	}
+
+	/// <summary>
 	/// 席外し(Team=None)時に、既存のキャラメイク設定を維持したままチームのみを解除します。
 	/// </summary>
 	public LobbyPlayerData UnseatPlayer(ulong clientId)
@@ -135,7 +233,7 @@ public class SessionPlayerDataStore : MonoBehaviour
 
 		if (IsServer)
 		{
-			m_PlayerDataCache[clientId] = data;
+			data = NormalizeDefaultPlayerName(data);
 		}
 
 		return data;
@@ -241,6 +339,7 @@ public class SessionPlayerDataStore : MonoBehaviour
 	public void ClearAll()
 	{
 		m_PlayerDataCache.Clear();
+		m_AssignedPlayerNumbers.Clear();
 		m_LatestMatchSummaries.Clear();
 		m_LatestMatchResult = default;
 		m_LatestExhibitionStats = default;
