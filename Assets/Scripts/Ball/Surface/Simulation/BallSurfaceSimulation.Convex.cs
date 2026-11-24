@@ -5,6 +5,7 @@
 /// </summary>
 public sealed partial class BallSurfaceSimulation
 {
+
 	/// <summary>
 	/// Vertex球面パッチから入ったEdgeでは、
 	/// 球面との位置連続性を保つため真円Offsetを使用します。
@@ -771,7 +772,6 @@ public sealed partial class BallSurfaceSimulation
 			return true;
 		}
 
-
 		m_SurfacePoint +=
 			m_ConvexEdgeDirection *
 				m_ConvexAlongSpeed *
@@ -882,6 +882,8 @@ public sealed partial class BallSurfaceSimulation
 			out completedEntryEdgeIndex,
 			out completed);
 	}
+
+
 
 	/// <summary>
 	/// Convex Edgeの円弧移動を終了し、

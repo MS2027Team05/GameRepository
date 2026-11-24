@@ -8,6 +8,7 @@ public partial class BallPhysicsController
 	private bool m_HasPendingSurfaceExit;
 	private Vector3 m_PendingSurfaceExitVelocity;
 
+
 	/// <summary>
 	/// BallSurfaceへロックしてSurface Physicsを開始します。
 	/// </summary>
@@ -250,6 +251,9 @@ public partial class BallPhysicsController
 		float nearestDistance =
 			float.PositiveInfinity;
 
+		BallSurfaceSource nearestHitSurfaceSource =
+			null;
+
 		for (int hitIndex = 0;
 			hitIndex < hitCount;
 			hitIndex++)
@@ -269,8 +273,14 @@ public partial class BallPhysicsController
 
 			// BallSurface同士の乗り換えは別機能として扱うため、
 			// 今回の通常Collider衝突からは除外します。
-			if (hitCollider.GetComponent<BallSurfaceSource>() !=
-				null)
+			BallSurfaceSource hitSurfaceSource =
+				hitCollider.GetComponent<BallSurfaceSource>();
+
+			if (hitSurfaceSource !=
+				null &&
+				!ShouldTreatSurfaceHitAsObstacle(
+					hitSurfaceSource,
+					hit))
 			{
 				continue;
 			}
@@ -289,6 +299,9 @@ public partial class BallPhysicsController
 
 			nearestDistance =
 				hit.distance;
+
+			nearestHitSurfaceSource =
+				hitSurfaceSource;
 		}
 
 		if (!hasObstacleHit)
@@ -318,6 +331,32 @@ public partial class BallPhysicsController
 			moveDirection *
 				safeMoveDistance;
 
+		if (nearestHitSurfaceSource !=
+			null)
+		{
+			if (TryContinueSameSurfaceBounce(
+				nearestHitSurfaceSource,
+				nearestHit,
+				incomingVelocity))
+			{
+				return true;
+			}
+
+			// 同一Surface内の別壁として検出できたにもかかわらず、
+			// Surface Physicsへ再接続できなかった場合は、
+			// 壁を貫通させず安全位置で停止します。
+			m_Rigidbody.position =
+				safeColliderCenter -
+				colliderCenterOffset;
+
+			Debug.LogWarning(
+				$"{name}: 同一BallSurface内の別壁へ衝突しましたが、Surface Physicsの再初期化に失敗したため停止します。",
+				this);
+
+			StopSurfaceMotionSafely();
+			return true;
+		}
+
 		m_Rigidbody.position =
 			safeColliderCenter -
 			colliderCenterOffset;
@@ -341,6 +380,195 @@ public partial class BallPhysicsController
 		return true;
 	}
 
+
+
+	/// <summary>
+	/// BallSurfaceSourceへのSphereCast Hitを、
+	/// Surface移動を止める障害物として扱うか取得します。
+	/// </summary>
+	/// <remarks>
+	/// 別BallSurfaceSourceは従来通りSurface乗り換え側の責務として無視します。
+	///
+	/// 同じBallSurfaceSourceの場合は、
+	/// 現在Triangleとその直接隣接Triangleだけ通常Surface移動として無視し、
+	/// それ以外のTriangleは同一Mesh内の別壁として障害物扱いします。
+	/// </remarks>
+	private bool ShouldTreatSurfaceHitAsObstacle(
+		BallSurfaceSource hitSurfaceSource,
+		RaycastHit hit)
+	{
+		BallSurfaceSource currentSurfaceSource =
+			m_SurfaceSimulation.SurfaceSource;
+
+		if (hitSurfaceSource == null ||
+			currentSurfaceSource == null ||
+			hitSurfaceSource !=
+				currentSurfaceSource)
+		{
+			return false;
+		}
+
+		int currentTriangleIndex =
+			m_SurfaceSimulation.CurrentTriangleIndex;
+
+		if (currentTriangleIndex <
+			0)
+		{
+			return false;
+		}
+
+		int hitTriangleIndex =
+			hit.triangleIndex;
+
+		if (hitTriangleIndex <
+			0)
+		{
+			if (!hitSurfaceSource.TryGetSurfaceHit(
+				hit.point,
+				hit.normal,
+				out RaycastHit recoveredSurfaceHit))
+			{
+				return false;
+			}
+
+			hitTriangleIndex =
+				recoveredSurfaceHit.triangleIndex;
+		}
+
+		if (hitTriangleIndex <
+			0)
+		{
+			return false;
+		}
+
+		return !IsCurrentOrNeighborSurfaceTriangle(
+			currentTriangleIndex,
+			hitTriangleIndex);
+	}
+
+	/// <summary>
+	/// 指定Triangleが現在Triangle、またはその直接隣接Triangleか取得します。
+	/// </summary>
+	private bool IsCurrentOrNeighborSurfaceTriangle(
+		int currentTriangleIndex,
+		int targetTriangleIndex)
+	{
+		if (targetTriangleIndex ==
+			currentTriangleIndex)
+		{
+			return true;
+		}
+
+		BallSurfaceSource currentSurfaceSource =
+			m_SurfaceSimulation.SurfaceSource;
+
+		if (currentSurfaceSource == null ||
+			currentSurfaceSource.MeshData == null)
+		{
+			return false;
+		}
+
+		BallSurfaceMeshData meshData =
+			currentSurfaceSource.MeshData;
+
+		for (int edgeIndex = 0;
+			edgeIndex < 3;
+			edgeIndex++)
+		{
+			if (!meshData.TryGetNeighbor(
+				currentTriangleIndex,
+				edgeIndex,
+				out int neighborTriangleIndex,
+				out _))
+			{
+				continue;
+			}
+
+			if (neighborTriangleIndex ==
+				targetTriangleIndex)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
+	/// <summary>
+	/// 同一BallSurface内の別Triangleへ衝突した際、
+	/// Hit Triangleを新しいSurfaceとしてSurface Physicsを継続します。
+	/// </summary>
+	/// <remarks>
+	/// 通常Collider用のApplyBounceVelocityは使用しません。
+	/// BallSurfaceSimulation.TryInitializeへ衝突直前のWorld速度を渡し、
+	/// Surface Physics専用のBounce設定で反射させます。
+	///
+	/// RigidbodyはKinematic、MotionStateはSurfaceのまま維持します。
+	/// </remarks>
+	private bool TryContinueSameSurfaceBounce(
+		BallSurfaceSource surfaceSource,
+		RaycastHit obstacleHit,
+		Vector3 incomingVelocity)
+	{
+		if (surfaceSource == null ||
+			!surfaceSource.IsReady)
+		{
+			return false;
+		}
+
+		RaycastHit surfaceHit =
+			obstacleHit;
+
+		if (surfaceHit.triangleIndex <
+			0)
+		{
+			if (!surfaceSource.TryGetSurfaceHit(
+				obstacleHit.point,
+				obstacleHit.normal,
+				out surfaceHit))
+			{
+				return false;
+			}
+		}
+
+		if (surfaceHit.triangleIndex <
+			0)
+		{
+			return false;
+		}
+
+		// Transform Scaleなどが変わった場合にも、
+		// 現在のBall半径を再初期化後のSimulationへ反映します。
+		ConfigureSurfaceSimulation();
+
+		if (!m_SurfaceSimulation.TryInitialize(
+			surfaceSource,
+			surfaceHit.triangleIndex,
+			surfaceHit.point,
+			incomingVelocity))
+		{
+			return false;
+		}
+
+		m_FlightDirection =
+			Vector3.zero;
+
+		m_PrePhysicsVelocity =
+			Vector3.zero;
+
+		m_SurfaceGravity.Clear();
+
+		ChangeMotionState(
+			EBallMotionState.Surface);
+
+		// 新しいTriangleの接触位置へ即時反映します。
+		// immediate=trueのためObstacle SphereCastは再実行しません。
+		ApplySurfacePosition(
+			true);
+
+		return true;
+	}
 
 	/// <summary>
 	/// Surface端へ到達したWorld位置と速度を保持し、
