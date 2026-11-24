@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// BallPhysicsControllerの追尾パス物理処理を定義します。
@@ -167,11 +167,12 @@ public partial class BallPhysicsController
 		Vector3 currentPosition = m_Rigidbody.position;
 		Vector3 toTarget = targetPosition - currentPosition;
 
-		// 対象に十分近づいたら通常飛行へ移行し、速度を維持したまま対象方向へ進ませる
+		// 対象に十分近づいたら追尾完了(味方ならサーバー上で即キャッチ確定)
 		float endDistance = Mathf.Max(0.1f, m_HomingEndDistance);
-		if (toTarget.sqrMagnitude <= endDistance * endDistance)
+		float endDistanceSqr = endDistance * endDistance;
+		if (toTarget.sqrMagnitude <= endDistanceSqr)
 		{
-			EndHoming();
+			CompleteHomingArrival();
 			return;
 		}
 
@@ -203,6 +204,22 @@ public partial class BallPhysicsController
 
 		Vector3 nextVelocity = desiredDirection * m_CurrentHomingSpeed;
 
+		// 高速移動による1ステップ飛び越しを防ぐため、障害物がなければ移動線分上で到達を判定します。
+		if (hasClearPath)
+		{
+			Vector3 nextPosition = currentPosition + nextVelocity * Time.fixedDeltaTime;
+			float segmentDistanceSqr = CalculatePointToSegmentSqrDistance(
+				currentPosition,
+				nextPosition,
+				targetPosition);
+
+			if (segmentDistanceSqr <= endDistanceSqr)
+			{
+				CompleteHomingArrival();
+				return;
+			}
+		}
+
 		m_Rigidbody.linearVelocity = nextVelocity;
 		m_PrePhysicsVelocity = nextVelocity;
 		m_FlightDirection = desiredDirection;
@@ -223,7 +240,7 @@ public partial class BallPhysicsController
 	{
 		if (IsHomingTargetCollider(hitCollider))
 		{
-			EndHoming();
+			CompleteHomingArrival();
 			return;
 		}
 
@@ -431,6 +448,45 @@ public partial class BallPhysicsController
 		return targetCollider == m_HomingTargetCollider ||
 			targetCollider.transform == m_HomingTarget ||
 			targetCollider.transform.IsChildOf(m_HomingTarget);
+	}
+
+	/// <summary>
+	/// 追尾到達時の処理を実行します。味方プレイヤー追尾時はサーバー側で直接キャッチを確定します。
+	/// </summary>
+	private void CompleteHomingArrival()
+	{
+		if (m_IsHomingTargetTransform &&
+			m_BallController != null &&
+			m_BallController.TryCompleteHomingPassCatch(m_HomingTarget))
+		{
+			ClearHomingState();
+			m_PrePhysicsVelocity = Vector3.zero;
+			m_FlightDirection = Vector3.zero;
+			ChangeMotionState(EBallMotionState.Idle);
+			return;
+		}
+
+		EndHoming();
+	}
+
+	/// <summary>
+	/// 線分と点の最短距離の2乗を計算します。
+	/// </summary>
+	private static float CalculatePointToSegmentSqrDistance(
+		Vector3 segmentStart,
+		Vector3 segmentEnd,
+		Vector3 point)
+	{
+		Vector3 segment = segmentEnd - segmentStart;
+		float segmentLengthSqr = segment.sqrMagnitude;
+		if (segmentLengthSqr <= Mathf.Epsilon)
+		{
+			return (point - segmentStart).sqrMagnitude;
+		}
+
+		float t = Mathf.Clamp01(Vector3.Dot(point - segmentStart, segment) / segmentLengthSqr);
+		Vector3 closestPoint = segmentStart + segment * t;
+		return (point - closestPoint).sqrMagnitude;
 	}
 
 	/// <summary>

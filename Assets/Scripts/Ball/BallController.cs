@@ -1,4 +1,4 @@
-﻿// BallController.cs
+// BallController.cs
 using System;
 using System.Collections;
 using Unity.Netcode;
@@ -692,6 +692,27 @@ public class BallController : NetworkBehaviour
 
 		m_IsStealing = false;
 		m_ElectricStealCoroutine = null;
+	}
+
+	/// <summary>
+	/// サーバー側で追尾パスが味方ターゲットへ到達した際、通信ラグを待たずに所持確定を試みます。
+	/// </summary>
+	public bool TryCompleteHomingPassCatch(Transform targetTransform)
+	{
+		if (!IsServer || targetTransform == null)
+		{
+			return false;
+		}
+
+		NetworkObject targetNetworkObject = targetTransform.GetComponentInParent<NetworkObject>();
+		if (targetNetworkObject == null || !targetNetworkObject.IsSpawned)
+		{
+			return false;
+		}
+
+		return TrySetHolder(
+			targetNetworkObject.OwnerClientId,
+			targetNetworkObject.NetworkObjectId);
 	}
 
 	/// <summary>
