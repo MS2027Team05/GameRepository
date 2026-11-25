@@ -2,11 +2,19 @@
 using UnityEngine.Rendering;
 
 /// <summary>
-/// デバッグ用: リソースの急速回復と味方パスによる回復を、青白い稲妻で可視化します。
+/// リソースの急速回復と味方パスによる回復を、登録した電流スクリプトまたはデバッグ稲妻で可視化します。
 /// PlayerResourceControllerから呼ばれる表示専用クラスで、回復計算やネットワーク同期は行いません。
 /// </summary>
 public class PlayerRecoveryEffectController : MonoBehaviour
 {
+	[Header("回復エフェクトの差し替え")]
+	[Tooltip("急速回復中に有効化する電流コンポーネント。プレイヤー配下のSphereSurfaceLightningBoltなどを登録します。未設定の場合はデバッグ稲妻を使用します。")]
+	[SerializeField] private ALightningBolt m_RecoveryEffect;
+	[Tooltip("味方パス回復時に有効化する電流コンポーネント。対象のGameObjectはアクティブにしておきます。未設定の場合はデバッグ稲妻を使用します。")]
+	[SerializeField] private ALightningBolt m_PassEffect;
+	[Tooltip("味方パス回復エフェクトを表示する時間です(秒)。登録した電流とデバッグ稲妻の両方に適用します。0より大きい値が必要です。")]
+	[SerializeField] private float m_PassBurstDuration;
+
 	[Header("デバッグ稲妻の表示範囲(プレイヤーのローカル座標)")]
 	[Tooltip("デバッグ用稲妻の中心位置です。このオブジェクトを基準としたローカル座標で指定します。")]
 	[SerializeField] private Vector3 m_LightningCenter;
@@ -20,8 +28,6 @@ public class PlayerRecoveryEffectController : MonoBehaviour
 	[SerializeField] private float m_LightningWidth;
 	[Tooltip("デバッグ用稲妻の形状を更新する間隔です(秒)。0より大きい値が必要です。")]
 	[SerializeField] private float m_LightningRefreshInterval;
-	[Tooltip("味方パス受取時の放射状の稲妻を表示する時間です(秒)。0より大きい値が必要です。")]
-	[SerializeField] private float m_PassBurstDuration;
 
 	private const int m_ContinuousBoltCount = 7;
 	private const int m_PassBoltCount = 12;
@@ -41,22 +47,27 @@ public class PlayerRecoveryEffectController : MonoBehaviour
 	private bool m_HasWarnedInvalidSettings;
 	private float m_FlickerElapsed;
 	private float m_PassBurstRemaining;
+	private ALightningBolt m_ControlledRecoveryEffect;
+	private ALightningBolt m_ControlledPassEffect;
 
-	/// <summary>急速回復中は稲妻を継続表示し、停止中はすべて隠します。</summary>
+	private void Awake()
+	{
+		StopAll();
+	}
+
+	/// <summary>急速回復の継続表示を切り替えます。パス回復の表示は独立して管理します。</summary>
 	public void SetRegenerating(bool isRegenerating)
 	{
-		if (m_IsRegenerating == isRegenerating)
+		if (!isActiveAndEnabled || m_IsRegenerating == isRegenerating)
 		{
 			return;
 		}
 
 		m_IsRegenerating = isRegenerating;
+		UpdateScriptEffects();
 		if (isRegenerating)
 		{
-			if (EnsureLightningCreated())
-			{
-				RefreshContinuousBolts();
-			}
+			UpdateRecoveryEffect(true);
 		}
 		else
 		{
@@ -64,23 +75,30 @@ public class PlayerRecoveryEffectController : MonoBehaviour
 		}
 	}
 
-	/// <summary>味方パス受取時は、胴体から外側へ伸びる稲妻を短時間だけ表示します。</summary>
+	/// <summary>味方パス受取時のエフェクトを指定時間だけ表示します。</summary>
 	public void PlayPassBonus()
 	{
-		if (!EnsureLightningCreated())
+		if (!isActiveAndEnabled)
 		{
+			return;
+		}
+		if (m_PassBurstDuration <= 0f)
+		{
+			Debug.LogWarning("パス回復エフェクトのPass Burst Durationを0より大きい値に設定してください。", this);
 			return;
 		}
 
 		m_PassBurstRemaining = m_PassBurstDuration;
 		m_FlickerElapsed = 0.0f;
-		RefreshPassBolts();
+		UpdateScriptEffects();
+		UpdatePassEffect(true);
 	}
 
 	private void Update()
 	{
 		if (!m_IsRegenerating && m_PassBurstRemaining <= 0.0f)
 		{
+			UpdateScriptEffects();
 			return;
 		}
 
@@ -93,26 +111,78 @@ public class PlayerRecoveryEffectController : MonoBehaviour
 			}
 		}
 
-		if (m_CoreLines == null)
-		{
-			return;
-		}
-
+		UpdateScriptEffects();
 		m_FlickerElapsed += Time.deltaTime;
-		if (m_FlickerElapsed < m_LightningRefreshInterval)
+		bool refreshLightning = m_FlickerElapsed >= m_LightningRefreshInterval;
+		if (refreshLightning)
 		{
-			return;
+			m_FlickerElapsed = 0.0f;
 		}
 
-		m_FlickerElapsed = 0.0f;
 		if (m_IsRegenerating)
 		{
-			RefreshContinuousBolts();
+			UpdateRecoveryEffect(refreshLightning);
 		}
 
 		if (m_PassBurstRemaining > 0.0f)
 		{
+			UpdatePassEffect(refreshLightning);
+		}
+	}
+
+	private void UpdateRecoveryEffect(bool refreshLightning)
+	{
+		if (m_RecoveryEffect != null)
+		{
+			SetBoltRangeVisible(0, m_ContinuousBoltCount, false);
+		}
+		else if (refreshLightning && EnsureLightningCreated())
+		{
+			RefreshContinuousBolts();
+		}
+	}
+
+	private void UpdatePassEffect(bool refreshLightning)
+	{
+		if (m_PassEffect != null)
+		{
+			SetBoltRangeVisible(m_ContinuousBoltCount, m_PassBoltCount, false);
+		}
+		else if (refreshLightning && EnsureLightningCreated())
+		{
 			RefreshPassBolts();
+		}
+	}
+
+	private void UpdateScriptEffects()
+	{
+		// 実行中に参照を差し替えた場合は、以前の電流を停止します。
+		if (m_ControlledRecoveryEffect != m_RecoveryEffect && m_ControlledRecoveryEffect != m_PassEffect)
+		{
+			SetEffectEnabled(m_ControlledRecoveryEffect, false);
+		}
+		if (m_ControlledPassEffect != m_RecoveryEffect && m_ControlledPassEffect != m_PassEffect)
+		{
+			SetEffectEnabled(m_ControlledPassEffect, false);
+		}
+		m_ControlledRecoveryEffect = m_RecoveryEffect;
+		m_ControlledPassEffect = m_PassEffect;
+
+		bool isPassPlaying = m_PassBurstRemaining > 0f;
+		// 同じコンポーネントを両方に登録した場合は、どちらかの表示条件が成立している間だけ有効にします。
+		bool isShared = m_RecoveryEffect == m_PassEffect;
+		SetEffectEnabled(m_RecoveryEffect, isActiveAndEnabled && (m_IsRegenerating || (isShared && isPassPlaying)));
+		if (!isShared)
+		{
+			SetEffectEnabled(m_PassEffect, isActiveAndEnabled && isPassPlaying);
+		}
+	}
+
+	private static void SetEffectEnabled(ALightningBolt effect, bool isEnabled)
+	{
+		if (effect != null && effect.enabled != isEnabled)
+		{
+			effect.enabled = isEnabled;
 		}
 	}
 
@@ -122,6 +192,7 @@ public class PlayerRecoveryEffectController : MonoBehaviour
 		m_IsRegenerating = false;
 		m_PassBurstRemaining = 0.0f;
 		m_FlickerElapsed = 0.0f;
+		UpdateScriptEffects();
 
 		SetBoltRangeVisible(0, m_ContinuousBoltCount + m_PassBoltCount, false);
 	}
@@ -134,8 +205,7 @@ public class PlayerRecoveryEffectController : MonoBehaviour
 		}
 
 		if (m_LightningRadius <= 0.0f || m_LightningHeight <= 0.0f ||
-			m_LightningWidth <= 0.0f || m_LightningRefreshInterval <= 0.0f ||
-			m_PassBurstDuration <= 0.0f)
+			m_LightningWidth <= 0.0f || m_LightningRefreshInterval <= 0.0f)
 		{
 			if (!m_HasWarnedInvalidSettings)
 			{

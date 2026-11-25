@@ -22,6 +22,8 @@
 ### 4. 電撃VFX・カラー連携
 - **共通基底とリソース**: `Assets/VFX/Lightning/VFXScripts/ALightningBolt` が共通マテリアル (`Resources/Lightning/`) の読込、線描画プールと差し替え Prefab 再生の切り替え、および所有者からの色同期を担当します。派生クラスは形状・接触検知・移動軌跡などの発生ロジックを担当します。
 - **色連動**: `PlayerAppearance.TryGetEffectColor` / `EffectColorChanged` が `EEffectColorSource` (選択色またはチーム色) に応じた色とパレット種別を提供し、ボール所持時は `BallHoldAttachment` が描画配下の電撃へ所有者を明示します。
+- **箱表面の電撃**: `CubeSurfaceLightningBolt` がローカル座標で定義した箱の表面を這う線を描画し、`CubeSurfaceLightningPath` が面上の移動と辺での方向変換を担当します。面の境界を描画頂点に追加し、各線分を同一面上に収めます。
+- **自プレイヤーの回復演出**: `PlayerResourceController` が回復状態と表示設定を通知し、`PlayerRecoveryEffectController` が直接登録された急速回復用・パス回復用の `ALightningBolt` コンポーネントを有効・無効に切り替えます。未指定の側はデバッグ稲妻を表示し、パス回復の表示時間は回復演出側で管理します。同じ電流を両方に登録した場合は、どちらかの表示条件が成立している間だけ有効にします。
 
 ---
 

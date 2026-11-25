@@ -40,10 +40,12 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	[Tooltip("自分のリソースを表示するゲージUIです。Owner以外には表示しません。")]
 	[SerializeField] private PlayerResourceGaugeUI m_ResourceGauge;
 
-	[Header("デバッグ専用回復エフェクト")]
-	[Tooltip("デバッグ専用です。ONで自分の回復時に電気エフェクトを表示します。他プレイヤーへは同期しません。")]
+	[Header("回復エフェクト(自プレイヤーのみ)")]
+	[Tooltip("ONで自分の回復時にエフェクトを表示します。他プレイヤーへは同期しません。")]
+	[InspectorName("Enable Recovery Effect")]
 	[SerializeField] private bool m_EnableDebugRecoveryEffect;
-	[Tooltip("デバッグ専用の回復エフェクト制御コンポーネントです。通常回復と味方パス回復の表示に使用します。")]
+	[Tooltip("急速回復と味方パス回復の表示を制御するコンポーネントです。")]
+	[InspectorName("Recovery Effect Controller")]
 	[SerializeField] private PlayerRecoveryEffectController m_DebugRecoveryEffectController;
 
 	private IGravityMover m_GravityMover;
@@ -121,8 +123,14 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 			return;
 		}
 
+		if (!m_EnableDebugRecoveryEffect)
+		{
+			m_DebugRecoveryEffectController?.StopAll();
+		}
+
 		if (IsInfiniteEnergyDebugEnabled)
 		{
+			m_DebugRecoveryEffectController?.StopAll();
 			if (m_CurrentResource < MaxResource)
 			{
 				m_CurrentResource = MaxResource;

@@ -547,8 +547,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 372.5, y: 231.3}
-  m_SizeDelta: {x: 226.87498, y: 226.87498}
+  m_AnchoredPosition: {x: 371.8, y: 231}
+  m_SizeDelta: {x: 226.25002, y: 226.25002}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &365736332269386701
 CanvasRenderer:
@@ -2854,6 +2854,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5002633098547168191}
   - component: {fileID: 8150090777408388913}
+  - component: {fileID: 48360723627419938}
   m_Layer: 6
   m_Name: RecoveryDebugEffect
   m_TagString: Untagged
@@ -2892,12 +2893,44 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ec3d0b6f29e2404b9da661d630a8e724, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRecoveryEffectController
+  m_RecoveryEffect: {fileID: 48360723627419938}
+  m_PassEffect: {fileID: 48360723627419938}
+  m_PassBurstDuration: 0.45
   m_LightningCenter: {x: 0, y: 0.5, z: 0}
   m_LightningRadius: 0.85
   m_LightningHeight: 1.7
   m_LightningWidth: 0.045
   m_LightningRefreshInterval: 0.06
-  m_PassBurstDuration: 0.45
+--- !u!114 &48360723627419938
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7888641462818605851}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aba2302bdd09424d859d67b0af63eabb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeSurfaceLightningBolt
+  m_UsePrefabEffect: 0
+  m_EffectPrefab: {fileID: 0}
+  m_BoltCount: 20
+  m_MaxActiveBoltCount: 10
+  m_SegmentCount: 6
+  m_Displacement: 0.04
+  m_CoreWidth: 0.008
+  m_GlowWidth: 0.03
+  m_EndWidthRatio: 0.5
+  m_RefreshInterval: 0.05
+  m_Lifetime: 0.1
+  m_SpawnInterval: 0.04
+  m_CenterPoint: {fileID: 2037211824179790620}
+  m_LocalCenter: {x: 0, y: 0, z: 0}
+  m_Size: {x: 0.2, y: 0.2, z: 0.2}
+  m_SurfaceOffset: 0.02
+  m_PathLength: 1
+  m_CrawlSpeed: 0.8
 --- !u!1 &8399714881753745463
 GameObject:
   m_ObjectHideFlags: 0
