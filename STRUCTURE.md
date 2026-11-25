@@ -5,8 +5,8 @@
 ## 全体アーキテクチャ・主要フロー
 
 ### 1. 試合進行・リスタート・得点演出
-- **エントリーポイント**: `Game/MatchManager` がサーバー権限で試合状態 (`Waiting` / `PreparingRestart` / `Countdown` / `Playing` / `GoalCelebration` / `GoalReplay` / `Finished`)・制限時間・チーム得点を統括します。
-- **スポーンとリスタート**: `Network/PlayerSpawner` が陣営別スポーン地点 (`RedSpawn` / `BlueSpawn` は中央向きに180度対向配置) を保持し、試合開始および得点後の `PreparingRestart` で `PlayerController.PrepareForRestart` へ再配置を指示します。Owner 側は `PlayerController.Respawn` による姿勢・カメラ・アニメーション初期化に加えて `IPlayerResource.ResetToFull` で燃料を100%へ戻し、完了応答後に `Countdown` へ遷移します。
+- **エントリーポイント**: `Game/MatchManager` がサーバー権限で試合状態 (`Waiting` / `PreparingRestart` / `Countdown` / `Playing` / `GoalCelebration` / `GoalReplay` / `Finished`)・制限時間・チーム得点・全端末のシーン読込完了待機およびデバッグ用時間/燃料無制限設定を統括します。
+- **スポーンとリスタート**: `Network/PlayerSpawner` が陣営別・配置番号別の自陣ゴール付近/中央付近スポーン地点 (`RedGoalSpawn` / `RedCenterSpawn` / `BlueGoalSpawn` / `BlueCenterSpawn`) を保持し、初期配置は両チーム自陣ゴール付近、得点後は得点側を自陣ゴール付近・失点側を中央付近へ `PlayerController.PrepareForRestart` で再配置します。Owner 側は `PlayerController.Respawn` による姿勢・カメラ・アニメーション初期化に加えて `IPlayerResource.ResetToFull` で燃料を100%へ戻し、完了応答後に `Countdown` へ遷移します。
 - **得点演出とHUD**: `MatchManager.TryAddGoalScore` で得点確定後に全端末へ通知し、各端末の `GoalController` が配置済み ParticleSystem を再生します。全端末での粒子消滅完了を受けて次フェーズへ移行し、`UI/MatchHudController` が同期状態に応じた得点メッセージやカウントダウンを表示します。
 
 ### 2. ゴールリプレイ・戦績・統計
@@ -17,7 +17,7 @@
 ### 3. ボール制御・所持追従・場外復帰
 - **状態管理・物理**: `Ball/BallController` が所持・奪取・投球・パス判定をサーバー権限で管理し、物理挙動を `BallPhysicsController` 系へ委譲します。
 - **描画階層の追従**: `BallHoldAttachment` が描画専用階層 (`VisualRoot`) のみを `PlayerBallCarrier.BallHoldPoint` (表示中の男女モデルに応じたジョイント) へ付け替え・復元し、物理・通信用本体は `BallController` がサーバー側 `LateUpdate` で追従させます。
-- **場外復帰**: `BallOutOfBoundsRespawner` がサーバー上の未所持かつ試合進行中ボールの範囲外を検知し、試合再開時と共通の `BallController.RespawnAtInitialPosition()` で初期位置へ戻します。
+- **場外復帰**: `BallOutOfBoundsRespawner` がサーバー上の未所持かつ試合進行中ボールの範囲外を検知し、最後に場内だった位置の近傍 Ground Surface へ `BallController.RespawnAtPosition()` で復帰させます。近傍 Ground を取得できない場合は `BallController.RespawnAtInitialPosition()` で初期位置へ戻します。
 
 ### 4. 電撃VFX・カラー連携
 - **共通基底とリソース**: `Assets/VFX/Lightning/VFXScripts/ALightningBolt` が共通マテリアル (`Resources/Lightning/`) の読込、線描画プールと差し替え Prefab 再生の切り替え、および所有者からの色同期を担当します。派生クラスは形状・接触検知・移動軌跡などの発生ロジックを担当します。
@@ -52,7 +52,7 @@ GameRepository/
 │   │   ├── Ball/                    # ボール制御・物理・Surface・UI・場外復帰
 │   │   │   ├── BallController.cs            # [EntryPoint] ボール所持・奪取・シュート・復帰統括
 │   │   │   ├── BallHoldAttachment.cs        # 描画専用階層(VisualRoot)の所持ジョイント付け替え・復元
-│   │   │   ├── BallOutOfBoundsRespawner.cs  # 未所持ボールのワールド範囲外検知・初期位置復帰
+│   │   │   ├── BallOutOfBoundsRespawner.cs  # 未所持ボールのワールド範囲外検知・近傍Ground/初期位置復帰
 │   │   │   ├── Physics/                     # Free Flight・Homing・Surface物理制御
 │   │   │   │   ├── BallPhysicsController.cs # [EntryPoint] ボール物理状態統括 (Air/Collision/Homing/Surface)
 │   │   │   │   ├── BallBounce.cs            # ボールの跳ね返り挙動制御
@@ -123,7 +123,8 @@ GameRepository/
 │   │   │   ├── Interfaces/                  # モジュール間インターフェース群 (IAimAssist, IAimGuide, IBallCarrier, ICameraEffect, IElectricAction, IGravityMover, IGroundDetector, ILockOnProvider, IMovingSurface, IPlayerResource, IPlayerRespawnHandler, ISurfaceMover)
 │   │   │   ├── PlayerNetworkProfile.cs      # プレイヤープロファイル同期
 │   │   │   ├── PlayerAppearance.cs          # 外見(性別モデル・12色・チーム色・電流色ソース)管理
-│   │   │   ├── PlayerAppearanceCatalog.cs   # 外見マテリアル・プレビュー色管理ScriptableObject
+│   │   │   ├── PlayerAppearanceCatalog.cs   # 外見マテリアル・プレビュー色・共通発光管理ScriptableObject
+│   │   │   ├── PlayerEmissionController.cs  # MaterialPropertyBlockによるプレイヤー共通発光制御
 │   │   │   ├── EEffectColorSource.cs        # 電流色取得元(選択色/チーム色)Enum
 │   │   │   ├── PlayerNamePlate.cs           # 頭上3Dネームプレート・敵味方表示制御
 │   │   │   ├── PlayerInputReceiver.cs       # InputSystem入力・視点操作(マウス/PAD感度)・カーソル管理
@@ -137,6 +138,7 @@ GameRepository/
 │   │   │   ├── LockOnManager.cs             # 優先度付きロックオン検索・捕捉
 │   │   │   ├── PlayerBallCarrier.cs         # ボール所持・男女別ジョイント提供・パス/シュート
 │   │   │   ├── ElectricAction.cs            # 電撃チャージ・発射・奪取/スタン命中処理
+│   │   │   ├── PlayerChargeProgress.cs      # 電撃・追尾パス共通の円形チャージ進捗UI表示
 │   │   │   ├── PlayerResourceController.cs  # [EntryPoint] Owner側リソース消費・回復・パスボーナス・100%リセット
 │   │   │   ├── PlayerRecoveryEffectController.cs # 回復・パスボーナスVFX再生および同期
 │   │   │   ├── PlayerAnimationController.cs # Animator状態切替・移動状態同期
@@ -146,6 +148,8 @@ GameRepository/
 │   │       ├── UIInputReceiver.cs           # UI系統入力検知・InputAction分離
 │   │       ├── UIFocusGlowOutline.cs        # 汎用UIフォーカス発光枠線制御
 │   │       ├── PlayerResourceGaugeUI.cs     # リソースゲージ表示更新
+│   │       ├── PlayerWorldTargetUI.cs       # ボール・ゴール・味方プレイヤーの画面上補助マーカーUI制御
+│   │       ├── PlayerUIResolutionManager.cs # 画面解像度比率に応じたプレイヤーUIスケール調整
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] Escメニュー・設定連携・ロビー復帰
 │   │       ├── MatchHudController.cs        # 試合時間・得点・状態メッセージ表示
 │   │       ├── ResultAwardItemUI.cs         # リザルト個人表彰1項目表示
