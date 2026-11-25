@@ -43,17 +43,17 @@ public class PlayerActionHelpUI : MonoBehaviour
 	private const string m_HoldElectricReadyPadText =
 		"L2を離すとボールを奪取 / 敵をスタン\nR2でキャンセル";
 	private const string m_HoldElectricReadyMouseText =
-		"左クリックを離すとボールを奪取 / 敵をスタン\n右クリックでキャンセル";
+		"離すとボールを奪取 / 敵をスタン\n右クリックでキャンセル";
 
 	private const string m_HoldBallThrowPadText =
-		"L2を離すとボールを投げる\nたまると追尾パス\nR2でキャンセル";
+		"離すとボールを投げる\nたまると追尾パス\nR2でキャンセル";
 	private const string m_HoldBallThrowMouseText =
-		"左クリックを離すとボールを投げる\nたまると追尾パス\n右クリックでキャンセル";
+		"離すとボールを投げる\nたまると追尾パス\n右クリックでキャンセル";
 
 	private const string m_HoldBallHomingReadyPadText =
-		"L2を離すと追尾パス\nR2でキャンセル";
+		"離すと追尾パス\nR2でキャンセル";
 	private const string m_HoldBallHomingReadyMouseText =
-		"左クリックを離すと追尾パス\n右クリックでキャンセル";
+		"離すと追尾パス\n右クリックでキャンセル";
 
 	private bool m_IsInitialized;
 	private bool m_LastVisible;
