@@ -52,12 +52,12 @@ GameRepository/
 │   │   │   ├── BallHoldAttachment.cs        # 描画専用階層(VisualRoot)の所持ジョイント付け替え・復元
 │   │   │   ├── BallOutOfBoundsRespawner.cs  # 未所持ボールのワールド範囲外検知・初期位置復帰
 │   │   │   ├── Physics/                     # Free Flight・Homing・Surface物理制御
-│   │   │   │   ├── BallPhysicsController.cs # [EntryPoint] ボール物理状態統括 (Air/Collision/Homing/Surface)
+│   │   │   │   ├── BallPhysicsController.cs # [EntryPoint] ボール物理状態統括 (Air/Collision/Homing/Surface・障害物判定・診断)
 │   │   │   │   ├── BallBounce.cs            # ボールの跳ね返り挙動制御
 │   │   │   │   └── Attraction/              # 疑似重力・Surface探索 (BallSurfaceGravity/Search)
 │   │   │   ├── Surface/                     # BallSurfaceのMesh解析・曲面上移動シミュレーション
 │   │   │   │   ├── BallSurfaceSource.cs     # [EntryPoint] MeshColliderからSurfaceデータを構築
-│   │   │   │   └── BallSurfaceSimulation.cs # Surface Physics進行処理 (Simulation/配下に形状別分割)
+│   │   │   │   └── BallSurfaceSimulation.cs # Surface Physics進行処理 (Simulation/配下に初期化・形状別遷移・World状態を分割)
 │   │   │   ├── UI/
 │   │   │   │   ├── BallScreenIndicator.cs   # 画面内・画面外インジケーターUI制御
 │   │   │   │   └── BallSpectatorHighlight.cs# 観戦時の最小視認スケール維持・強調制御

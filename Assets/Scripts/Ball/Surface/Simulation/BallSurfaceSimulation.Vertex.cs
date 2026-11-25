@@ -358,7 +358,7 @@ public sealed partial class BallSurfaceSimulation
 				null ||
 			!m_HasWorldState)
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("MissingSurfaceOrWorldState");
 		}
 
 		Vector3 localVertexPoint =
@@ -373,7 +373,7 @@ public sealed partial class BallSurfaceSimulation
 			incidentEdges.Length <
 				3)
 		{
-			return RecordGeometryFailure("Guard2");
+			return RecordGeometryFailure("InsufficientIncidentConvexEdges");
 		}
 
 		if (!TryGetVertexSphereInteriorDirection(
@@ -381,7 +381,7 @@ public sealed partial class BallSurfaceSimulation
 			incidentEdges,
 			out Vector3 interiorDirection))
 		{
-			return RecordGeometryFailure("Guard3");
+			return RecordGeometryFailure("VertexInteriorDirection");
 		}
 
 		Vector3 beforeCenter =
@@ -403,7 +403,7 @@ public sealed partial class BallSurfaceSimulation
 				m_BallRadius -
 					m_TransitionPositionTolerance)
 		{
-			return RecordGeometryFailure("Guard4");
+			return RecordGeometryFailure("InvalidVertexRadius");
 		}
 
 		Vector3 radialDirection =
@@ -424,7 +424,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard5");
+			return RecordGeometryFailure("TangentSpeedTooSmall");
 		}
 
 		Vector3 rotationAxis =
@@ -436,7 +436,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard6");
+			return RecordGeometryFailure("InvalidRotationAxis");
 		}
 
 		rotationAxis.Normalize();
@@ -592,7 +592,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("InvalidRadialDirection");
 		}
 
 		m_ConvexVertexSphereRadialDirection.Normalize();
@@ -610,7 +610,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard2");
+			return RecordGeometryFailure("RotatedTangentTooSmall");
 		}
 
 		m_SurfaceVelocity =
@@ -637,7 +637,7 @@ public sealed partial class BallSurfaceSimulation
 			boundaryEdge,
 			ref m_ConvexVertexSphereRadialDirection))
 		{
-			return RecordGeometryFailure("Guard3");
+			return RecordGeometryFailure("SnapVertexBoundaryFailed");
 		}
 
 		m_SurfaceVelocity =
@@ -649,7 +649,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard4");
+			return RecordGeometryFailure("BoundaryTangentTooSmall");
 		}
 
 		m_SurfaceVelocity =
@@ -681,7 +681,7 @@ public sealed partial class BallSurfaceSimulation
 			exitRadialDirection,
 			exitSurfaceVelocity))
 		{
-			return RecordGeometryFailure("Guard5");
+			return RecordGeometryFailure("BeginConvexFromVertexFailed");
 		}
 
 		completed =

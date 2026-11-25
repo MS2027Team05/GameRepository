@@ -414,9 +414,6 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 指定Triangle上でWorld座標に最も近い点を取得します。
-	/// </summary>
-	/// <summary>
 	/// 再初期化候補の球中心と補正経路を同一Meshの全Triangleに対して検証します。
 	/// </summary>
 	internal bool IsBouncePlacementClear(Vector3 start, Vector3 end, float radius,
@@ -677,6 +674,9 @@ public sealed class BallSurfaceSource : MonoBehaviour
 		return correctionDistance > tolerance * 0.25f && correctionDistance <= budget;
 	}
 
+	/// <summary>
+	/// 指定Triangle上でWorld座標に最も近い点を取得します。
+	/// </summary>
 	internal bool TryGetTriangleClosestWorldPoint(
 		int triangleIndex,
 		Vector3 worldPoint,
@@ -1120,18 +1120,26 @@ public sealed class BallSurfaceSource : MonoBehaviour
 					correctedPoint, normal, maximumDistance,
 					out triangleIndex, out surfacePoint, out float normalDot))
 				{
+#if BALL_SURFACE_DIAGNOSTICS
 					Debug.Log(
 						$"[BallSurface][ContactTriangleCorrectionSucceeded] Surface={name} ContactSeparation={contactSeparation:F6} CorrectionDistance={correctionDistance:F6} OriginalPoint={contactPoint.ToString("F6")} CorrectedPoint={correctedPoint.ToString("F6")} Triangle={triangleIndex} SurfacePoint={surfacePoint.ToString("F6")} DistanceBefore={Vector3.Distance(contactPoint, surfacePoint):F6} DistanceAfter={Vector3.Distance(correctedPoint, surfacePoint):F6} MaxDistance={maximumDistance:F6} Angle={Mathf.Acos(Mathf.Clamp(normalDot, -1.0f, 1.0f)) * Mathf.Rad2Deg:F3}deg MaxAngle=60.000deg DistancePass=True AnglePass=True", this);
+#endif
 					return true;
 				}
 
+#if BALL_SURFACE_DIAGNOSTICS
 				Debug.LogWarning(
 					$"[BallSurface][ContactTriangleCorrectionFailed] Surface={name} ContactSeparation={contactSeparation:F6} CorrectionDistance={correctionDistance:F6} OriginalPoint={contactPoint.ToString("F6")} CorrectedPoint={correctedPoint.ToString("F6")} MaxDistance={maximumDistance:F6} MaxAngle=60.000deg", this);
 				LogContactTriangleSearchFailure(correctedPoint, normal, maximumDistance, false, -1, false);
+#endif
 			}
 		}
 
+#if BALL_SURFACE_DIAGNOSTICS
 		LogContactTriangleSearchFailure(contactPoint, normal, maximumDistance, rayFound, hit.triangleIndex);
+#else
+		Debug.LogWarning($"[BallSurface][ContactTriangleNotFound] Surface={name} RayFound={rayFound} ContactSeparation={contactSeparation:F6}", this);
+#endif
 		return false;
 	}
 
@@ -1181,6 +1189,7 @@ public sealed class BallSurfaceSource : MonoBehaviour
 		return triangleIndex >= 0;
 	}
 
+#if BALL_SURFACE_DIAGNOSTICS
 	/// <summary>
 	/// 接触Triangleの補完探索に失敗した場合だけ、距離と法線の判定結果を記録します。
 	/// 診断用の再探索であり、採用条件やSimulation状態は変更しません。
@@ -1286,6 +1295,7 @@ public sealed class BallSurfaceSource : MonoBehaviour
 			$"NearestAnglePassed: {anglePassedDetails}\n" +
 			$"BestAngleWithinDistance: {distancePassedDetails}", this);
 	}
+#endif
 
 	/// <summary>
 	/// ContactPointの両側からMeshColliderへRayを飛ばし、

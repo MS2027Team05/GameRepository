@@ -99,7 +99,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("InvalidSurfaceNormal");
 		}
 
 		surfaceNormal.Normalize();
@@ -142,7 +142,7 @@ public sealed partial class BallSurfaceSimulation
 
 		if (!m_IsInitialized)
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("NotInitialized");
 		}
 
 		// Concave Airborne中はWorldStateそのものがBall本体です。
@@ -150,7 +150,7 @@ public sealed partial class BallSurfaceSimulation
 		{
 			if (!m_HasWorldState)
 			{
-				return RecordGeometryFailure("Guard2");
+				return RecordGeometryFailure("MissingConcaveWorldState");
 			}
 
 			worldCenter =
@@ -165,7 +165,7 @@ public sealed partial class BallSurfaceSimulation
 		if (!TryGetCurrentSurfaceNormal(
 			out Vector3 surfaceNormal))
 		{
-			return RecordGeometryFailure("Guard3");
+			return RecordGeometryFailure("CurrentSurfaceNormal");
 		}
 
 		Vector3 ballCenterOffset;
@@ -219,7 +219,7 @@ public sealed partial class BallSurfaceSimulation
 			out Vector3 worldCenter,
 			out Vector3 worldVelocity))
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("CalculateTraversalWorldState");
 		}
 
 		SetWorldState(

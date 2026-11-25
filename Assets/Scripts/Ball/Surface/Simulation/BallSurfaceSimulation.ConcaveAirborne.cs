@@ -644,7 +644,7 @@ public sealed partial class BallSurfaceSimulation
 		if (sourceSpeed <=
 			m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("ReferenceSpeedTooSmall");
 		}
 
 		if (!TryGetTriangleWorldData(
@@ -654,7 +654,7 @@ public sealed partial class BallSurfaceSimulation
 			out Vector3 vertexC,
 			out _))
 		{
-			return RecordGeometryFailure("Guard2");
+			return RecordGeometryFailure("TargetTriangleWorldData");
 		}
 
 		if (!TryGetConcaveEdgeWorldVertices(
@@ -665,7 +665,7 @@ public sealed partial class BallSurfaceSimulation
 			out Vector3 edgeStart,
 			out Vector3 edgeEnd))
 		{
-			return RecordGeometryFailure("Guard3");
+			return RecordGeometryFailure("EntryEdgeWorldVertices");
 		}
 
 		Vector3 edgeVector =
@@ -676,7 +676,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard4");
+			return RecordGeometryFailure("DegenerateEntryEdge");
 		}
 
 		Vector3 edgeDirection =
@@ -733,7 +733,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard5");
+			return RecordGeometryFailure("InvalidTargetInsideDirection");
 		}
 
 		targetInsideDirection.Normalize();
@@ -747,7 +747,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard6");
+			return RecordGeometryFailure("MappedVelocityTooSmall");
 		}
 
 		// 数値誤差でReference速度量が増減しないようにします。

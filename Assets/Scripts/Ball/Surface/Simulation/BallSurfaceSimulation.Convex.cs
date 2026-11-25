@@ -363,7 +363,7 @@ public sealed partial class BallSurfaceSimulation
 				m_MinimumCalculationValue *
 					m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("InvalidMeshOrVertexMotion");
 		}
 
 		if (!m_MeshData.TryGetNeighbor(
@@ -372,7 +372,7 @@ public sealed partial class BallSurfaceSimulation
 			out int neighborTriangleIndex,
 			out int neighborEdgeIndex))
 		{
-			return RecordGeometryFailure("Guard2");
+			return RecordGeometryFailure("MissingConvexNeighbor");
 		}
 
 		if (!TryGetEdgeWorldVertices(
@@ -381,7 +381,7 @@ public sealed partial class BallSurfaceSimulation
 			out Vector3 edgeStart,
 			out Vector3 edgeEnd))
 		{
-			return RecordGeometryFailure("Guard3");
+			return RecordGeometryFailure("EdgeWorldVertices");
 		}
 
 		Vector3 edgeVector =
@@ -392,7 +392,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard4");
+			return RecordGeometryFailure("DegenerateEdge");
 		}
 
 		Vector3 edgeDirection =
@@ -411,7 +411,7 @@ public sealed partial class BallSurfaceSimulation
 				out _,
 				out Vector3 secondNormal))
 		{
-			return RecordGeometryFailure("Guard5");
+			return RecordGeometryFailure("TriangleWorldData");
 		}
 
 		radialDirection.Normalize();
@@ -428,7 +428,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard6");
+			return RecordGeometryFailure("ProjectedTangentTooSmall");
 		}
 
 		tangentVelocity =
@@ -445,7 +445,7 @@ public sealed partial class BallSurfaceSimulation
 			firstToSecondSignedAngle) <=
 			m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard7");
+			return RecordGeometryFailure("ZeroSignedAngle");
 		}
 
 		Vector3 firstToSecondCrossDirection =
@@ -459,7 +459,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard8");
+			return RecordGeometryFailure("InvalidCrossDirection");
 		}
 
 		firstToSecondCrossDirection.Normalize();
@@ -527,7 +527,7 @@ public sealed partial class BallSurfaceSimulation
 			signedAngle) <=
 			m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard9");
+			return RecordGeometryFailure("ZeroSignedAngle");
 		}
 
 		float currentAngleMagnitude =
@@ -543,7 +543,7 @@ public sealed partial class BallSurfaceSimulation
 			totalAngleMagnitude +
 				m_VertexSphereArcAngleTolerance)
 		{
-			return RecordGeometryFailure("Guard10");
+			return RecordGeometryFailure("AngleOutsideArc");
 		}
 
 		float currentAngle =
@@ -564,7 +564,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard11");
+			return RecordGeometryFailure("InvalidCrossDirection");
 		}
 
 		crossDirection.Normalize();
@@ -591,7 +591,7 @@ public sealed partial class BallSurfaceSimulation
 		if (reconstructedSpeed <=
 			m_MinimumCalculationValue)
 		{
-			return RecordGeometryFailure("Guard12");
+			return RecordGeometryFailure("ReconstructedSpeedTooSmall");
 		}
 
 		float speedScale =
@@ -845,7 +845,7 @@ public sealed partial class BallSurfaceSimulation
 
 			if (!RefreshWorldStateFromCurrentTraversal())
 			{
-				return RecordGeometryFailure("Guard1");
+				return RecordGeometryFailure("RefreshWorldStateAtVertex");
 			}
 
 			if (BeginConvexVertexSpherePatch(
@@ -936,7 +936,7 @@ public sealed partial class BallSurfaceSimulation
 		// 接線速度から再構成できます。
 		if (!RefreshWorldStateFromCurrentTraversal())
 		{
-			return RecordGeometryFailure("Guard1");
+			return RecordGeometryFailure("RefreshWorldStateBeforeExit");
 		}
 
 		Vector3 beforeCenter =
@@ -952,7 +952,7 @@ public sealed partial class BallSurfaceSimulation
 			out _,
 			out Vector3 targetNormal))
 		{
-			return RecordGeometryFailure("Guard2");
+			return RecordGeometryFailure("TargetTriangleWorldData");
 		}
 
 		float signedCenterDistance =
@@ -965,7 +965,7 @@ public sealed partial class BallSurfaceSimulation
 			m_BallRadius -
 				m_TransitionPositionTolerance)
 		{
-			return RecordGeometryFailure("Guard3");
+			return RecordGeometryFailure("CenterInsideTargetRadius");
 		}
 
 		m_CurrentTriangleIndex =
