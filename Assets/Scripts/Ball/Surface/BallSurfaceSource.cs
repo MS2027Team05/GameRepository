@@ -349,8 +349,8 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	/// Mesh全体からWorld座標に最も近いSurface位置を取得します。
 	/// </summary>
 	/// <remarks>
-	/// 通常のFlying追跡では使用せず、
-	/// 追跡Triangleが無効になった場合のFallbackとして使用します。
+	/// Flying・SeekingSurfaceの初回探索、およびFlyingの追跡で
+	/// 全体の再探索が必要な場合に使用します。
 	/// </remarks>
 	public bool TryFindNearestSurface(
 		Vector3 worldPoint,
@@ -493,7 +493,7 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	/// <summary>
 	/// 三角形上で指定点に最も近い点を取得します。
 	/// </summary>
-	private static Vector3 GetClosestPointOnTriangle(
+	internal static Vector3 GetClosestPointOnTriangle(
 		Vector3 point,
 		Vector3 vertexA,
 		Vector3 vertexB,
