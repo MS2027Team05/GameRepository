@@ -25,6 +25,90 @@ public partial class BallPhysicsController
 	private bool m_HasPendingSurfaceExit;
 	private Vector3 m_PendingSurfaceExitVelocity;
 
+	// Editor / Development Build専用の直近Surface更新履歴です。
+	private const int m_SurfaceTraceCapacity = 12;
+	private System.Text.StringBuilder[] m_SurfaceTrace;
+	private int m_SurfaceTraceNext;
+	private int m_SurfaceTraceCount;
+	private int m_SurfaceTraceCurrent = -1;
+
+	/// <summary>
+	/// 物理更新または初回Surface進入の診断記録を開始します。
+	/// </summary>
+	[System.Diagnostics.Conditional("UNITY_EDITOR")]
+	[System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+	private void BeginSurfaceTrace(string eventName, bool clearHistory = false)
+	{
+		if (m_SurfaceTrace == null)
+		{
+			m_SurfaceTrace = new System.Text.StringBuilder[m_SurfaceTraceCapacity];
+		}
+
+		if (clearHistory)
+		{
+			m_SurfaceTraceNext = 0;
+			m_SurfaceTraceCount = 0;
+		}
+
+		m_SurfaceTraceCurrent = m_SurfaceTraceNext;
+		m_SurfaceTraceNext = (m_SurfaceTraceNext + 1) % m_SurfaceTraceCapacity;
+		m_SurfaceTraceCount = Mathf.Min(m_SurfaceTraceCount + 1, m_SurfaceTraceCapacity);
+		System.Text.StringBuilder record = m_SurfaceTrace[m_SurfaceTraceCurrent];
+		if (record == null)
+		{
+			record = new System.Text.StringBuilder(2048);
+			m_SurfaceTrace[m_SurfaceTraceCurrent] = record;
+		}
+
+		record.Clear();
+		Vector3 center = m_Rigidbody.position + transform.TransformVector(m_BallCollider.center);
+		record.AppendLine($"[Step] Event={eventName} FixedTime={Time.fixedTime:F6} Frame={Time.frameCount}");
+		record.AppendLine($"BeforeTriangle={m_SurfaceSimulation.CurrentTriangleIndex} Center={center.ToString("F6")} BallRadius={GetBallWorldRadius():F6}");
+		if (m_SurfaceSimulation.TryGetWorldVelocity(out Vector3 velocity))
+		{
+			record.AppendLine($"BeforeVelocity={velocity.ToString("F6")}");
+		}
+	}
+
+	/// <summary>
+	/// 現在の診断記録へ情報を追加します。Release Buildでは呼び出されません。
+	/// </summary>
+	[System.Diagnostics.Conditional("UNITY_EDITOR")]
+	[System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+	private void RecordSurfaceTrace(string message)
+	{
+		if (m_SurfaceTraceCurrent >= 0 && m_SurfaceTrace != null)
+		{
+			m_SurfaceTrace[m_SurfaceTraceCurrent].AppendLine(message);
+		}
+	}
+
+	/// <summary>
+	/// 安全停止直前に履歴を古い順でまとめて出力します。
+	/// </summary>
+	[System.Diagnostics.Conditional("UNITY_EDITOR")]
+	[System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+	private void DumpSurfaceTrace()
+	{
+		if (m_SurfaceTrace == null || m_SurfaceTraceCount == 0)
+		{
+			return;
+		}
+
+		System.Text.StringBuilder report = new System.Text.StringBuilder();
+		report.AppendLine($"[BallSurface][ObstacleTrace] Ball={name} State={m_MotionState} Records={m_SurfaceTraceCount}");
+		int first = (m_SurfaceTraceNext - m_SurfaceTraceCount + m_SurfaceTraceCapacity) % m_SurfaceTraceCapacity;
+		for (int index = 0; index < m_SurfaceTraceCount; index++)
+		{
+			report.Append(m_SurfaceTrace[(first + index) % m_SurfaceTraceCapacity]);
+		}
+
+		Debug.LogWarning(report.ToString(), this);
+		m_SurfaceTraceCount = 0;
+		m_SurfaceTraceCurrent = -1;
+		m_SurfaceTraceNext = 0;
+	}
+
 
 	/// <summary>
 	/// BallSurfaceへロックしてSurface Physicsを開始します。
@@ -32,43 +116,35 @@ public partial class BallPhysicsController
 	private bool TryEnterSurfaceSimulation(
 		BallSurfaceSource surfaceSource,
 		ContactPoint contact,
-		Vector3 incomingVelocity)
+		Vector3 incomingVelocity,
+		out BallSurfaceSimulation.EInitializeResult result)
 	{
-		if (surfaceSource == null ||
-			!surfaceSource.IsReady)
+		if (surfaceSource == null || !surfaceSource.IsReady)
+		{
+			result = BallSurfaceSimulation.EInitializeResult.InvalidSurface;
+			return false;
+		}
+
+		if (!surfaceSource.TryResolveContactTriangle(
+			contact.point, contact.normal, contact.separation,
+			out int triangleIndex, out Vector3 surfacePoint))
+		{
+			result = BallSurfaceSimulation.EInitializeResult.ContactTriangleNotFound;
+			return false;
+		}
+
+		// Transform Scaleなどが変わった場合にも現在のBall半径を反映します。
+		ConfigureSurfaceSimulation();
+		if (!m_SurfaceSimulation.TryInitialize(
+			surfaceSource, triangleIndex, surfacePoint, incomingVelocity, out result))
 		{
 			return false;
 		}
 
-		if (!surfaceSource.TryGetSurfaceHit(
-			contact.point,
-			contact.normal,
-			out RaycastHit surfaceHit))
-		{
-			return false;
-		}
-
-		if (surfaceHit.triangleIndex <
-			0)
-		{
-			return false;
-		}
-
-		// 新しいSurfaceへ入る時点で、以前の出口保留状態は破棄します。
+		// 初期化の成功後に以前の出口保留状態を破棄します。
 		ClearPendingSurfaceExit();
 
-		// Transform Scaleなどが変わった場合にも
-		// 現在のBall半径をSurface Simulationへ反映します。
-		ConfigureSurfaceSimulation();
-
-		if (!m_SurfaceSimulation.TryInitialize(
-			surfaceSource,
-			surfaceHit.triangleIndex,
-			surfaceHit.point,
-			incomingVelocity))
-		{
-			return false;
-		}
+		BeginSurfaceTrace("EnterSurface", true);
 
 		// Dynamic Rigidbodyの間に速度を停止します。
 		m_Rigidbody.linearVelocity =
@@ -102,6 +178,8 @@ public partial class BallPhysicsController
 	/// </summary>
 	private void UpdateSurfaceSimulation()
 	{
+		BeginSurfaceTrace("FixedUpdate");
+
 		// Surface端へ到達したFrameではKinematicのまま出口位置を確定し、
 		// 次のFixedUpdate開始時にDynamicへ戻します。
 		// FixedUpdate途中でDynamicへ戻すと、その直後のPhysics更新で
@@ -126,6 +204,8 @@ public partial class BallPhysicsController
 		BallSurfaceSimulation.EAdvanceResult result =
 			m_SurfaceSimulation.Advance(
 				Time.fixedDeltaTime);
+
+		RecordSurfaceTrace($"Advance={result} AfterTriangle={m_SurfaceSimulation.CurrentTriangleIndex} HasLastEdge={m_SurfaceSimulation.HasLastEdge} LastEdgeTriangle={m_SurfaceSimulation.LastEdgeTriangleIndex} LastEdge={m_SurfaceSimulation.LastEdgeIndex} LastEdgeType={m_SurfaceSimulation.LastEdgeType}");
 
 		switch (result)
 		{
@@ -183,6 +263,8 @@ public partial class BallPhysicsController
 			targetColliderCenter -
 			colliderCenterOffset;
 
+		RecordSurfaceTrace($"ApplyTarget={targetColliderCenter.ToString("F6")} Immediate={immediate} Triangle={m_SurfaceSimulation.CurrentTriangleIndex}");
+
 		if (!immediate &&
 			TryHandleSurfaceObstacleCollision(
 				targetColliderCenter,
@@ -193,11 +275,13 @@ public partial class BallPhysicsController
 
 		if (immediate)
 		{
+			RecordSurfaceTrace("Apply=DirectPosition (SphereCastSkipped)");
 			m_Rigidbody.position =
 				targetRigidbodyPosition;
 		}
 		else
 		{
+			RecordSurfaceTrace("Apply=MovePosition");
 			m_Rigidbody.MovePosition(
 				targetRigidbodyPosition);
 		}
@@ -235,6 +319,7 @@ public partial class BallPhysicsController
 		if (moveDistance <=
 			m_MinimumCalculationDistance)
 		{
+			RecordSurfaceTrace($"CastSkipped=ShortMove Distance={moveDistance:F6}");
 			return false;
 		}
 
@@ -257,6 +342,8 @@ public partial class BallPhysicsController
 				moveDistance,
 				m_BallCollisionMask,
 				QueryTriggerInteraction.Ignore);
+
+		RecordSurfaceTrace($"CastStartCenter={currentColliderCenter.ToString("F6")} CastTargetCenter={targetColliderCenter.ToString("F6")} CastRadius={castRadius:F6} MoveDistance={moveDistance:F6} Hits={hitCount} BufferSize={m_SurfaceObstacleHits.Length} BufferMayBeFull={hitCount == m_SurfaceObstacleHits.Length}");
 
 		if (hitCount <=
 			0)
@@ -286,10 +373,13 @@ public partial class BallPhysicsController
 			Collider hitCollider =
 				hit.collider;
 
+			RecordSurfaceTrace($"Hit[{hitIndex}] Collider={(hitCollider != null ? hitCollider.name : "null")} Triangle={hit.triangleIndex} Distance={hit.distance:F6} Point={hit.point.ToString("F6")} Normal={hit.normal.ToString("F6")}");
+
 			if (hitCollider == null ||
 				hitCollider.attachedRigidbody ==
 					m_Rigidbody)
 			{
+				RecordSurfaceTrace("Decision=IgnoreSelfOrNull");
 				continue;
 			}
 
@@ -304,15 +394,18 @@ public partial class BallPhysicsController
 					hitSurfaceSource,
 					hit))
 			{
+				RecordSurfaceTrace("Decision=IgnoreSurfaceHit");
 				continue;
 			}
 
 			if (hit.distance >=
 				nearestDistance)
 			{
+				RecordSurfaceTrace("Decision=FartherThanCurrentCandidate");
 				continue;
 			}
 
+			RecordSurfaceTrace("Decision=ObstacleCandidate");
 			hasObstacleHit =
 				true;
 
@@ -328,8 +421,11 @@ public partial class BallPhysicsController
 
 		if (!hasObstacleHit)
 		{
+			RecordSurfaceTrace("CastResult=AllHitsIgnored");
 			return false;
 		}
+
+		RecordSurfaceTrace($"SelectedHit Triangle={nearestHit.triangleIndex} HitDistance={nearestHit.distance:F6} HitPoint={nearestHit.point.ToString("F6")} HitNormal={nearestHit.normal.ToString("F6")}");
 
 		if (!TryGetSurfaceWorldVelocity(
 			out Vector3 incomingVelocity))
@@ -353,16 +449,22 @@ public partial class BallPhysicsController
 			moveDirection *
 				safeMoveDistance;
 
+		RecordSurfaceTrace($"SafeCenter={safeColliderCenter.ToString("F6")} IncomingVelocity={incomingVelocity.ToString("F6")}");
+
 		if (nearestHitSurfaceSource !=
 			null)
 		{
 			if (TryContinueSameSurfaceBounce(
 				nearestHitSurfaceSource,
 				nearestHit,
-				incomingVelocity))
+				incomingVelocity,
+				out BallSurfaceSimulation.EInitializeResult initializeResult))
 			{
+				RecordSurfaceTrace("SameSurfaceBounce=Success");
 				return true;
 			}
+
+			RecordSurfaceTrace($"SameSurfaceBounce=Failed Result={initializeResult}");
 
 			// 同一Surface内の別壁として検出できたにもかかわらず、
 			// Surface Physicsへ再接続できなかった場合は、
@@ -372,7 +474,7 @@ public partial class BallPhysicsController
 				colliderCenterOffset;
 
 			Debug.LogWarning(
-				$"{name}: 同一BallSurface内の別壁へ衝突しましたが、Surface Physicsの再初期化に失敗したため停止します。",
+				$"{name}: 同一BallSurface内の別壁へ衝突しましたが、Surface Physicsの再初期化に失敗したため停止します。 Result={initializeResult} Surface={nearestHitSurfaceSource.name} HitTriangle={nearestHit.triangleIndex} HitPoint={nearestHit.point}",
 				this);
 
 			StopSurfaceMotionSafely();
@@ -426,6 +528,7 @@ public partial class BallPhysicsController
 			hitSurfaceSource !=
 				currentSurfaceSource)
 		{
+			RecordSurfaceTrace("SurfaceFilter=DifferentOrMissingSource");
 			return false;
 		}
 
@@ -435,36 +538,36 @@ public partial class BallPhysicsController
 		if (currentTriangleIndex <
 			0)
 		{
+			RecordSurfaceTrace("SurfaceFilter=InvalidCurrentTriangle");
 			return false;
 		}
 
 		int hitTriangleIndex =
 			hit.triangleIndex;
 
-		if (hitTriangleIndex <
-			0)
+		if (hitSurfaceSource.MeshData == null || hitTriangleIndex < 0 ||
+			hitTriangleIndex >= hitSurfaceSource.MeshData.TriangleCount)
 		{
-			if (!hitSurfaceSource.TryGetSurfaceHit(
-				hit.point,
-				hit.normal,
-				out RaycastHit recoveredSurfaceHit))
+			if (!hitSurfaceSource.TryResolveContactTriangle(
+				hit.point, hit.normal, out hitTriangleIndex, out _))
 			{
+				RecordSurfaceTrace("SurfaceFilter=TriangleRecoveryFailed");
 				return false;
 			}
-
-			hitTriangleIndex =
-				recoveredSurfaceHit.triangleIndex;
 		}
 
 		if (hitTriangleIndex <
 			0)
 		{
+			RecordSurfaceTrace("SurfaceFilter=InvalidHitTriangle");
 			return false;
 		}
 
-		return !IsCurrentOrNeighborSurfaceTriangle(
+		bool isCurrentOrNeighbor = IsCurrentOrNeighborSurfaceTriangle(
 			currentTriangleIndex,
 			hitTriangleIndex);
+		RecordSurfaceTrace($"SurfaceFilter={(isCurrentOrNeighbor ? (currentTriangleIndex == hitTriangleIndex ? "CurrentTriangle" : "NeighborTriangle") : "SeparateWall")} CurrentTriangle={currentTriangleIndex} ResolvedHitTriangle={hitTriangleIndex}");
+		return !isCurrentOrNeighbor;
 	}
 
 	/// <summary>
@@ -533,44 +636,32 @@ public partial class BallPhysicsController
 	private bool TryContinueSameSurfaceBounce(
 		BallSurfaceSource surfaceSource,
 		RaycastHit obstacleHit,
-		Vector3 incomingVelocity)
+		Vector3 incomingVelocity,
+		out BallSurfaceSimulation.EInitializeResult result)
 	{
-		if (surfaceSource == null ||
-			!surfaceSource.IsReady)
+		if (surfaceSource == null || !surfaceSource.IsReady)
 		{
+			result = BallSurfaceSimulation.EInitializeResult.InvalidSurface;
 			return false;
 		}
 
-		RaycastHit surfaceHit =
-			obstacleHit;
-
-		if (surfaceHit.triangleIndex <
-			0)
+		int triangleIndex = obstacleHit.triangleIndex;
+		Vector3 surfacePoint = obstacleHit.point;
+		// 有効なHit Triangleは変更せず、不明な場合だけ接触面を再探索します。
+		if (triangleIndex < 0 || triangleIndex >= surfaceSource.MeshData.TriangleCount)
 		{
-			if (!surfaceSource.TryGetSurfaceHit(
-				obstacleHit.point,
-				obstacleHit.normal,
-				out surfaceHit))
+			if (!surfaceSource.TryResolveContactTriangle(
+				obstacleHit.point, obstacleHit.normal, out triangleIndex, out surfacePoint))
 			{
+				result = BallSurfaceSimulation.EInitializeResult.ContactTriangleNotFound;
 				return false;
 			}
 		}
 
-		if (surfaceHit.triangleIndex <
-			0)
-		{
-			return false;
-		}
-
-		// Transform Scaleなどが変わった場合にも、
-		// 現在のBall半径を再初期化後のSimulationへ反映します。
+		// Transform Scaleなどが変わった場合にも現在のBall半径を反映します。
 		ConfigureSurfaceSimulation();
-
 		if (!m_SurfaceSimulation.TryInitialize(
-			surfaceSource,
-			surfaceHit.triangleIndex,
-			surfaceHit.point,
-			incomingVelocity))
+			surfaceSource, triangleIndex, surfacePoint, incomingVelocity, out result))
 		{
 			return false;
 		}
@@ -820,6 +911,7 @@ public partial class BallPhysicsController
 	/// </summary>
 	private void StopSurfaceMotionSafely()
 	{
+		DumpSurfaceTrace();
 		m_SurfaceSimulation.Reset();
 
 		m_Rigidbody.linearVelocity =

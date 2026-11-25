@@ -64,13 +64,14 @@ public partial class BallPhysicsController
 			if (TryEnterSurfaceSimulation(
 				surfaceSource,
 				contact,
-				incomingVelocity))
+				incomingVelocity,
+				out BallSurfaceSimulation.EInitializeResult initializeResult))
 			{
 				return;
 			}
 
 			Debug.LogWarning(
-				$"{name}: BallSurfaceへ接触しましたがSurface Physicsの初期化に失敗したため、接触地点付近で停止します。 Surface={surfaceSource.name}",
+				$"{name}: BallSurfaceへ接触しましたがSurface Physicsの初期化に失敗したため、接触地点付近で停止します。 Result={initializeResult} Surface={surfaceSource.name} ContactPoint={contact.point.ToString("F6")} ContactNormal={contact.normal.ToString("F6")} BallCenter={(m_Rigidbody.position + transform.TransformVector(m_BallCollider.center)).ToString("F6")} BallRadius={GetBallWorldRadius():F6} IncomingVelocity={incomingVelocity.ToString("F6")} ContactCount={collision.contactCount} ContactSeparation={contact.separation:F6} Collider={collision.collider.name}",
 				this);
 
 			StopSafelyAtSurfaceContact(
