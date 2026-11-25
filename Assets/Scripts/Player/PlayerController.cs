@@ -4,6 +4,7 @@ using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.Serialization;
+using TMPro;
 
 /// <summary>
 /// プレイヤー全体の「状態管理(ステート)」と「各専門モジュールへの命令ルーティング」を担当するクラス。
@@ -25,6 +26,13 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	[Header("新アクションフロー設定")]
 	[Tooltip("L1の短押しと長押しを区別する時間です(秒)。0以下ではコード側の代替値を使用します。")]
 	[SerializeField] private float m_ShortTapMaxDuration;
+
+	/// <summary>
+	/// 左トリガー長押し中に中央へ表示する操作案内UI
+	/// </summary>
+	[Header("操作補助UI")]
+	[SerializeField]
+	private TMP_Text m_ActionHelpText;
 
 	[Header("移動時の電撃エフェクト")]
 	[SerializeField] private GameObject m_MovingEffect;
@@ -57,6 +65,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private uint m_RestartSequence;
 	private PlayerAnimationController m_AnimationController;
 	public bool IsReadyForRestart { get; private set; }
+
+	private PlayerChargeProgress m_ChargeProgressUI;
 
 	// プレイヤーの内部状態
 	public enum EPlayerState
@@ -119,6 +129,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		m_LockOnProvider = GetComponent<ILockOnProvider>();
 		m_PlayerResource = GetComponent<IPlayerResource>();
 		m_ElectricAction = GetComponent<IElectricAction>();
+		m_ChargeProgressUI =
+	GetComponentInChildren<PlayerChargeProgress>(true);
 
 		if (m_GravityMover == null)
 		{
@@ -366,83 +378,88 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// </summary>
 	private void UpdateReworkedSubAction()
 	{
-		// 電撃チャージの更新は、チャージ中でなくても毎フレーム実行する
+		// 電撃チャージを毎フレーム更新
 		m_ElectricAction?.UpdateCharge(Time.deltaTime);
 
-		// パスモード中は、左クリックを離していても制限時間を計測する
-		if (m_IsPassModeActive)
-		{
-			m_PassModeTimer += Time.deltaTime;
-
-			// パスモードの制限時間が終了
-			if (m_PassModeTimer >= m_PassModeDuration)
-			{
-				CancelPassMode();
-				return;
-			}
-
-			// パスモード中は対象を継続して検索する
-			m_LockOnProvider?.UpdateTargetSearch();
-
-			LogPassLockOnTarget();
-
-			// 2回目の短押し待ち
-			if (!m_IsSubActionHeld)
-			{
-				return;
-			}
-
-			// パスモード中のクリックはチャージ処理に進ませない
-			return;
-		}
-
-		// 通常時は従来どおり、押していなければ何もしない
 		if (!m_IsSubActionHeld)
 		{
+			UpdateActionHelpUI();
 			return;
 		}
 
-		if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned)
+		if (!m_IsMatchActionEnabled ||
+			CurrentState == EPlayerState.Stunned)
 		{
 			CancelActiveSubAction();
+			UpdateActionHelpUI();
 			return;
 		}
 
+		// ボール非所持：電撃チャージ・ロックオン更新
 		if (m_IsChargingElectric)
 		{
 			m_LockOnProvider?.UpdateTargetSearch();
 
-			LogPassLockOnTarget();
+			UpdateActionHelpUI();
 			return;
 		}
 
+		// ボール所持確認
 		if (m_BallCarrier == null || !m_BallCarrier.HasBall)
 		{
 			CancelActiveSubAction();
+			UpdateActionHelpUI();
 			return;
 		}
 
+		// 長押し時間を加算
 		m_SubActionHoldTimer += Time.deltaTime;
-		float tapThreshold = m_ShortTapMaxDuration > 0.0f ? m_ShortTapMaxDuration : 0.2f;
 
-		if (!m_HasStartedPassCharge && m_SubActionHoldTimer >= tapThreshold)
+		float tapThreshold =
+			m_ShortTapMaxDuration > 0.0f
+			? m_ShortTapMaxDuration
+			: 0.2f;
+
+		// 一定時間を超えたら追尾パスチャージ開始
+		if (!m_HasStartedPassCharge &&
+			m_SubActionHoldTimer >= tapThreshold)
 		{
 			m_HasStartedPassCharge = true;
 
-			// パスモード開始
-			m_IsPassModeActive = true;
-			m_IsPassModeTapHeld = false;
-			m_PassModeTimer = 0.0f;
+			m_LockOnProvider?.SetSearchMode(
+				ELockOnSearchMode.BallHolder);
 
-			// 味方またはゴールを検索するモードに切り替える
-			m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.BallHolder);
+			m_BallCarrier.BeginPassCharge();
 
-			// パスモード開始時点で対象検索を実行
-			m_LockOnProvider?.UpdateTargetSearch();
+			// 追尾パス用のゲージ表示に切り替え
+			m_ChargeProgressUI?.SetPassChargeMode(true);
+			m_ChargeProgressUI?.SetPassChargeProgress(0.0f);
 
-			Debug.Log("[PlayerController] パスモード開始");
+			Debug.Log("[PlayerController] 追尾パスチャージ開始");
 		}
 
+		// 追尾パスチャージ中
+		if (m_HasStartedPassCharge)
+		{
+			m_LockOnProvider?.UpdateTargetSearch();
+
+			m_BallCarrier.UpdatePassCharge(Time.deltaTime);
+
+			// 追尾パスの進捗率を円形ゲージへ反映
+			m_ChargeProgressUI?.SetPassChargeProgress(
+				m_BallCarrier.PassChargeRatio);
+
+			LogPassLockOnTarget();
+
+			// チャージ完了時のログ
+			if (m_BallCarrier.IsPassChargeFull)
+			{
+				Debug.Log("[PlayerController] 追尾パスチャージ完了！");
+			}
+		}
+
+		// 操作案内を更新
+		UpdateActionHelpUI();
 	}
 
 	/// <summary>
@@ -798,84 +815,41 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// </summary>
 	private void HandleSubActionReleased()
 	{
-		if (!m_IsSubActionHeld)
-		{
-			return;
-		}
-
-		// パスモード中の2回目の短押しを判定
-		bool isPassModeTap = m_IsPassModeActive && m_IsPassModeTapHeld;
-
-
-		// パスモード中のクリックを離した場合
-		if (m_IsPassModeActive)
-		{
-			Debug.Log(
-				$"[PassMode] 左クリック離した / TapHeld={m_IsPassModeTapHeld} / HasTarget={m_LockOnProvider?.HasValidTarget}"
-			);
-
-			m_IsSubActionHeld = false;
-			m_SubActionHoldTimer = 0.0f;
-
-			// 最初の長押しを離しただけならパスモードを維持
-			if (!m_IsPassModeTapHeld)
-			{
-				Debug.Log("[PassMode] 最初の長押しを解放。パスモード継続");
-				RestoreStateAfterSubAction();
-				return;
-			}
-
-			// 2回目の短押しを離した
-			m_IsPassModeTapHeld = false;
-
-			// ロックオン対象が存在すれば追尾パス
-			if (m_LockOnProvider != null &&
-				m_LockOnProvider.HasValidTarget &&
-				m_LockOnProvider.CurrentTargetObject != null &&
-				m_BallCarrier != null &&
-				m_BallCarrier.HasBall)
-			{
-				Debug.Log(
-					"[PassMode] 追尾パス実行: " +
-					m_LockOnProvider.CurrentTargetObject.name
-				);
-
-				m_BallCarrier.ShootHoming(
-					m_LockOnProvider.CurrentTargetObject,
-					m_LockOnProvider.CurrentTargetType
-				);
-			}
-			else
-			{
-				// 対象がない場合は通常シュート
-				Debug.LogWarning("[PassMode] ロックオン対象なし。通常シュート実行");
-
-				HandleShoot();
-			}
-
-			CancelPassMode();
-			RestoreStateAfterSubAction();
-			return;
-		}
-
+		if (!m_IsSubActionHeld) return;
 
 		bool wasChargingElectric = m_IsChargingElectric;
 		bool hadStartedPassCharge = m_HasStartedPassCharge;
 
+		bool passChargeFull =
+			m_BallCarrier != null &&
+			m_BallCarrier.IsPassChargeFull;
+
+		bool isAllyTarget =
+			m_LockOnProvider != null &&
+			m_LockOnProvider.HasValidTarget &&
+			m_LockOnProvider.CurrentTargetType ==
+			ELockOnTargetType.AllyPlayer;
+
+		GameObject passTarget =
+			isAllyTarget
+			? m_LockOnProvider.CurrentTargetObject
+			: null;
+
+		// チャージ状態を解除
 		m_IsSubActionHeld = false;
 		m_IsChargingElectric = false;
 		m_HasStartedPassCharge = false;
-		m_IsPassModeActive = false;
-		m_IsPassModeTapHeld = false;
-		m_PassModeTimer = 0.0f;
 		m_SubActionHoldTimer = 0.0f;
+
 		m_LastLoggedPassTarget = null;
 
 		RestoreStateAfterSubAction();
 
+		// 電撃アクション
 		if (wasChargingElectric)
 		{
-			float cost = m_ElectricAction != null
+			float cost =
+				m_ElectricAction != null
 				? m_ElectricAction.RequiredCost
 				: float.PositiveInfinity;
 
@@ -891,19 +865,48 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 				m_ElectricAction?.CancelCharge();
 			}
 
-			m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.None);
+			m_LockOnProvider?.SetSearchMode(
+				ELockOnSearchMode.None);
+
+			UpdateActionHelpUI();
 			return;
 		}
 
-		// ボール所持時の短押しは通常シュート
-		if (!hadStartedPassCharge)
+		// 追尾パス発射条件
+		if (hadStartedPassCharge &&
+			passChargeFull &&
+			isAllyTarget &&
+			passTarget != null &&
+			m_BallCarrier != null &&
+			m_BallCarrier.HasBall)
 		{
+			Debug.Log(
+				"[PlayerController] チャージ満タン・味方ロックオン。追尾パス発射");
+
+			m_BallCarrier.ShootHoming(
+				passTarget,
+				ELockOnTargetType.AllyPlayer);
+		}
+		// 上記以外は通常投げ
+		else if (m_BallCarrier != null &&
+				 m_BallCarrier.HasBall)
+		{
+			Debug.Log(
+				"[PlayerController] 通常投げ実行 (ロックオンなし/チャージ不足)");
+
 			HandleShoot();
-			return;
 		}
 
-		// パスモード開始後の最初の解放ではパスを実行しない
-		// パスモードは継続する
+		// チャージ・ロックオン状態の後処理
+		m_BallCarrier?.CancelPassCharge();
+
+		// 追尾パス表示を終了し、電撃ゲージ表示へ戻す
+		m_ChargeProgressUI?.SetPassChargeMode(false);
+
+		m_LockOnProvider?.SetSearchMode(
+			ELockOnSearchMode.None);
+
+		UpdateActionHelpUI();
 	}
 
 	/// <summary>
@@ -919,6 +922,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		m_BallCarrier?.CancelPassCharge();
 
+		// 追尾パスゲージ表示を解除
+		m_ChargeProgressUI?.SetPassChargeMode(false);
+
 		m_LastLoggedPassTarget = null;
 
 		// ロックオン解除
@@ -933,8 +939,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private void CancelActiveSubAction()
 	{
 		if (!m_IsSubActionHeld &&
-			CurrentState != EPlayerState.ChargingSubAction &&
-			!m_IsPassModeActive)
+			CurrentState != EPlayerState.ChargingSubAction)
 		{
 			return;
 		}
@@ -945,18 +950,14 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		m_SubActionHoldTimer = 0.0f;
 
 		m_ElectricAction?.CancelCharge();
+		m_BallCarrier?.CancelPassCharge();
 
-		if (m_IsPassModeActive)
-		{
-			CancelPassMode();
-		}
-		else
-		{
-			m_BallCarrier?.CancelPassCharge();
-			m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.None);
-		}
+		m_LockOnProvider?.SetSearchMode(
+			ELockOnSearchMode.None);
 
 		RestoreStateAfterSubAction();
+
+		UpdateActionHelpUI();
 	}
 
 	/// <summary>
@@ -1312,10 +1313,12 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// <param name="hasBall">ボールを所持している場合はtrue</param>
 	public void NotifyBallStateChanged(bool hasBall)
 	{
-		// 新システムでは、サブアクションまたはパスモード中にボール状態が変化したらキャンセル
-		if (m_IsSubActionHeld || m_IsPassModeActive)
+		// L1長押しチャージ中のR1入力はキャンセル専用として消費
+		if (m_IsSubActionHeld ||
+			CurrentState == EPlayerState.ChargingSubAction)
 		{
 			CancelActiveSubAction();
+			return;
 		}
 
 		float speedMultiplier = hasBall ? 0.7f : 1.0f;
@@ -1391,4 +1394,84 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 		base.OnDestroy();
 	}
+
+
+	/// <summary>
+	/// Ownerが左トリガーを押している間の中央操作案内を更新します。
+	/// </summary>
+	private void UpdateActionHelpUI()
+	{
+		if (m_ActionHelpText == null) return;
+
+		bool show =
+			IsOwner &&
+			m_IsSubActionHeld &&
+			m_IsMatchActionEnabled &&
+			CurrentState != EPlayerState.Stunned;
+
+		m_ActionHelpText.gameObject.SetActive(show);
+
+		if (!show) return;
+
+		string action = "";
+
+		// ボール所持中
+		if (m_BallCarrier != null && m_BallCarrier.HasBall)
+		{
+			bool isAllyTarget =
+				m_LockOnProvider != null &&
+				m_LockOnProvider.HasValidTarget &&
+				m_LockOnProvider.CurrentTargetType ==
+				ELockOnTargetType.AllyPlayer;
+
+			// チャージ満タン + 味方ロックオン
+			if (m_HasStartedPassCharge &&
+				m_BallCarrier.IsPassChargeFull &&
+				isAllyTarget)
+			{
+				action = "離すと追尾パス";
+			}
+			else
+			{
+				// それ以外は通常投げ
+				action = "離すとボールを投げる\nたまると追尾パス";
+			}
+		}
+		// ボール非所持
+		else
+		{
+			bool validElectricTarget =
+				m_LockOnProvider != null &&
+				m_LockOnProvider.HasValidTarget &&
+				(
+					m_LockOnProvider.CurrentTargetType ==
+					ELockOnTargetType.Ball ||
+
+					m_LockOnProvider.CurrentTargetType ==
+					ELockOnTargetType.EnemyPlayer
+				);
+
+			// 対象あり + 電撃チャージ満タン
+			if (m_IsChargingElectric &&
+				validElectricTarget &&
+				m_ElectricAction != null &&
+				m_ElectricAction.ChargeRatio >= 1.0f)
+			{
+				action = "離すとボールを奪取\n / 敵をスタン";
+			}
+			else
+			{
+				// それ以外は通常投げ
+				action = "貯まるとボールを奪取\n / 敵をスタン";
+			}
+		}
+
+		// キャンセル案内は常時表示
+		m_ActionHelpText.text =
+			action +
+			(string.IsNullOrEmpty(action)
+				? "右クリックでキャンセル"
+				: "\n右クリックでキャンセル");
+	}
+
 }
