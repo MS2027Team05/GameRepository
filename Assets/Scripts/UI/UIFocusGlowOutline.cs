@@ -37,6 +37,10 @@ public sealed class UIFocusGlowOutline : MonoBehaviour,
 	[Range(0f, 0.4f)]
 	[SerializeField] private float m_PulseIntensity = 0.18f;
 
+	[Header("枠線付与先設定(任意)")]
+	[Tooltip("枠線を表示するGraphicを明示指定します(未設定時は自身→targetGraphic→子Graphicの順で自動選択)")]
+	[SerializeField] private Graphic m_TargetGraphicOverride;
+
 	private Outline m_OutlineComponent;
 	private Selectable m_Selectable;
 	private bool m_IsSelected;
@@ -138,12 +142,23 @@ public sealed class UIFocusGlowOutline : MonoBehaviour,
 
 	private void EnsureOutlineComponent()
 	{
+		if (m_Selectable == null)
+		{
+			m_Selectable = GetComponent<Selectable>();
+		}
+
 		if (m_OutlineComponent == null)
 		{
-			m_OutlineComponent = GetComponent<Outline>();
+			GameObject targetObject = ResolveOutlineTargetObject();
+			if (targetObject == null)
+			{
+				return;
+			}
+
+			m_OutlineComponent = targetObject.GetComponent<Outline>();
 			if (m_OutlineComponent == null)
 			{
-				m_OutlineComponent = gameObject.AddComponent<Outline>();
+				m_OutlineComponent = targetObject.AddComponent<Outline>();
 			}
 		}
 
@@ -152,6 +167,28 @@ public sealed class UIFocusGlowOutline : MonoBehaviour,
 			m_OutlineComponent.effectDistance = m_OutlineDistance;
 			m_OutlineComponent.useGraphicAlpha = true;
 		}
+	}
+
+	private GameObject ResolveOutlineTargetObject()
+	{
+		if (m_TargetGraphicOverride != null)
+		{
+			return m_TargetGraphicOverride.gameObject;
+		}
+
+		Graphic selfGraphic = GetComponent<Graphic>();
+		if (selfGraphic != null)
+		{
+			return gameObject;
+		}
+
+		if (m_Selectable != null && m_Selectable.targetGraphic != null)
+		{
+			return m_Selectable.targetGraphic.gameObject;
+		}
+
+		Graphic childGraphic = GetComponentInChildren<Graphic>(true);
+		return childGraphic != null ? childGraphic.gameObject : null;
 	}
 
 	private void UpdateVisualState()

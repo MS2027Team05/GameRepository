@@ -547,8 +547,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 1010, y: 590}
-  m_SizeDelta: {x: 675, y: 675}
+  m_AnchoredPosition: {x: 617, y: 369}
+  m_SizeDelta: {x: 398.75006, y: 398.75006}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &365736332269386701
 CanvasRenderer:
@@ -1660,10 +1660,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAimAssist
   m_TargetCamera: {fileID: 0}
-  m_AssistRadius: 0.24
-  m_InnerSlowdownRadius: 0.09
+  m_AssistRadius: 0.3
+  m_InnerSlowdownRadius: 0.12
   m_MaxAssistDistance: 60
-  m_MinSlowdownMultiplier: 0.45
+  m_MinSlowdownMultiplier: 0.4
   m_MaxFollowYawDegreesPerSecond: 55
   m_MaxFollowPitchDegreesPerSecond: 40
   m_StickActivityThreshold: 0.05
