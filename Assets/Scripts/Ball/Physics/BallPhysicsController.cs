@@ -8,7 +8,7 @@ using UnityEngine;
 /// <remarks>
 /// 主な処理の流れ:
 /// 1. シュート後はFlyingとしてRigidbody速度を維持しながら減速します。
-/// 2. 速度低下後は周囲のAttachSurfaceを探索し、必要に応じて疑似重力へ移行します。
+/// 2. 速度低下後は共通の最近接点探索でAttachSurfaceを探し、必要に応じて疑似重力へ移行します。
 /// 3. BallSurfaceSourceへ接触した場合はRigidbody移動からSurface Physicsへ切り替えます。
 /// 4. Surface中はTriangleを追跡し、Flat・Smooth・Convex・Concave・Vertexを専用処理で移動します。
 /// 5. Surface移動経路上の通常Colliderや同一Mesh内の別壁も衝突対象として処理します。
@@ -131,7 +131,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	[SerializeField] private float m_AttractStartSpeed;
 
 	[Tooltip(
-		"飛行中にAttachSurfaceを探す最大距離です。")]
+		"飛行中にAttachSurfaceの最近接点を探す最大距離です。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_AttractSearchDistance;
 
@@ -228,7 +228,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	[Header("停止後のAttachSurface探索")]
 
 	[Tooltip(
-		"停止後にAttachSurfaceを探す最大距離です。")]
+		"停止後にAttachSurfaceの最近接点を探す最大距離です。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceSearchRadius;
 

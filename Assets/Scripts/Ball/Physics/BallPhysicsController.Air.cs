@@ -7,9 +7,9 @@
 /// 主な処理の流れ:
 /// 1. シュート・強制解放を受けてFlyingまたはSurface探索を開始します。
 /// 2. Flying中は進行方向を維持しながら速度を減衰させます。
-/// 3. 一定速度以下になると周辺のAttachSurfaceを低コストで探索します。
+/// 3. 一定速度以下になると周辺のAttachSurfaceを最近接点で探索します。
 /// 4. Surfaceを発見するとAttractingSurfaceへ移行し、疑似重力を適用します。
-/// 5. 十分低速になった場合はSeekingSurfaceとして高精度探索を行います。
+/// 5. 十分低速になった場合はSeekingSurfaceとして同じ最近接点探索を行います。
 /// 6. Surfaceへ十分近づくと停止・吸着状態へ移行します。
 ///
 /// BallSurface上をTriangle単位で移動する処理はBallPhysicsController.Surface.csが担当します。
@@ -121,7 +121,7 @@ public partial class BallPhysicsController
 	}
 
 	/// <summary>
-	/// 飛行中に低コストのSurface探索を実行し、
+	/// 飛行中に共通の最近接点探索を実行し、
 	/// Surfaceを発見した場合は疑似重力を開始します。
 	/// </summary>
 	private void TryBeginSurfaceAttraction()
@@ -136,39 +136,33 @@ public partial class BallPhysicsController
 			Time.time +
 			m_AttractSearchInterval;
 
-		if (!m_SurfaceSearch.TrySearchLowCost(
+		if (!m_SurfaceSearch.TrySearchNearest(
 			m_Rigidbody.position,
 			m_AttractSearchDistance,
 			m_AttachSurfaceMask,
-			out RaycastHit nearestHit))
+			m_Rigidbody,
+			out BallSurfaceSearch.SearchResult nearestSurface))
 		{
 			return;
 		}
 
-		// BallSurfaceSourceを持つObjectでは、
-		// 最初にHitしたTriangleを起点としてSurfaceを追跡します。
-		//
-		// Target Object自体はロックしたまま、
-		// 重力対象のSurfaceだけをBall位置に合わせて更新します。
-		BallSurfaceSource surfaceSource =
-			nearestHit.collider.GetComponent<BallSurfaceSource>();
-
-		bool usesTrackedBallSurface =
-			surfaceSource != null &&
-			surfaceSource.IsReady &&
-			nearestHit.triangleIndex >=
-				0 &&
-			m_SurfaceGravity.SetTrackedBallSurface(
-				surfaceSource,
-				nearestHit.triangleIndex);
-
-		if (!usesTrackedBallSurface)
+		// BallSurfaceでは最近接Triangleを追跡の起点とし、
+		// 重力対象のObjectは今まで通り固定します。
+		if (nearestSurface.SurfaceSource != null)
 		{
-			// BallSurfaceSourceを持たない従来AttachSurfaceは、
-			// 互換性のためFixedPoint方式を維持します。
+			if (!m_SurfaceGravity.SetTrackedBallSurface(
+				nearestSurface.SurfaceSource,
+				nearestSurface.TriangleIndex))
+			{
+				return;
+			}
+		}
+		else
+		{
+			// 従来のAttachSurfaceは固定点への疑似重力を維持します。
 			m_SurfaceGravity.SetFixedPoint(
-				nearestHit.collider,
-				nearestHit.point);
+				nearestSurface.Collider,
+				nearestSurface.Point);
 		}
 
 		ChangeMotionState(
@@ -368,7 +362,7 @@ public partial class BallPhysicsController
 	}
 
 	/// <summary>
-	/// 空中停止後に高精度Surface探索を実行し、
+	/// 空中停止後に共通の最近接点探索を実行し、
 	/// 発見したSurfaceへボールを移動させます。
 	/// </summary>
 	private void UpdateSurfaceSeeking()
@@ -387,11 +381,12 @@ public partial class BallPhysicsController
 				Time.time +
 				m_SurfaceSearchInterval;
 
-			if (!m_SurfaceSearch.TrySearchHighPrecision(
+			if (!m_SurfaceSearch.TrySearchNearest(
 				m_Rigidbody.position,
 				m_SurfaceSearchRadius,
 				m_AttachSurfaceMask,
-				out RaycastHit nearestHit))
+				m_Rigidbody,
+				out BallSurfaceSearch.SearchResult nearestSurface))
 			{
 				m_Rigidbody.linearVelocity =
 					Vector3.zero;
@@ -399,9 +394,10 @@ public partial class BallPhysicsController
 				return;
 			}
 
+			// 探索処理はFlyingと共通ですが、停止後は従来通り固定点へ移動します。
 			m_SurfaceGravity.SetFixedPoint(
-				nearestHit.collider,
-				nearestHit.point);
+				nearestSurface.Collider,
+				nearestSurface.Point);
 		}
 
 		MoveTowardTargetSurface();
