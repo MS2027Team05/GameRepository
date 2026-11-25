@@ -17336,6 +17336,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: BallScreenIndicator
       objectReference: {fileID: 0}
+    - target: {fileID: 2113937953634303168, guid: 87db16527f0e220419ea374f457f1e78, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2572389300043001466, guid: 87db16527f0e220419ea374f457f1e78, type: 3}
       propertyPath: m_BallController
       value: 

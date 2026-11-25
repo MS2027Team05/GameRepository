@@ -85,6 +85,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	// 新フロー: L1サブアクション押下・チャージ管理用フラグ
 	private bool m_IsSubActionHeld;
+	// R1移動アクションの押下状態
+	private bool m_IsMoveActionHeld;
+
 	private bool m_IsChargingElectric;
 	private bool m_HasStartedPassCharge;
 	private float m_SubActionHoldTimer;
@@ -216,6 +219,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		// 新アクションフロー
 		m_InputReceiver.OnMoveActionPressed += HandleMoveActionPressed;
+		m_InputReceiver.OnMoveActionReleased += HandleMoveActionReleased;
 		m_InputReceiver.OnSubActionStarted += HandleSubActionStarted;
 		m_InputReceiver.OnSubActionReleased += HandleSubActionReleased;
 	}
@@ -230,6 +234,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		m_InputReceiver.OnViewResetPressed -= HandleLegacyViewResetInput;
 
 		m_InputReceiver.OnMoveActionPressed -= HandleMoveActionPressed;
+		m_InputReceiver.OnMoveActionReleased -= HandleMoveActionReleased;
 		m_InputReceiver.OnSubActionStarted -= HandleSubActionStarted;
 		m_InputReceiver.OnSubActionReleased -= HandleSubActionReleased;
 	}
@@ -450,7 +455,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// L1チャージ中であればキャンセルのみを実行して移動暴発を防ぎ、
 	/// 通常時は地上予備浮上移動または空中即時再移動を実行します。
 	/// </summary>
-	private void HandleMoveActionPressed()
+	private void ExecuteMoveAction()
 	{
 		if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned)
 		{
@@ -617,6 +622,61 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		});
 	}
 
+	/// <summary>
+	/// R1押下時の処理。
+	/// この時点では移動を発動せず、押下状態だけを記録します。
+	/// </summary>
+	private void HandleMoveActionPressed()
+	{
+		if (!m_IsMatchActionEnabled ||
+			CurrentState == EPlayerState.Stunned)
+		{
+			return;
+		}
+
+		// L1チャージ中のR1入力はキャンセル専用
+		if (m_IsSubActionHeld ||
+			CurrentState == EPlayerState.ChargingSubAction)
+		{
+			CancelActiveSubAction();
+			return;
+		}
+
+		if (m_AimGuide == null || m_AimGuide.IsTakingOff)
+		{
+			return;
+		}
+
+		m_IsMoveActionHeld = true;
+	}
+
+	/// <summary>
+	/// R1解放時の処理。
+	/// 押下状態を確認してから移動処理を実行します。
+	/// </summary>
+	private void HandleMoveActionReleased()
+	{
+		if (!m_IsMoveActionHeld)
+		{
+			return;
+		}
+
+		m_IsMoveActionHeld = false;
+
+		if (!m_IsMatchActionEnabled ||
+			CurrentState == EPlayerState.Stunned)
+		{
+			return;
+		}
+
+		if (m_IsSubActionHeld ||
+			CurrentState == EPlayerState.ChargingSubAction)
+		{
+			return;
+		}
+
+		ExecuteMoveAction();
+	}
 	private void CompleteFallStart(Vector3 targetPoint, Vector3 targetNormal)
 	{
 		CurrentState = EPlayerState.Falling;
@@ -725,6 +785,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void CancelAllActiveActionsAndEffects()
 	{
+		m_IsMoveActionHeld = false;
+
 		CancelActiveSubAction();
 		m_AimGuide?.CancelGroundTakeoff();
 		m_AimGuide?.EndLandingTracking();
