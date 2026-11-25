@@ -863,6 +863,7 @@ MonoBehaviour:
   m_TargetUIList:
   - {fileID: 7077357125740447800}
   - {fileID: 8917311764080082361}
+  - {fileID: 3837238713462390657}
 --- !u!1 &1574588748598060794
 GameObject:
   m_ObjectHideFlags: 0
@@ -2068,7 +2069,7 @@ MonoBehaviour:
   m_BallMarkerScale: 0.15
   m_GoalMarkerScale: 0.15
   m_PlayerMarkerScale: 0.15
-  m_HideWhenOffScreen: 1
+  m_HideWhenOffScreen: 0
   m_EdgeMargin: 40
   m_EdgeMarkerScale: 0.65
   m_RefreshInterval: 0.5

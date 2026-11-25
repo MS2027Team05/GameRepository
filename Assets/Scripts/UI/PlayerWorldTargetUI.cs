@@ -544,6 +544,13 @@ public class PlayerWorldTargetUI : MonoBehaviour
 			ETeamType team =
 				marker.m_Target.Team;
 
+			// 自分と違うチームのプレイヤーUIは表示しない
+			if (team != m_LocalProfile.Team)
+			{
+				marker.m_View.m_Root.SetActive(false);
+				continue;
+			}
+
 			if (team == ETeamType.Red)
 			{
 				SetMarkerImage(marker.m_View, true);
@@ -635,16 +642,22 @@ public class PlayerWorldTargetUI : MonoBehaviour
 
 			float margin = Mathf.Max(0f, m_EdgeMargin);
 
-			screenPosition.x = Mathf.Clamp(
-				screenPosition.x,
-				cameraRect.xMin + margin,
-				cameraRect.xMax - margin);
+			// 画面の左右どちらに表示するか判定
+			bool showOnRight =
+				screenPosition.x >= cameraRect.center.x;
 
+			// 左右の表示位置を決定
+			screenPosition.x = showOnRight
+				? cameraRect.xMax - margin
+				: cameraRect.xMin + margin;
+
+			// 上下方向は画面内に収める
 			screenPosition.y = Mathf.Clamp(
 				screenPosition.y,
 				cameraRect.yMin + margin,
 				cameraRect.yMax - margin);
 
+			// 画面外ではUIを縮小
 			scaleMultiplier = m_EdgeMarkerScale;
 		}
 
