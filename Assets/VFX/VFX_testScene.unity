@@ -520,6 +520,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 2678469258313734883, guid: 98492b9c629af31458bcaf28317f030b, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2791049693960956650, guid: 98492b9c629af31458bcaf28317f030b, type: 3}
       propertyPath: m_Pivot.x
       value: 0

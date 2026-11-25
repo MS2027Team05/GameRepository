@@ -22,6 +22,8 @@
 ### 4. 電撃VFX・カラー連携
 - **共通基底とリソース**: `Assets/VFX/Lightning/VFXScripts/ALightningBolt` が共通マテリアル (`Resources/Lightning/`) の読込、線描画プールと差し替え Prefab 再生の切り替え、および所有者からの色同期を担当します。派生クラスは形状・接触検知・移動軌跡などの発生ロジックを担当します。
 - **色連動**: `PlayerAppearance.TryGetEffectColor` / `EffectColorChanged` が `EEffectColorSource` (選択色またはチーム色) に応じた色とパレット種別を提供し、ボール所持時は `BallHoldAttachment` が描画配下の電撃へ所有者を明示します。
+- **箱表面の電撃**: `CubeSurfaceLightningBolt` がローカル座標で定義した箱の表面を這う線を描画し、`CubeSurfaceLightningPath` が面上の移動と辺での方向変換を担当します。面の境界を描画頂点に追加し、各線分を同一面上に収めます。
+- **自プレイヤーの回復演出**: `PlayerResourceController` が回復状態と表示設定を通知し、`PlayerRecoveryEffectController` が直接登録された急速回復用・パス回復用の `ALightningBolt` コンポーネントを有効・無効に切り替えます。未指定の側はデバッグ稲妻を表示し、パス回復の表示時間は回復演出側で管理します。同じ電流を両方に登録した場合は、どちらかの表示条件が成立している間だけ有効にします。
 
 ---
 
@@ -165,3 +167,10 @@ GameRepository/
 ├── AGENTS.md                        # AI用ルール・規約定義
 └── STRUCTURE.md                     # 本ドキュメント
 ```
+
+## プレイヤー共通の発光設定
+
+- `Assets/Scripts/Player/`の外見制御は、共有カタログ`PlayerAppearanceCatalog`で共通発光強度とチーム別・チーム未確定時の発光色を管理する。値と有効化はInspectorで設定する。
+- `PlayerAppearance`が外見・所属チームの変更時に発光を再適用し、Play中はカタログの設定変更通知も購読する。
+- 描画への上書きと解除は`PlayerEmissionController`へ分離する。既存の本体・チームカラーRendererの先頭スロットだけを`MaterialPropertyBlock`で調整し、Emissionが有効かつEmission Mapが設定されたマテリアルを対象にする。元のマテリアルアセットと追加のアウトライン用スロットは変更しない。
+- 共通設定の無効化やコンポーネントの無効化・破棄時には、保存したスロット別プロパティを復元する。Bloomの設定はこの制御に含まない。

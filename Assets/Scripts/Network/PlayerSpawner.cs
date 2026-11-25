@@ -13,15 +13,18 @@ public class PlayerSpawner : NetworkBehaviour
 	[FormerlySerializedAs("playerPrefab")]
 	[SerializeField] private GameObject m_PlayerPrefab;
 
-	[Header("スポーン地点(Red陣営 / Blue陣営)")]
+	[Header("自陣ゴール付近のスポーン地点(チーム内の配置番号順)")]
 	[FormerlySerializedAs("redSpawnPoints")]
 	[SerializeField] private Transform[] m_RedSpawnPoints;
 	[FormerlySerializedAs("blueSpawnPoints")]
 	[SerializeField] private Transform[] m_BlueSpawnPoints;
+	[Header("中央近くのスポーン地点(チーム内の配置番号順)")]
+	[SerializeField] private Transform[] m_RedCenterSpawnPoints;
+	[SerializeField] private Transform[] m_BlueCenterSpawnPoints;
 
 	private readonly List<GameObject> m_SpawnedPlayerObjects = new List<GameObject>();
-	private readonly List<(PlayerController Controller, Vector3 Position, Quaternion Rotation)> m_RestartPlayers =
-		new List<(PlayerController, Vector3, Quaternion)>();
+	private readonly List<(PlayerController Controller, ETeamType Team, int SlotIndex)> m_RestartPlayers =
+		new List<(PlayerController, ETeamType, int)>();
 
 	public bool IsReady { get; private set; }
 
@@ -100,7 +103,11 @@ public class PlayerSpawner : NetworkBehaviour
 			// 所属チームに応じたスポーン地点と回転の決定
 			bool isRedTeam = (playerData.Team == ETeamType.Red);
 			int targetSlot = isRedTeam ? redSlotIndex++ : blueSlotIndex++;
-			GetSpawnTransform(isRedTeam, targetSlot, out Vector3 spawnPosition, out Quaternion spawnRotation);
+			if (!TryGetSpawnTransform(playerData.Team, targetSlot, false, out Vector3 spawnPosition, out Quaternion spawnRotation) ||
+				!TryGetSpawnTransform(playerData.Team, targetSlot, true, out _, out _))
+			{
+				return;
+			}
 
 			GameObject playerInstance = Instantiate(m_PlayerPrefab, spawnPosition, spawnRotation);
 			NetworkObject networkObject = playerInstance.GetComponent<NetworkObject>();
@@ -124,7 +131,7 @@ public class PlayerSpawner : NetworkBehaviour
 					Debug.LogError("[PlayerSpawner] PlayerPrefabにPlayerControllerを設定してください。", this);
 					return;
 				}
-				m_RestartPlayers.Add((controller, spawnPosition, spawnRotation));
+				m_RestartPlayers.Add((controller, playerData.Team, targetSlot));
 				controller.SetMatchActionEnabledOwnerRpc(false);
 			}
 			else
@@ -138,18 +145,33 @@ public class PlayerSpawner : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 生成時の陣営別配置を使って全プレイヤーを再配置します。
+	/// 初期配置では両チームを自陣ゴール付近へ、得点後は失点側だけを中央近くへ再配置します。
 	/// </summary>
-	public void ResetPlayersForRestart()
+	/// <param name="scoringTeam">得点したチーム。初期配置ではNoneを指定します。</param>
+	/// <returns>配置地点が設定され、全プレイヤーへ再配置を要求できた場合はtrue。</returns>
+	public bool ResetPlayersForRestart(ETeamType scoringTeam)
 	{
-		if (!IsServer || !IsSpawned) return;
+		if (!IsServer || !IsSpawned) return false;
+		bool isAfterGoal = scoringTeam == ETeamType.Red || scoringTeam == ETeamType.Blue;
+		// 一部のプレイヤーだけが再配置されないよう、要求前に全員分の設定を確認します。
+		foreach (var player in m_RestartPlayers)
+		{
+			if (player.Controller != null && player.Controller.IsSpawned &&
+				!TryGetSpawnTransform(player.Team, player.SlotIndex, isAfterGoal && player.Team != scoringTeam, out _, out _))
+			{
+				return false;
+			}
+		}
 		foreach (var player in m_RestartPlayers)
 		{
 			if (player.Controller != null && player.Controller.IsSpawned)
 			{
-				player.Controller.PrepareForRestart(player.Position, player.Rotation);
+				TryGetSpawnTransform(player.Team, player.SlotIndex, isAfterGoal && player.Team != scoringTeam,
+					out Vector3 position, out Quaternion rotation);
+				player.Controller.PrepareForRestart(position, rotation);
 			}
 		}
+		return true;
 	}
 
 	/// <summary>
@@ -167,26 +189,28 @@ public class PlayerSpawner : NetworkBehaviour
 		}
 	}
 
-	private void GetSpawnTransform(bool isRedTeam, int slotIndex, out Vector3 position, out Quaternion rotation)
+	private bool TryGetSpawnTransform(ETeamType team, int slotIndex, bool useCenter, out Vector3 position, out Quaternion rotation)
 	{
-		Transform[] targetPoints = isRedTeam ? m_RedSpawnPoints : m_BlueSpawnPoints;
+		Transform[] targetPoints = useCenter
+			? (team == ETeamType.Red ? m_RedCenterSpawnPoints : m_BlueCenterSpawnPoints)
+			: (team == ETeamType.Red ? m_RedSpawnPoints : m_BlueSpawnPoints);
 
-		if (targetPoints != null && targetPoints.Length > 0)
+		if (targetPoints != null && slotIndex >= 0 && slotIndex < targetPoints.Length)
 		{
-			Transform point = targetPoints[slotIndex % targetPoints.Length];
+			Transform point = targetPoints[slotIndex];
 			if (point != null)
 			{
 				position = point.position;
 				rotation = point.rotation;
-				return;
+				return true;
 			}
 		}
 
-		// スポーン地点が未設定の場合のフォールバック座標
-		position = isRedTeam
-			? new Vector3(-5f - (slotIndex * 2f), 1f, 0f)
-			: new Vector3(5f + (slotIndex * 2f), 1f, 0f);
-		rotation = isRedTeam ? Quaternion.LookRotation(Vector3.right) : Quaternion.LookRotation(Vector3.left);
+		// 配列の循環や固定座標への代替で同じ地点に重なることを避けます。
+		Debug.LogError($"[PlayerSpawner] {team}の{(useCenter ? "中央近く" : "自陣ゴール付近")}の配置番号{slotIndex}にスポーン地点を設定してください。", this);
+		position = default;
+		rotation = Quaternion.identity;
+		return false;
 	}
 
 	/// <summary>

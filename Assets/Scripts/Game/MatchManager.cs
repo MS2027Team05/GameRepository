@@ -568,7 +568,11 @@ public class MatchManager : NetworkBehaviour
 			m_MatchState.Value = EMatchState.Waiting;
 			return;
 		}
-		m_PlayerSpawner.ResetPlayersForRestart();
+		if (!m_PlayerSpawner.ResetPlayersForRestart(m_GoalScoringTeam.Value))
+		{
+			Debug.LogError("[MatchManager] プレイヤーの配置地点が未設定のため、開始待ちへ戻します。", this);
+			m_MatchState.Value = EMatchState.Waiting;
+		}
 	}
 
 	/// <summary>
