@@ -779,6 +779,254 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 接触したTriangleと面上の位置を取得します。
+	/// SphereCastなど、接触時のめり込み量がない場合は従来の探索を使用します。
+	/// </summary>
+	public bool TryResolveContactTriangle(
+		Vector3 contactPoint,
+		Vector3 contactNormal,
+		out int triangleIndex,
+		out Vector3 surfacePoint)
+	{
+		return TryResolveContactTriangle(
+			contactPoint,
+			contactNormal,
+			0.0f,
+			out triangleIndex,
+			out surfacePoint);
+	}
+
+	/// <summary>
+	/// Collisionの接触点からTriangleを探索します。
+	/// 通常探索が失敗した場合だけ、負のSeparationから接触点を補正して再探索します。
+	/// 補正後も元の探索距離と法線の条件を使用します。
+	/// </summary>
+	public bool TryResolveContactTriangle(
+		Vector3 contactPoint,
+		Vector3 contactNormal,
+		float contactSeparation,
+		out int triangleIndex,
+		out Vector3 surfacePoint)
+	{
+		triangleIndex = -1;
+		surfacePoint = Vector3.zero;
+
+		if (!IsReady || !(contactNormal.sqrMagnitude > Mathf.Epsilon) ||
+			float.IsNaN(contactPoint.x) || float.IsInfinity(contactPoint.x) ||
+			float.IsNaN(contactPoint.y) || float.IsInfinity(contactPoint.y) ||
+			float.IsNaN(contactPoint.z) || float.IsInfinity(contactPoint.z) ||
+			float.IsNaN(contactNormal.sqrMagnitude) || float.IsInfinity(contactNormal.sqrMagnitude))
+		{
+			Debug.LogWarning(
+				$"[BallSurface][ContactTriangleNotFound] Surface={name} Reason=InvalidSurfaceOrContactInput IsReady={IsReady} ContactPoint={contactPoint.ToString("F6")} ContactNormal={contactNormal.ToString("F6")} RayExecuted=false", this);
+			return false;
+		}
+
+		bool rayFound = TryGetSurfaceHit(contactPoint, contactNormal, out RaycastHit hit);
+		if (rayFound &&
+			hit.triangleIndex >= 0 && hit.triangleIndex < m_MeshData.TriangleCount)
+		{
+			triangleIndex = hit.triangleIndex;
+			surfacePoint = hit.point;
+			return true;
+		}
+
+		float maximumDistance = Mathf.Min(0.05f,
+			Mathf.Max(m_MinimumProbeOffset, m_SurfaceCollider.contactOffset * 2.0f));
+		Vector3 normal = contactNormal.normalized;
+
+		if (TryFindContactTriangleByClosestPoint(
+			contactPoint, normal, maximumDistance,
+			out triangleIndex, out surfacePoint, out _))
+		{
+			return true;
+		}
+
+		// 負のSeparationはめり込みを表します。接触法線方向へその距離だけ戻し、
+		// 補正した点の近くに実際の接触面があるか確認します。
+		// SphereCastなどSeparationがない場合には補正しません。
+		if (contactSeparation < 0.0f && !float.IsInfinity(contactSeparation))
+		{
+			float correctionDistance = -contactSeparation;
+			Vector3 correctedPoint = contactPoint + normal * correctionDistance;
+
+			if (!float.IsNaN(correctedPoint.x) && !float.IsInfinity(correctedPoint.x) &&
+				!float.IsNaN(correctedPoint.y) && !float.IsInfinity(correctedPoint.y) &&
+				!float.IsNaN(correctedPoint.z) && !float.IsInfinity(correctedPoint.z))
+			{
+				// 補正後は広いRay探索を行わず、従来と同じ距離・法線条件で判定します。
+				if (TryFindContactTriangleByClosestPoint(
+					correctedPoint, normal, maximumDistance,
+					out triangleIndex, out surfacePoint, out float normalDot))
+				{
+					Debug.Log(
+						$"[BallSurface][ContactTriangleCorrectionSucceeded] Surface={name} ContactSeparation={contactSeparation:F6} CorrectionDistance={correctionDistance:F6} OriginalPoint={contactPoint.ToString("F6")} CorrectedPoint={correctedPoint.ToString("F6")} Triangle={triangleIndex} SurfacePoint={surfacePoint.ToString("F6")} DistanceBefore={Vector3.Distance(contactPoint, surfacePoint):F6} DistanceAfter={Vector3.Distance(correctedPoint, surfacePoint):F6} MaxDistance={maximumDistance:F6} Angle={Mathf.Acos(Mathf.Clamp(normalDot, -1.0f, 1.0f)) * Mathf.Rad2Deg:F3}deg MaxAngle=60.000deg DistancePass=True AnglePass=True", this);
+					return true;
+				}
+
+				Debug.LogWarning(
+					$"[BallSurface][ContactTriangleCorrectionFailed] Surface={name} ContactSeparation={contactSeparation:F6} CorrectionDistance={correctionDistance:F6} OriginalPoint={contactPoint.ToString("F6")} CorrectedPoint={correctedPoint.ToString("F6")} MaxDistance={maximumDistance:F6} MaxAngle=60.000deg", this);
+				LogContactTriangleSearchFailure(correctedPoint, normal, maximumDistance, false, -1, false);
+			}
+		}
+
+		LogContactTriangleSearchFailure(contactPoint, normal, maximumDistance, rayFound, hit.triangleIndex);
+		return false;
+	}
+
+	/// <summary>
+	/// 指定点に近く、接触法線と整合するTriangleの最近接点を取得します。
+	/// 通常探索とめり込み補正後の探索で同じ採用条件を使用します。
+	/// </summary>
+	private bool TryFindContactTriangleByClosestPoint(
+		Vector3 contactPoint,
+		Vector3 normal,
+		float maximumDistance,
+		out int triangleIndex,
+		out Vector3 surfacePoint,
+		out float bestNormalDot)
+	{
+		triangleIndex = -1;
+		surfacePoint = Vector3.zero;
+		float bestDistanceSquared = maximumDistance * maximumDistance;
+		bestNormalDot = -1.0f;
+
+		for (int index = 0; index < m_MeshData.TriangleCount; index++)
+		{
+			if (!TryGetTriangleClosestWorldPoint(index, contactPoint,
+				out Vector3 point, out Vector3 triangleNormal, out float distanceSquared))
+			{
+				continue;
+			}
+
+			float normalDot = Vector3.Dot(normal, triangleNormal);
+			// 法線差が60度を超える面や、距離・法線が不正な候補は採用しません。
+			if (!(normalDot >= 0.5f) || !(distanceSquared <= bestDistanceSquared))
+			{
+				continue;
+			}
+
+			if (triangleIndex >= 0 && distanceSquared == bestDistanceSquared && normalDot <= bestNormalDot)
+			{
+				continue;
+			}
+
+			triangleIndex = index;
+			surfacePoint = point;
+			bestDistanceSquared = distanceSquared;
+			bestNormalDot = normalDot;
+		}
+
+		return triangleIndex >= 0;
+	}
+
+	/// <summary>
+	/// 接触Triangleの補完探索に失敗した場合だけ、距離と法線の判定結果を記録します。
+	/// 診断用の再探索であり、採用条件やSimulation状態は変更しません。
+	/// </summary>
+	private void LogContactTriangleSearchFailure(
+		Vector3 contactPoint,
+		Vector3 contactNormal,
+		float maximumDistance,
+		bool rayFound,
+		int rayTriangleIndex,
+		bool rayExecuted = true)
+	{
+		const float minimumNormalDot = 0.5f;
+		float maximumDistanceSquared = maximumDistance * maximumDistance;
+		int invalidCount = 0;
+		int distanceOnlyCount = 0;
+		int angleOnlyCount = 0;
+		int bothCount = 0;
+		int passedCount = 0;
+		int nearestIndex = -1;
+		float nearestDistanceSquared = float.PositiveInfinity;
+		float nearestNormalDot = 0.0f;
+		Vector3 nearestPoint = Vector3.zero;
+		Vector3 nearestNormal = Vector3.zero;
+		int nearestAnglePassedIndex = -1;
+		float nearestAnglePassedDistanceSquared = float.PositiveInfinity;
+		int bestDistancePassedIndex = -1;
+		float bestDistancePassedDot = float.NegativeInfinity;
+
+		for (int index = 0; index < m_MeshData.TriangleCount; index++)
+		{
+			if (!TryGetTriangleClosestWorldPoint(index, contactPoint,
+				out Vector3 point, out Vector3 triangleNormal, out float distanceSquared))
+			{
+				invalidCount++;
+				continue;
+			}
+
+			float normalDot = Vector3.Dot(contactNormal, triangleNormal);
+			if (float.IsNaN(distanceSquared) || float.IsInfinity(distanceSquared) ||
+				float.IsNaN(normalDot) || float.IsInfinity(normalDot) || distanceSquared < 0.0f)
+			{
+				invalidCount++;
+				continue;
+			}
+
+			bool distancePassed = distanceSquared <= maximumDistanceSquared;
+			bool anglePassed = normalDot >= minimumNormalDot;
+			if (distancePassed && anglePassed)
+			{
+				passedCount++;
+			}
+			else if (!distancePassed && !anglePassed)
+			{
+				bothCount++;
+			}
+			else if (!distancePassed)
+			{
+				distanceOnlyCount++;
+			}
+			else
+			{
+				angleOnlyCount++;
+			}
+
+			if (distanceSquared < nearestDistanceSquared)
+			{
+				nearestIndex = index;
+				nearestDistanceSquared = distanceSquared;
+				nearestNormalDot = normalDot;
+				nearestPoint = point;
+				nearestNormal = triangleNormal;
+			}
+
+			if (anglePassed && distanceSquared < nearestAnglePassedDistanceSquared)
+			{
+				nearestAnglePassedIndex = index;
+				nearestAnglePassedDistanceSquared = distanceSquared;
+			}
+
+			if (distancePassed && normalDot > bestDistancePassedDot)
+			{
+				bestDistancePassedIndex = index;
+				bestDistancePassedDot = normalDot;
+			}
+		}
+
+		string nearestDetails = nearestIndex >= 0
+			? $"Triangle={nearestIndex} Distance={Mathf.Sqrt(nearestDistanceSquared):F6} Angle={Mathf.Acos(Mathf.Clamp(nearestNormalDot, -1.0f, 1.0f)) * Mathf.Rad2Deg:F3}deg NormalDot={nearestNormalDot:F6} DistancePass={nearestDistanceSquared <= maximumDistanceSquared} AnglePass={nearestNormalDot >= minimumNormalDot} Point={nearestPoint.ToString("F6")} Normal={nearestNormal.ToString("F6")}"
+			: "None";
+		string anglePassedDetails = nearestAnglePassedIndex >= 0
+			? $"Triangle={nearestAnglePassedIndex} Distance={Mathf.Sqrt(nearestAnglePassedDistanceSquared):F6}"
+			: "None";
+		string distancePassedDetails = bestDistancePassedIndex >= 0
+			? $"Triangle={bestDistancePassedIndex} Angle={Mathf.Acos(Mathf.Clamp(bestDistancePassedDot, -1.0f, 1.0f)) * Mathf.Rad2Deg:F3}deg NormalDot={bestDistancePassedDot:F6}"
+			: "None";
+
+		Debug.LogWarning(
+			$"[BallSurface][ContactTriangleNotFound] Surface={name} ContactPoint={contactPoint.ToString("F6")} ContactNormal={contactNormal.ToString("F6")}\n" +
+			$"RayExecuted={rayExecuted} RayFound={rayFound} RayTriangle={(rayFound ? rayTriangleIndex : -1)} ContactOffset={m_SurfaceCollider.contactOffset:F6} MaxDistance={maximumDistance:F6} MaxAngle={Mathf.Acos(minimumNormalDot) * Mathf.Rad2Deg:F3}deg MinNormalDot={minimumNormalDot:F6}\n" +
+			$"Triangles={m_MeshData.TriangleCount} Invalid={invalidCount} DistanceOnlyRejected={distanceOnlyCount} AngleOnlyRejected={angleOnlyCount} BothRejected={bothCount} Passed={passedCount}\n" +
+			$"Nearest: {nearestDetails}\n" +
+			$"NearestAnglePassed: {anglePassedDetails}\n" +
+			$"BestAngleWithinDistance: {distancePassedDetails}", this);
+	}
+
+	/// <summary>
 	/// ContactPointの両側からMeshColliderへRayを飛ばし、
 	/// 最もContactPointに近いTriangle Hitを取得します。
 	/// </summary>
