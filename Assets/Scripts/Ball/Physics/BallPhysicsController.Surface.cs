@@ -10,7 +10,7 @@
 /// 2. BallSurfaceSimulationを初期化し、RigidbodyをKinematicへ切り替えます。
 /// 3. FixedUpdateごとにSurfaceSimulationを進め、計算されたBall中心位置を反映します。
 /// 4. Surface移動経路はSphereCastで確認し、通常Colliderへのすり抜けを防ぎます。
-/// 5. 同一BallSurface内でも現在Triangleと直接隣接していないTriangleは別壁として扱います。
+/// 5. 同一BallSurface内でも今回のSurface移動が管理しないTriangleは別壁として扱います。
 /// 6. 同一Mesh内の別壁へ当たった場合はHit TriangleでSimulationを再初期化し、
 ///    Flyingへ切り替えずSurface Physics用バウンドを継続します。
 /// 7. Surface端から離脱する場合は出口位置と速度を一度保留し、
@@ -296,7 +296,7 @@ public partial class BallPhysicsController
 	///
 	/// BallSurfaceSourceへのHitは一律に無視しません。
 	/// 別BallSurfaceSourceはSurface乗り換え側の責務として無視しますが、
-	/// 現在と同じBallSurfaceSourceの非隣接Triangleは同一Mesh内の別壁として扱います。
+	/// 現在と同じBallSurfaceSourceでも、今回の移動が管理しないTriangleは同一Mesh内の別壁として扱います。
 	///
 	/// これによりConvex Edgeの回り込み中などに、予定軌道上の別壁を
 	/// Kinematic Rigidbodyがすり抜けることを防ぎます。
@@ -458,6 +458,7 @@ public partial class BallPhysicsController
 				nearestHitSurfaceSource,
 				nearestHit,
 				incomingVelocity,
+				safeColliderCenter,
 				out BallSurfaceSimulation.EInitializeResult initializeResult))
 			{
 				RecordSurfaceTrace("SameSurfaceBounce=Success");
@@ -511,8 +512,8 @@ public partial class BallPhysicsController
 	/// 同一Mesh内の別壁として衝突処理する必要があるか判定します。
 	/// </summary>
 	/// <remarks>
-	/// 現在Triangle自身と直接隣接Triangleは通常のSurface移動で通過するため除外します。
-	/// 同じBallSurfaceSourceで、それ以外のTriangleへ空間的に接触した場合だけ障害物として扱います。
+	/// 今回のAdvanceで使用した支持面と遷移の構成面だけを除外します。
+	/// 同じBallSurfaceSourceでも、単に隣接しているだけのTriangleは障害物として扱います。
 	///
 	/// 別BallSurfaceSourceはこの処理では扱わず、Surface乗り換え機能側へ責務を残します。
 	/// </remarks>
@@ -563,11 +564,9 @@ public partial class BallPhysicsController
 			return false;
 		}
 
-		bool isCurrentOrNeighbor = IsCurrentOrNeighborSurfaceTriangle(
-			currentTriangleIndex,
-			hitTriangleIndex);
-		RecordSurfaceTrace($"SurfaceFilter={(isCurrentOrNeighbor ? (currentTriangleIndex == hitTriangleIndex ? "CurrentTriangle" : "NeighborTriangle") : "SeparateWall")} CurrentTriangle={currentTriangleIndex} ResolvedHitTriangle={hitTriangleIndex}");
-		return !isCurrentOrNeighbor;
+		bool isTraversalTriangle = m_SurfaceSimulation.IsTraversalTriangle(hitTriangleIndex);
+		RecordSurfaceTrace($"SurfaceFilter={(isTraversalTriangle ? (currentTriangleIndex == hitTriangleIndex ? "CurrentTriangle" : "TraversalTriangle") : (IsCurrentOrNeighborSurfaceTriangle(currentTriangleIndex, hitTriangleIndex) ? "NeighborNotTraversed" : "SeparateWall"))} CurrentTriangle={currentTriangleIndex} ResolvedHitTriangle={hitTriangleIndex}");
+		return !isTraversalTriangle;
 	}
 
 	/// <summary>
@@ -637,6 +636,7 @@ public partial class BallPhysicsController
 		BallSurfaceSource surfaceSource,
 		RaycastHit obstacleHit,
 		Vector3 incomingVelocity,
+		Vector3 safeColliderCenter,
 		out BallSurfaceSimulation.EInitializeResult result)
 	{
 		if (surfaceSource == null || !surfaceSource.IsReady)
@@ -647,8 +647,25 @@ public partial class BallPhysicsController
 
 		int triangleIndex = obstacleHit.triangleIndex;
 		Vector3 surfacePoint = obstacleHit.point;
-		// 有効なHit Triangleは変更せず、不明な場合だけ接触面を再探索します。
-		if (triangleIndex < 0 || triangleIndex >= surfaceSource.MeshData.TriangleCount)
+		float radius = GetBallWorldRadius();
+		float tolerance = m_MinimumCalculationDistance;
+		bool startsOverlapping = obstacleHit.distance <= 0.0f;
+		// 開始時重複ではHitPointとHitNormalを接触面の情報として使いません。
+		if (startsOverlapping)
+		{
+			if (!surfaceSource.TryGetTriangleClosestWorldPoint(triangleIndex, safeColliderCenter,
+				out surfacePoint, out Vector3 faceNormal, out float distanceSquared) ||
+				!(distanceSquared <= (radius + tolerance) * (radius + tolerance)) ||
+				Vector3.Dot(safeColliderCenter - surfacePoint, faceNormal) < -tolerance ||
+				Vector3.Dot(incomingVelocity, faceNormal) >= 0.0f)
+			{
+				RecordSurfaceTrace($"OverlapContactRecovery=Rejected Triangle={triangleIndex}");
+				result = BallSurfaceSimulation.EInitializeResult.ContactTriangleNotFound;
+				return false;
+			}
+			RecordSurfaceTrace($"OverlapContactRecovery=Success Triangle={triangleIndex} Point={surfacePoint.ToString("F6")} FaceNormal={faceNormal.ToString("F6")} Distance={Mathf.Sqrt(distanceSquared):F6}");
+		}
+		else if (triangleIndex < 0 || triangleIndex >= surfaceSource.MeshData.TriangleCount)
 		{
 			if (!surfaceSource.TryResolveContactTriangle(
 				obstacleHit.point, obstacleHit.normal, out triangleIndex, out surfacePoint))
@@ -658,14 +675,132 @@ public partial class BallPhysicsController
 			}
 		}
 
-		// Transform Scaleなどが変わった場合にも現在のBall半径を反映します。
+		// 配置候補は既存の仮初期化で生成し、検証に成功した場合だけ確定します。
 		ConfigureSurfaceSimulation();
-		if (!m_SurfaceSimulation.TryInitialize(
-			surfaceSource, triangleIndex, surfacePoint, incomingVelocity, out result))
+		// 有効なSweep Hitから、球中心を維持できる既存Traversalへの初期化を優先します。
+		// 開始時重複のHit Normalは使用せず、従来の復元処理に任せます。
+		if (!startsOverlapping)
+		{
+			if (m_SurfaceSimulation.TryInitializePreservingImpactCenter(surfaceSource, triangleIndex,
+				safeColliderCenter, obstacleHit.normal, incomingVelocity, tolerance,
+				center => surfaceSource.IsBouncePlacementClear(safeColliderCenter, center,
+					radius, tolerance, out _, out _), out BallSurfaceSimulation preserved, out string feature))
+			{
+				m_SurfaceSimulation = preserved;
+				m_SurfaceSimulation.TryGetWorldCenter(out Vector3 preservedCenter);
+				RecordSurfaceTrace($"ImpactCenterPreserved=Success Feature={feature} HitTriangle={triangleIndex} Center={preservedCenter.ToString("F6")} Delta={Vector3.Distance(safeColliderCenter, preservedCenter):F6}");
+				result = BallSurfaceSimulation.EInitializeResult.Success;
+				CompleteSameSurfaceBounce();
+				return true;
+			}
+			RecordSurfaceTrace($"ImpactCenterPreserved=Rejected Feature={feature} HitTriangle={triangleIndex}");
+		}
+		int lastBlockedTriangle = -1;
+		Vector3 lastCandidateCenter = Vector3.zero;
+		float remainingBudget = Mathf.Min(radius * 0.1f, surfaceSource.SurfaceCollider.contactOffset * 2.0f);
+		bool ValidateCenter(Vector3 candidateCenter)
+		{
+			lastBlockedTriangle = -1;
+			lastCandidateCenter = candidateCenter;
+			float maxCorrection = radius + tolerance;
+			if (!((candidateCenter - safeColliderCenter).sqrMagnitude <= maxCorrection * maxCorrection))
+			{
+				RecordSurfaceTrace($"BouncePlacement=Rejected Reason=CorrectionTooFar SafeCenter={safeColliderCenter.ToString("F6")} CandidateCenter={candidateCenter.ToString("F6")}");
+				return false;
+			}
+
+			// 配置先の重複と、補正経路だけの重複を区別します。
+			if (!surfaceSource.IsBouncePlacementClear(candidateCenter, candidateCenter,
+				radius, tolerance, out lastBlockedTriangle, out float endpointDistance))
+			{
+				RecordSurfaceTrace($"BouncePlacement=Rejected Reason=EndpointOverlap CandidateCenter={candidateCenter.ToString("F6")} BlockedTriangle={lastBlockedTriangle} BlockedDistance={endpointDistance:F6}");
+				return false;
+			}
+
+			if (surfaceSource.IsBouncePlacementClear(safeColliderCenter, candidateCenter,
+				radius, tolerance, out int pathBlockedTriangle, out float pathBlockedDistance))
+			{
+				RecordSurfaceTrace($"BouncePlacement=Accepted Reason=DirectPath CandidateCenter={candidateCenter.ToString("F6")}");
+				return true;
+			}
+
+			// 配置先が安全な場合だけ、経路の迂回を試します。
+			// 経路失敗ではlastBlockedTriangleを更新せず、配置先の押し出し補正と混同しません。
+			RecordSurfaceTrace($"BouncePlacement=Rejected Reason=PathOverlap CandidateCenter={candidateCenter.ToString("F6")} BlockedTriangle={pathBlockedTriangle} BlockedDistance={pathBlockedDistance:F6}");
+			if (pathBlockedTriangle >= 0 &&
+				surfaceSource.TryGetBouncePlacementDetour(safeColliderCenter, candidateCenter,
+					pathBlockedTriangle, radius, tolerance, remainingBudget, out Vector3 waypoint))
+			{
+				RecordSurfaceTrace($"BouncePlacementDetour=Success BlockedTriangle={pathBlockedTriangle} Waypoint={waypoint.ToString("F6")} CandidateCenter={candidateCenter.ToString("F6")} Budget={remainingBudget:F6}");
+				return true;
+			}
+
+			RecordSurfaceTrace($"BouncePlacementDetour=Rejected BlockedTriangle={pathBlockedTriangle} BlockedDistance={pathBlockedDistance:F6} Budget={remainingBudget:F6}");
+			return false;
+		}
+		Vector3 attemptPoint = surfacePoint;
+		float attemptHeight = 0.0f;
+		bool initialized = m_SurfaceSimulation.TryInitialize(surfaceSource, triangleIndex, attemptPoint,
+			incomingVelocity, out result, ValidateCenter);
+		if (!initialized &&
+			(result == BallSurfaceSimulation.EInitializeResult.InvalidPlacement ||
+				result == BallSurfaceSimulation.EInitializeResult.PointOutsideTriangle) &&
+			surfaceSource.TryGetTriangleClosestWorldPoint(triangleIndex, safeColliderCenter,
+				out Vector3 correctedPoint, out _, out _) &&
+			(correctedPoint - surfacePoint).sqrMagnitude <= radius * radius &&
+			(correctedPoint - surfacePoint).sqrMagnitude > tolerance * tolerance)
+		{
+			attemptPoint = correctedPoint;
+			RecordSurfaceTrace($"BouncePlacementRetry Triangle={triangleIndex} Point={attemptPoint.ToString("F6")}");
+			initialized = m_SurfaceSimulation.TryInitialize(surfaceSource, triangleIndex, attemptPoint,
+				incomingVelocity, out result, ValidateCenter);
+		}
+
+		// 微小な重複だけを対象とし、補正量と再試行回数に上限を設けます。
+		// 既存の補正経路・全Triangle検証・ボール半径による制限は緩和しません。
+		const int maximumCorrectionAttempts = 4;
+		for (int attempt = 0; !initialized && attempt < maximumCorrectionAttempts; attempt++)
+		{
+			if (result != BallSurfaceSimulation.EInitializeResult.InvalidPlacement || lastBlockedTriangle < 0)
+			{
+				break;
+			}
+
+			int blockedTriangle = lastBlockedTriangle;
+			if (!surfaceSource.TryGetBouncePlacementCorrection(triangleIndex, blockedTriangle,
+				attemptPoint, lastCandidateCenter, radius, tolerance, remainingBudget,
+				out Vector3 nextPoint, out float heightIncrease))
+			{
+				RecordSurfaceTrace($"BouncePlacementDepenetration=Rejected Triangle={triangleIndex} BlockedTriangle={blockedTriangle} Budget={remainingBudget:F6}");
+				break;
+			}
+
+			remainingBudget -= (nextPoint - attemptPoint).magnitude + heightIncrease;
+			attemptPoint = nextPoint;
+			attemptHeight += heightIncrease;
+			RecordSurfaceTrace($"BouncePlacementDepenetration=Retry Attempt={attempt + 1} Triangle={triangleIndex} BlockedTriangle={blockedTriangle} Point={attemptPoint.ToString("F6")} Height={attemptHeight:F6} Budget={remainingBudget:F6}");
+			initialized = m_SurfaceSimulation.TryInitialize(surfaceSource, triangleIndex, attemptPoint,
+				incomingVelocity, out result, ValidateCenter, attemptHeight);
+			if (initialized)
+			{
+				RecordSurfaceTrace($"BouncePlacementDepenetration=Success Triangle={triangleIndex} Height={attemptHeight:F6}");
+			}
+		}
+
+		if (!initialized)
 		{
 			return false;
 		}
 
+		CompleteSameSurfaceBounce();
+		return true;
+	}
+
+	/// <summary>
+	/// 検証済みのSurface初期化状態をRigidbodyへ反映します。
+	/// </summary>
+	private void CompleteSameSurfaceBounce()
+	{
 		m_FlightDirection =
 			Vector3.zero;
 
@@ -681,8 +816,6 @@ public partial class BallPhysicsController
 		// immediate=trueのためObstacle SphereCastは再実行しません。
 		ApplySurfacePosition(
 			true);
-
-		return true;
 	}
 
 	/// <summary>
@@ -914,11 +1047,11 @@ public partial class BallPhysicsController
 		DumpSurfaceTrace();
 		m_SurfaceSimulation.Reset();
 
-		m_Rigidbody.linearVelocity =
-			Vector3.zero;
-
-		m_Rigidbody.angularVelocity =
-			Vector3.zero;
+		if (!m_Rigidbody.isKinematic)
+		{
+			m_Rigidbody.linearVelocity = Vector3.zero;
+			m_Rigidbody.angularVelocity = Vector3.zero;
+		}
 
 		m_Rigidbody.isKinematic =
 			true;

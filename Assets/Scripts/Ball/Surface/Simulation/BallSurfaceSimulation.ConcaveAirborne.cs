@@ -201,6 +201,8 @@ public sealed partial class BallSurfaceSimulation
 		while (remainingTime >
 			m_MinimumCalculationValue)
 		{
+			RecordTraversalTriangles();
+
 			if (transitionCount >=
 				m_MaximumTriangleTransitionsPerStep)
 			{
@@ -214,7 +216,7 @@ public sealed partial class BallSurfaceSimulation
 				out Vector3 vertexC,
 				out Vector3 currentNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("CurrentTriangleWorldData");
 			}
 
 			m_SurfacePoint =
@@ -267,7 +269,7 @@ public sealed partial class BallSurfaceSimulation
 				m_MinimumCalculationValue *
 					m_MinimumCalculationValue)
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("ReferenceTangentVelocity");
 			}
 
 			m_ConcaveReferenceVelocity =
@@ -295,7 +297,7 @@ public sealed partial class BallSurfaceSimulation
 					vertexC,
 					out Vector3 endBarycentric))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("ReferenceBarycentric");
 			}
 
 			bool crossesEdge =
@@ -324,7 +326,7 @@ public sealed partial class BallSurfaceSimulation
 					out simultaneousEdgeIndex,
 					out segmentFraction))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("FirstSurfaceCrossing");
 				}
 
 				if (simultaneousEdgeIndex >=
@@ -438,7 +440,7 @@ public sealed partial class BallSurfaceSimulation
 				out _,
 				out Vector3 neighborNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("NeighborTriangleWorldData");
 			}
 
 			if (edgeType ==
@@ -449,6 +451,9 @@ public sealed partial class BallSurfaceSimulation
 
 				Vector3 beforeVelocity =
 					m_WorldVelocity;
+
+				float expectedRetention = m_HasAppliedConvexTraversalSpeedRetention ?
+					1.0f : m_ConvexEdgeSpeedRetention;
 
 				if (BeginConvexEdgeTransition(
 					crossedEdgeIndex,
@@ -462,7 +467,7 @@ public sealed partial class BallSurfaceSimulation
 					ValidateTransitionWorldState(
 						beforeCenter,
 						beforeVelocity,
-						"Concave -> Convex");
+						"Concave -> Convex", expectedRetention);
 
 					unusedTime =
 						remainingTime;
@@ -478,7 +483,7 @@ public sealed partial class BallSurfaceSimulation
 				neighborNormal,
 				out Vector3 neighborReferenceVelocity))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("MapConcaveReferenceVelocity");
 			}
 
 			m_CurrentTriangleIndex =
@@ -639,7 +644,7 @@ public sealed partial class BallSurfaceSimulation
 		if (sourceSpeed <=
 			m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard1");
 		}
 
 		if (!TryGetTriangleWorldData(
@@ -649,7 +654,7 @@ public sealed partial class BallSurfaceSimulation
 			out Vector3 vertexC,
 			out _))
 		{
-			return false;
+			return RecordGeometryFailure("Guard2");
 		}
 
 		if (!TryGetConcaveEdgeWorldVertices(
@@ -660,7 +665,7 @@ public sealed partial class BallSurfaceSimulation
 			out Vector3 edgeStart,
 			out Vector3 edgeEnd))
 		{
-			return false;
+			return RecordGeometryFailure("Guard3");
 		}
 
 		Vector3 edgeVector =
@@ -671,7 +676,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard4");
 		}
 
 		Vector3 edgeDirection =
@@ -728,7 +733,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard5");
 		}
 
 		targetInsideDirection.Normalize();
@@ -742,7 +747,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard6");
 		}
 
 		// 数値誤差でReference速度量が増減しないようにします。

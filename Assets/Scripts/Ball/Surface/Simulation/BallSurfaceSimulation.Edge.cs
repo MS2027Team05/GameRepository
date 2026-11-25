@@ -34,6 +34,8 @@ public sealed partial class BallSurfaceSimulation
 		while (remainingTime >
 			m_MinimumCalculationValue)
 		{
+			RecordTraversalTriangles();
+
 			if (transitionCount >=
 				m_MaximumTriangleTransitionsPerStep)
 			{
@@ -52,7 +54,7 @@ public sealed partial class BallSurfaceSimulation
 					ref remainingTime,
 					out bool completed))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("AdvanceConvexVertexSpherePatch");
 				}
 
 				if (!completed)
@@ -88,7 +90,7 @@ public sealed partial class BallSurfaceSimulation
 					out bool completed,
 					out int completedEntryEdgeIndex))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("AdvanceConvexEdgeTransition");
 				}
 
 				if (!completed)
@@ -110,7 +112,7 @@ public sealed partial class BallSurfaceSimulation
 				out Vector3 vertexC,
 				out Vector3 currentNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("CurrentTriangleWorldData");
 			}
 
 			m_SurfacePoint =
@@ -165,7 +167,7 @@ public sealed partial class BallSurfaceSimulation
 				vertexC,
 				out Vector3 startBarycentric))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("StartBarycentric");
 			}
 
 			if (!TryCalculateBarycentric(
@@ -175,7 +177,7 @@ public sealed partial class BallSurfaceSimulation
 				vertexC,
 				out Vector3 endBarycentric))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("EndBarycentric");
 			}
 
 			if (IsInsideTriangle(
@@ -199,7 +201,7 @@ public sealed partial class BallSurfaceSimulation
 				out int simultaneousEdgeIndex,
 				out float crossingFraction))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("FirstSurfaceCrossing");
 			}
 
 			Vector3 crossingPoint;
@@ -336,7 +338,7 @@ public sealed partial class BallSurfaceSimulation
 				out _,
 				out Vector3 neighborNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("NeighborTriangleWorldData");
 			}
 
 			if (edgeType ==
@@ -347,7 +349,7 @@ public sealed partial class BallSurfaceSimulation
 					crossingPoint,
 					currentNormal))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("ConcaveFaceWorldState");
 				}
 
 				// 空中でConcaveへ入った場合だけ、
@@ -405,7 +407,7 @@ public sealed partial class BallSurfaceSimulation
 					crossingPoint,
 					currentNormal))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("ConvexFaceWorldState");
 				}
 
 				m_SurfacePoint =
@@ -418,7 +420,7 @@ public sealed partial class BallSurfaceSimulation
 					currentNormal,
 					neighborNormal))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("BeginConvexEdgeTransition");
 				}
 
 				remainingTime *=
@@ -450,7 +452,7 @@ public sealed partial class BallSurfaceSimulation
 				neighborVertexA,
 				neighborNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("TransitionFlatOrSmoothEdge");
 			}
 
 			remainingTime *=

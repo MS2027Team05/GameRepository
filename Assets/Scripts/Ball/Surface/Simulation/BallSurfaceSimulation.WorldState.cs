@@ -99,7 +99,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard1");
 		}
 
 		surfaceNormal.Normalize();
@@ -142,7 +142,7 @@ public sealed partial class BallSurfaceSimulation
 
 		if (!m_IsInitialized)
 		{
-			return false;
+			return RecordGeometryFailure("Guard1");
 		}
 
 		// Concave Airborne中はWorldStateそのものがBall本体です。
@@ -150,7 +150,7 @@ public sealed partial class BallSurfaceSimulation
 		{
 			if (!m_HasWorldState)
 			{
-				return false;
+				return RecordGeometryFailure("Guard2");
 			}
 
 			worldCenter =
@@ -165,7 +165,7 @@ public sealed partial class BallSurfaceSimulation
 		if (!TryGetCurrentSurfaceNormal(
 			out Vector3 surfaceNormal))
 		{
-			return false;
+			return RecordGeometryFailure("Guard3");
 		}
 
 		Vector3 ballCenterOffset;
@@ -219,7 +219,7 @@ public sealed partial class BallSurfaceSimulation
 			out Vector3 worldCenter,
 			out Vector3 worldVelocity))
 		{
-			return false;
+			return RecordGeometryFailure("Guard1");
 		}
 
 		SetWorldState(
@@ -238,7 +238,8 @@ public sealed partial class BallSurfaceSimulation
 	private void ValidateTransitionWorldState(
 		Vector3 beforeCenter,
 		Vector3 beforeVelocity,
-		string transitionName)
+		string transitionName,
+		float expectedVelocityScale = 1.0f)
 	{
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 		if (!m_HasWorldState)
@@ -254,9 +255,10 @@ public sealed partial class BallSurfaceSimulation
 				beforeCenter,
 				m_WorldCenter);
 
+		Vector3 expectedVelocity = beforeVelocity * expectedVelocityScale;
 		float velocityDelta =
 			Vector3.Distance(
-				beforeVelocity,
+				expectedVelocity,
 				m_WorldVelocity);
 
 		float beforeEnergy =
@@ -270,13 +272,14 @@ public sealed partial class BallSurfaceSimulation
 			velocityDelta >
 				m_TransitionVelocityTolerance ||
 			afterEnergy >
-				beforeEnergy +
+				expectedVelocity.sqrMagnitude +
 					m_TransitionEnergyTolerance)
 		{
 			Debug.LogWarning(
 				$"[BallSurface][Transition] {transitionName}: " +
 				$"PositionDelta={positionDelta:F6}, " +
 				$"VelocityDelta={velocityDelta:F6}, " +
+				$"ExpectedVelocityScale={expectedVelocityScale:F6}, " +
 				$"EnergyBefore={beforeEnergy:F6}, " +
 				$"EnergyAfter={afterEnergy:F6}");
 		}

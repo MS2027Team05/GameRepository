@@ -358,7 +358,7 @@ public sealed partial class BallSurfaceSimulation
 				null ||
 			!m_HasWorldState)
 		{
-			return false;
+			return RecordGeometryFailure("Guard1");
 		}
 
 		Vector3 localVertexPoint =
@@ -373,7 +373,7 @@ public sealed partial class BallSurfaceSimulation
 			incidentEdges.Length <
 				3)
 		{
-			return false;
+			return RecordGeometryFailure("Guard2");
 		}
 
 		if (!TryGetVertexSphereInteriorDirection(
@@ -381,7 +381,7 @@ public sealed partial class BallSurfaceSimulation
 			incidentEdges,
 			out Vector3 interiorDirection))
 		{
-			return false;
+			return RecordGeometryFailure("Guard3");
 		}
 
 		Vector3 beforeCenter =
@@ -403,7 +403,7 @@ public sealed partial class BallSurfaceSimulation
 				m_BallRadius -
 					m_TransitionPositionTolerance)
 		{
-			return false;
+			return RecordGeometryFailure("Guard4");
 		}
 
 		Vector3 radialDirection =
@@ -424,7 +424,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard5");
 		}
 
 		Vector3 rotationAxis =
@@ -436,7 +436,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard6");
 		}
 
 		rotationAxis.Normalize();
@@ -474,6 +474,8 @@ public sealed partial class BallSurfaceSimulation
 
 		m_ConvexVertexSphereIncidentEdges =
 			incidentEdges;
+
+		RecordTraversalTriangles();
 
 		m_SurfacePoint =
 			vertexPoint;
@@ -590,7 +592,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard1");
 		}
 
 		m_ConvexVertexSphereRadialDirection.Normalize();
@@ -608,7 +610,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard2");
 		}
 
 		m_SurfaceVelocity =
@@ -635,7 +637,7 @@ public sealed partial class BallSurfaceSimulation
 			boundaryEdge,
 			ref m_ConvexVertexSphereRadialDirection))
 		{
-			return false;
+			return RecordGeometryFailure("Guard3");
 		}
 
 		m_SurfaceVelocity =
@@ -647,7 +649,7 @@ public sealed partial class BallSurfaceSimulation
 			m_MinimumCalculationValue *
 				m_MinimumCalculationValue)
 		{
-			return false;
+			return RecordGeometryFailure("Guard4");
 		}
 
 		m_SurfaceVelocity =
@@ -679,7 +681,7 @@ public sealed partial class BallSurfaceSimulation
 			exitRadialDirection,
 			exitSurfaceVelocity))
 		{
-			return false;
+			return RecordGeometryFailure("Guard5");
 		}
 
 		completed =
