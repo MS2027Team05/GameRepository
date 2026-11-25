@@ -149,7 +149,7 @@ public sealed class BallSurfaceSearch
 	/// <summary>
 	/// Colliderの種類に応じてSurface上の最近接点を取得します。
 	/// </summary>
-	private bool TryGetCandidateSurface(
+	internal bool TryGetCandidateSurface(
 		Collider candidate,
 		Vector3 origin,
 		out SearchResult result)

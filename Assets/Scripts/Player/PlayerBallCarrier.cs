@@ -290,23 +290,33 @@ public class PlayerBallCarrier :
 			return;
 		}
 
-		RequestShootServerRpc(
-			direction.normalized);
+		RequestShootServerRpc(direction.normalized, false, Vector3.zero);
 	}
 
 	/// <summary>
-	/// Host上でこのプレイヤーが所持するボールを取得し、
-	/// 指定方向へのシュートを試みます。
+	/// 所持中のボールを照準座標へ射出するようHostへ要求します。
 	/// </summary>
-	/// <param name="shootDirection">
-	/// ボールを射出する方向です。
-	/// </param>
-	[ServerRpc]
-	private void RequestShootServerRpc(
-		Vector3 shootDirection)
+	public void ShootAt(Vector3 targetPoint, Vector3 fallbackDirection)
 	{
-		if (shootDirection.sqrMagnitude <=
-			Mathf.Epsilon)
+		if (!IsOwner || !m_HasBall || fallbackDirection.sqrMagnitude <= 0.000001f ||
+			float.IsNaN(fallbackDirection.sqrMagnitude) || float.IsInfinity(fallbackDirection.sqrMagnitude) ||
+			float.IsNaN(targetPoint.sqrMagnitude) || float.IsInfinity(targetPoint.sqrMagnitude))
+		{
+			return;
+		}
+
+		RequestShootServerRpc(fallbackDirection.normalized, true, targetPoint);
+	}
+
+	/// <summary>
+	/// Hostで所持権を確認し、通常シュートの方向または照準座標を処理します。
+	/// </summary>
+	[ServerRpc]
+	private void RequestShootServerRpc(Vector3 shootDirection, bool useTargetPoint, Vector3 targetPoint)
+	{
+		float directionSquared = shootDirection.sqrMagnitude;
+		if (directionSquared <= 0.000001f || float.IsNaN(directionSquared) || float.IsInfinity(directionSquared) ||
+			(useTargetPoint && (float.IsNaN(targetPoint.sqrMagnitude) || float.IsInfinity(targetPoint.sqrMagnitude))))
 		{
 			return;
 		}
@@ -323,8 +333,10 @@ public class PlayerBallCarrier :
 			return;
 		}
 
-		if (!ballController.TryShoot(
-			shootDirection))
+		bool succeeded = useTargetPoint
+			? ballController.TryShootAt(targetPoint, shootDirection)
+			: ballController.TryShoot(shootDirection);
+		if (!succeeded)
 		{
 			Debug.LogWarning(
 				"[PlayerBallCarrier] " +

@@ -500,6 +500,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	private void ResetInternalState()
 	{
 		ClearHomingState();
+		ClearPendingSurfaceExit();
 
 		ChangeMotionState(
 			EBallMotionState.Idle);
@@ -523,6 +524,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	public void ResetMotionState()
 	{
 		ClearHomingState();
+		ClearPendingSurfaceExit();
 
 		if (!IsServer)
 		{

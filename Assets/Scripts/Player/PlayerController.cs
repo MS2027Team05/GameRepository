@@ -1091,7 +1091,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	}
 
 	/// <summary>
-	/// 所持中のボールをカメラ正面方向へ射出します。
+	/// 所持中のボールを中央レティクルの照準座標へ射出します。
 	/// </summary>
 	private void HandleShoot()
 	{
@@ -1106,6 +1106,12 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 
 		Vector3 shootDirection = GetAimDirection();
+		if (m_AimGuide != null && m_AimGuide.TryGetShotAim(shootDirection,
+			out Vector3 targetPoint, out Vector3 aimDirection))
+		{
+			m_BallCarrier.ShootAt(targetPoint, aimDirection);
+			return;
+		}
 
 		m_BallCarrier.Shoot(shootDirection);
 	}
