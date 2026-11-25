@@ -24,6 +24,8 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 	private PlayerNetworkProfile m_NetworkProfile;
 	private PlayerSilhouette m_PlayerSilhouette;
+	private PlayerEmissionController m_EmissionController;
+	private PlayerAppearanceCatalog m_SubscribedEmissionCatalog;
 
 	private bool m_HasAppliedCharacterType;
 	private bool m_HasAppliedColor;
@@ -58,6 +60,9 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 	private void OnEnable()
 	{
+		SubscribeEmissionSettings();
+		RefreshEmission();
+
 		if (m_NetworkProfile != null)
 		{
 			m_NetworkProfile.OnProfileChanged += HandleProfileChanged;
@@ -75,6 +80,9 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 	private void OnDisable()
 	{
+		UnsubscribeEmissionSettings();
+		m_EmissionController?.Restore();
+
 		if (m_NetworkProfile != null)
 		{
 			m_NetworkProfile.OnProfileChanged -= HandleProfileChanged;
@@ -169,6 +177,7 @@ public sealed class PlayerAppearance : MonoBehaviour
 		m_CurrentColor = colorType;
 		m_CurrentMaterial = activeCharacterType == ECharacterType.Woman ? womanMaterial : manMaterial;
 		m_HasAppliedColor = m_CurrentMaterial != null;
+		RefreshEmission();
 		m_HasSelectedEffectColor = true;
 		EffectColorChanged?.Invoke();
 	}
@@ -220,6 +229,7 @@ public sealed class PlayerAppearance : MonoBehaviour
 	public void ApplyTeamColor(ETeamType team)
 	{
 		m_CurrentTeam = team;
+		RefreshEmission();
 		if (m_EffectColorSource == EEffectColorSource.TeamColor)
 		{
 			EffectColorChanged?.Invoke();
@@ -251,6 +261,47 @@ public sealed class PlayerAppearance : MonoBehaviour
 
 		m_CurrentTeamMaterial = teamMaterial;
 		m_HasAppliedTeamColor = true;
+		RefreshEmission();
+	}
+
+	private void SubscribeEmissionSettings()
+	{
+		if (m_SubscribedEmissionCatalog == m_AppearanceCatalog)
+		{
+			return;
+		}
+
+		UnsubscribeEmissionSettings();
+		m_SubscribedEmissionCatalog = m_AppearanceCatalog;
+		if (m_SubscribedEmissionCatalog != null)
+		{
+			m_SubscribedEmissionCatalog.EmissionSettingsChanged += RefreshEmission;
+		}
+	}
+
+	private void UnsubscribeEmissionSettings()
+	{
+		if (m_SubscribedEmissionCatalog != null)
+		{
+			m_SubscribedEmissionCatalog.EmissionSettingsChanged -= RefreshEmission;
+		}
+		m_SubscribedEmissionCatalog = null;
+	}
+
+	private void RefreshEmission()
+	{
+		if (!isActiveAndEnabled || m_AppearanceCatalog == null || !m_AppearanceCatalog.UseEmissionSettings)
+		{
+			m_EmissionController?.Restore();
+			return;
+		}
+
+		// Unityの描画APIを呼ぶため、MonoBehaviourのフィールド初期化時には生成しません。
+		m_EmissionController ??= new PlayerEmissionController();
+		Color emissionColor = m_AppearanceCatalog.GetEmissionColor(m_CurrentTeam);
+		m_EmissionController.Apply(m_ManRenderers, emissionColor);
+		m_EmissionController.Apply(m_WomanRenderers, emissionColor);
+		m_EmissionController.Apply(m_TeamColorRenderers, emissionColor);
 	}
 
 	private static void ApplyMaterial(Renderer[] renderers, Material material)
@@ -294,6 +345,11 @@ public sealed class PlayerAppearance : MonoBehaviour
 	{
 		if (this != null)
 		{
+			if (Application.isPlaying && isActiveAndEnabled)
+			{
+				SubscribeEmissionSettings();
+			}
+			RefreshEmission();
 			EffectColorChanged?.Invoke();
 		}
 	}
@@ -315,10 +371,15 @@ public sealed class PlayerAppearance : MonoBehaviour
 		}
 	}
 
+#endif
+
 	private void OnDestroy()
 	{
+		UnsubscribeEmissionSettings();
+		m_EmissionController?.Restore();
+#if UNITY_EDITOR
 		UnityEditor.EditorApplication.delayCall -= ApplyAppearanceDelayed;
 		UnityEditor.EditorApplication.delayCall -= NotifyEffectColorChangedDelayed;
-	}
 #endif
+	}
 }

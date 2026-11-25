@@ -162,3 +162,10 @@ GameRepository/
 ├── AGENTS.md                        # AI用ルール・規約定義
 └── STRUCTURE.md                     # 本ドキュメント
 ```
+
+## プレイヤー共通の発光設定
+
+- `Assets/Scripts/Player/`の外見制御は、共有カタログ`PlayerAppearanceCatalog`で共通発光強度とチーム別・チーム未確定時の発光色を管理する。値と有効化はInspectorで設定する。
+- `PlayerAppearance`が外見・所属チームの変更時に発光を再適用し、Play中はカタログの設定変更通知も購読する。
+- 描画への上書きと解除は`PlayerEmissionController`へ分離する。既存の本体・チームカラーRendererの先頭スロットだけを`MaterialPropertyBlock`で調整し、Emissionが有効かつEmission Mapが設定されたマテリアルを対象にする。元のマテリアルアセットと追加のアウトライン用スロットは変更しない。
+- 共通設定の無効化やコンポーネントの無効化・破棄時には、保存したスロット別プロパティを復元する。Bloomの設定はこの制御に含まない。
