@@ -3,6 +3,7 @@ using System.Text;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -142,64 +143,83 @@ public class ResultUIController : MonoBehaviour
 			return;
 		}
 
-		// 3D台座への反映(試合に参加したRed/Blueプレイヤーのみ対象)
-		int displayIndex = 0;
+		// 参加プレイヤーをRed/Blueチーム別に振り分け(赤: 左側スロット、青: 右側スロット)
+		var redPlayers = new List<LobbyPlayerData>();
+		var bluePlayers = new List<LobbyPlayerData>();
+		foreach (var kvp in allPlayers)
+		{
+			var playerData = kvp.Value;
+			if (playerData.Team == ETeamType.Red)
+			{
+				redPlayers.Add(playerData);
+			}
+			else if (playerData.Team == ETeamType.Blue)
+			{
+				bluePlayers.Add(playerData);
+			}
+		}
+
+		// 3D台座への反映(前半スロット=Red左側、後半スロット=Blue右側)
 		if (m_PlayerDisplays != null && m_PlayerDisplays.Length > 0)
 		{
-			foreach (var kvp in allPlayers)
-			{
-				var playerData = kvp.Value;
-				if (playerData.Team != ETeamType.Red && playerData.Team != ETeamType.Blue)
-				{
-					continue;
-				}
-
-				if (displayIndex >= m_PlayerDisplays.Length)
-				{
-					break;
-				}
-
-				var display = m_PlayerDisplays[displayIndex];
-				if (display != null)
-				{
-					display.gameObject.SetActive(true);
-					Color nameColor = GetTeamColor(playerData.Team);
-					display.ApplyPlayerData(playerData, nameColor);
-				}
-
-				displayIndex++;
-			}
-
-			// 余った台座は非表示
-			for (int i = displayIndex; i < m_PlayerDisplays.Length; i++)
+			for (int i = 0; i < m_PlayerDisplays.Length; i++)
 			{
 				if (m_PlayerDisplays[i] != null)
 				{
 					m_PlayerDisplays[i].gameObject.SetActive(false);
 				}
 			}
+
+			int halfSlots = Mathf.Max(1, m_PlayerDisplays.Length / 2);
+			AssignTeamDisplays(redPlayers, 0, halfSlots);
+			AssignTeamDisplays(bluePlayers, halfSlots, m_PlayerDisplays.Length - halfSlots);
 		}
 
 		DisplayLocalPlayerAwards(store);
 
-		// UIテキスト一覧への反映(観戦者・未所属は除外)
+		// UIテキスト一覧への反映(Red -> Blue順、観戦者・未所属は除外)
 		if (m_PlayerListText != null)
 		{
 			m_Builder.Clear();
 			m_Builder.AppendLine("=== 参加プレイヤー ===");
-			foreach (var kvp in allPlayers)
-			{
-				var p = kvp.Value;
-				if (p.Team != ETeamType.Red && p.Team != ETeamType.Blue)
-				{
-					continue;
-				}
-
-				string teamTag = p.Team == ETeamType.Red ? "[RED]" : "[BLUE]";
-				m_Builder.Append($"{teamTag} {p.PlayerName}\n");
-			}
+			AppendPlayerListLines(redPlayers, "[RED]");
+			AppendPlayerListLines(bluePlayers, "[BLUE]");
 
 			m_PlayerListText.text = m_Builder.ToString();
+		}
+	}
+
+	private void AssignTeamDisplays(IReadOnlyList<LobbyPlayerData> teamPlayers, int startSlot, int maxSlots)
+	{
+		if (m_PlayerDisplays == null || maxSlots <= 0)
+		{
+			return;
+		}
+
+		int assignCount = Mathf.Min(teamPlayers.Count, maxSlots);
+		for (int i = 0; i < assignCount; i++)
+		{
+			int slotIndex = startSlot + i;
+			if (slotIndex < 0 || slotIndex >= m_PlayerDisplays.Length)
+			{
+				break;
+			}
+
+			var display = m_PlayerDisplays[slotIndex];
+			if (display != null)
+			{
+				LobbyPlayerData playerData = teamPlayers[i];
+				display.gameObject.SetActive(true);
+				display.ApplyPlayerData(playerData, GetTeamColor(playerData.Team));
+			}
+		}
+	}
+
+	private void AppendPlayerListLines(IReadOnlyList<LobbyPlayerData> teamPlayers, string teamTag)
+	{
+		for (int i = 0; i < teamPlayers.Count; i++)
+		{
+			m_Builder.Append(teamTag).Append(' ').Append(teamPlayers[i].PlayerName).Append('\n');
 		}
 	}
 
@@ -309,7 +329,24 @@ public class ResultUIController : MonoBehaviour
 
 		if (m_ReturnToTitleButton != null)
 		{
-			m_ReturnToTitleButton.gameObject.SetActive(!waitForHost);
+			bool showReturnButton = !waitForHost;
+			m_ReturnToTitleButton.gameObject.SetActive(showReturnButton);
+
+			if (showReturnButton)
+			{
+				if (!m_ReturnToTitleButton.TryGetComponent<UIFocusGlowOutline>(out _))
+				{
+					m_ReturnToTitleButton.gameObject.AddComponent<UIFocusGlowOutline>();
+				}
+
+				if (EventSystem.current != null &&
+					m_ReturnToTitleButton.gameObject.activeInHierarchy &&
+					m_ReturnToTitleButton.IsInteractable())
+				{
+					EventSystem.current.SetSelectedGameObject(null);
+					EventSystem.current.SetSelectedGameObject(m_ReturnToTitleButton.gameObject);
+				}
+			}
 		}
 
 		if (m_ClientWaitNoticeText != null)

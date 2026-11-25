@@ -44,6 +44,17 @@ public partial class BallPhysicsController
 			GetIncomingVelocity(
 				collision);
 
+		if (m_MotionState ==
+			EBallMotionState.Homing)
+		{
+			HandleHomingCollision(
+				collision.collider,
+				contact,
+				incomingVelocity);
+
+			return;
+		}
+
 		// BallSurfaceSourceが存在する面では、
 		// Rigidbody反射ではなくSurface Physicsへ移行します。
 		BallSurfaceSource surfaceSource =

@@ -26,6 +26,7 @@ public class PlayerBallCarrier :
 	[SerializeField] private Transform m_WomanBallHoldPoint;
 
 	private const float m_PickupRetryInterval = 0.10f;
+	private const float m_LocalPickupSuppressDuration = 0.25f;
 
 	[Header("追尾パス設定")]
 	[Tooltip("追尾パスのチャージ完了に必要な時間です(秒)。")]
@@ -39,6 +40,7 @@ public class PlayerBallCarrier :
 	private bool m_IsPassCharging;
 	private float m_PassChargeRatio;
 	private float m_NextPickupRetryTime;
+	private float m_LocalPickupSuppressUntil;
 
 	/// <summary>
 	/// このプレイヤーが現在ボールを所持しているか取得します。
@@ -168,7 +170,8 @@ public class PlayerBallCarrier :
 		bool ignoreRetryInterval)
 	{
 		if (!IsOwner ||
-			m_HasBall)
+			m_HasBall ||
+			Time.time < m_LocalPickupSuppressUntil)
 		{
 			return;
 		}
@@ -289,6 +292,10 @@ public class PlayerBallCarrier :
 		{
 			return;
 		}
+
+		m_LocalPickupSuppressUntil =
+			Time.time +
+			m_LocalPickupSuppressDuration;
 
 		RequestShootServerRpc(
 			direction.normalized);
@@ -572,6 +579,10 @@ public class PlayerBallCarrier :
 				$"{targetObject.name} / Position={targetPosition}"
 			);
 
+			m_LocalPickupSuppressUntil =
+				Time.time +
+				m_LocalPickupSuppressDuration;
+
 			RequestHomingPassToPositionServerRpc(
 				targetPosition
 			);
@@ -594,6 +605,10 @@ public class PlayerBallCarrier :
 
 			return;
 		}
+
+		m_LocalPickupSuppressUntil =
+			Time.time +
+			m_LocalPickupSuppressDuration;
 
 		RequestHomingPassServerRpc(
 			targetNetworkObject.NetworkObjectId

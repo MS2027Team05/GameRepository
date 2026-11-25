@@ -31,6 +31,7 @@ public class MatchHudController : MonoBehaviour
 		}
 
 		m_MatchManager.RemainingTimeChanged += UpdateRemainingTime;
+		m_MatchManager.InfiniteTimeEnabledChanged += HandleInfiniteTimeEnabledChanged;
 		m_MatchManager.RedScoreChanged += UpdateRedScore;
 		m_MatchManager.BlueScoreChanged += UpdateBlueScore;
 
@@ -52,14 +53,29 @@ public class MatchHudController : MonoBehaviour
 		}
 
 		m_MatchManager.RemainingTimeChanged -= UpdateRemainingTime;
+		m_MatchManager.InfiniteTimeEnabledChanged -= HandleInfiniteTimeEnabledChanged;
 		m_MatchManager.RedScoreChanged -= UpdateRedScore;
 		m_MatchManager.BlueScoreChanged -= UpdateBlueScore;
+	}
+
+	private void HandleInfiniteTimeEnabledChanged(bool isInfiniteTime)
+	{
+		if (m_MatchManager != null)
+		{
+			UpdateRemainingTime(m_MatchManager.RemainingTimeSeconds);
+		}
 	}
 
 	private void UpdateRemainingTime(int remainingTimeSeconds)
 	{
 		if (m_RemainingTimeText == null)
 		{
+			return;
+		}
+
+		if (m_MatchManager != null && m_MatchManager.IsInfiniteTimeEnabled)
+		{
+			m_RemainingTimeText.SetText("--:--");
 			return;
 		}
 

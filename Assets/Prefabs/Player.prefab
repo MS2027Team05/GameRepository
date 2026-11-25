@@ -547,8 +547,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 372.5, y: 231.3}
-  m_SizeDelta: {x: 226.87498, y: 226.87498}
+  m_AnchoredPosition: {x: 617, y: 369}
+  m_SizeDelta: {x: 398.75006, y: 398.75006}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &365736332269386701
 CanvasRenderer:
@@ -966,6 +966,7 @@ GameObject:
   - component: {fileID: -2047718237545438515}
   - component: {fileID: -4857989254335448453}
   - component: {fileID: -2503078115639488532}
+  - component: {fileID: 3637842659784654861}
   m_Layer: 6
   m_Name: Player
   m_TagString: Ally
@@ -1207,8 +1208,8 @@ MonoBehaviour:
   m_LockOnAction: {fileID: -7462022938041611242, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_MoveTriggerAction: {fileID: -1817242124071654599, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_SubAction: {fileID: -7462022938041611242, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  m_MouseBaseLookScale: 0.5
-  m_PadBaseLookScale: 10
+  m_MouseBaseLookScale: 0.6
+  m_PadBaseLookScale: 15
 --- !u!114 &8696501033850427894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1590,7 +1591,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LockOnManager
   m_TargetCamera: {fileID: 0}
   m_ElectricAction: {fileID: -2503078115639488532}
-  m_MaxSearchDistance: 30
+  m_MaxSearchDistance: 45
   m_LockOnSearchCircle: {fileID: 8613853620464201897}
   m_ShowSearchCircleOnlyWhenLockedOn: 1
   m_ReticleSearchRadius: 0.3
@@ -1598,7 +1599,7 @@ MonoBehaviour:
   m_EnemyGoalTag: Goal
   m_LockOnTargetMarker: {fileID: 3676228499014336005}
   m_MarkerNearDistance: 5
-  m_MarkerFarDistance: 30
+  m_MarkerFarDistance: 45
   m_MarkerMaxSize: 80
   m_MarkerMinSize: 25
   m_AimRerticle: {fileID: 5509881642956187267}
@@ -1645,7 +1646,30 @@ MonoBehaviour:
   m_RequiredCost: 20
   m_ChargeDecaySpeed: 0.25
   m_StunDuration: 2
-  m_MaxHitDistance: 30
+  m_MaxHitDistance: 45
+--- !u!114 &3637842659784654861
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2466233519835475451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15d24c0c653552f49b49e4b5ffc4cece, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerAimAssist
+  m_TargetCamera: {fileID: 0}
+  m_AssistRadius: 0.3
+  m_InnerSlowdownRadius: 0.12
+  m_MaxAssistDistance: 60
+  m_MinSlowdownMultiplier: 0.4
+  m_MaxFollowYawDegreesPerSecond: 55
+  m_MaxFollowPitchDegreesPerSecond: 40
+  m_StickActivityThreshold: 0.05
+  m_FollowDeadzoneAngle: 0.5
+  m_FollowRampAngle: 4
+  m_CounterInputSuppression: 1
 --- !u!1 &2979247098942009401
 GameObject:
   m_ObjectHideFlags: 0

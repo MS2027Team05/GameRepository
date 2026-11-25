@@ -46,12 +46,16 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private const float m_DefaultMouseBaseLookScale = 0.5f;
 	private const float m_DefaultPadBaseLookScale = 10.0f;
+	private const float m_DeviceDetectThresholdSq = 0.0001f;
 
 	/// <summary>地上移動・空中着地点シフト入力ベクトル(WASD/左スティック)</summary>
 	public Vector2 MoveInput { get; private set; }
 
 	/// <summary>視点操作入力ベクトル(マウスDelta/右スティック)</summary>
 	public Vector2 LookInput { get; private set; }
+
+	/// <summary>直近の操作入力がゲームパッドから行われたかどうか</summary>
+	public bool IsUsingGamepad { get; private set; }
 
 	/// <summary>エイムモードの開始・解除ボタン押下イベント(旧フロー互換用)</summary>
 	public event Action OnAimTogglePressed;
@@ -247,6 +251,11 @@ public class PlayerInputReceiver : MonoBehaviour
 
 	private void Update()
 	{
+		if (Gamepad.current == null)
+		{
+			IsUsingGamepad = false;
+		}
+
 		// 自分が操作するPlayer以外、またはポーズ中は入力処理を行わない
 		if (!m_InputAllowed || !isActiveAndEnabled || m_IsGlobalPaused)
 		{
@@ -285,7 +294,13 @@ public class PlayerInputReceiver : MonoBehaviour
 	{
 		if (HasAction(m_MoveAction))
 		{
-			MoveInput = m_MoveAction.action.ReadValue<Vector2>();
+			Vector2 move = m_MoveAction.action.ReadValue<Vector2>();
+			if (move.sqrMagnitude > m_DeviceDetectThresholdSq)
+			{
+				UpdateActiveDeviceFromControl(m_MoveAction.action.activeControl);
+			}
+
+			MoveInput = move;
 			return;
 		}
 
@@ -319,14 +334,28 @@ public class PlayerInputReceiver : MonoBehaviour
 			}
 		}
 
+		bool hasKeyboardMove = input.sqrMagnitude > m_DeviceDetectThresholdSq;
+		bool hasPadMove = false;
+
 		if (Gamepad.current != null)
 		{
 			Vector2 stick = Gamepad.current.leftStick.ReadValue();
 
-			if (stick.sqrMagnitude > input.sqrMagnitude)
+			if (stick.sqrMagnitude > m_DeviceDetectThresholdSq &&
+				stick.sqrMagnitude > input.sqrMagnitude)
 			{
 				input = stick;
+				hasPadMove = true;
 			}
+		}
+
+		if (hasPadMove)
+		{
+			IsUsingGamepad = true;
+		}
+		else if (hasKeyboardMove)
+		{
+			IsUsingGamepad = false;
 		}
 
 		MoveInput = Vector2.ClampMagnitude(input, 1f);
@@ -339,25 +368,44 @@ public class PlayerInputReceiver : MonoBehaviour
 			Vector2 raw = m_LookAction.action.ReadValue<Vector2>();
 			InputControl activeControl = m_LookAction.action.activeControl;
 			bool isGamepad = activeControl != null && activeControl.device is Gamepad;
+			if (raw.sqrMagnitude > m_DeviceDetectThresholdSq)
+			{
+				IsUsingGamepad = isGamepad;
+			}
+
 			LookInput = ApplyLookSensitivity(raw, isGamepad);
 			return;
 		}
 
 		// 未設定時のフォールバック(マウス移動デルタ / 右スティック)
+		Vector2 rawMouse = Vector2.zero;
 		Vector2 mouseInput = Vector2.zero;
 		if (Cursor.lockState == CursorLockMode.Locked &&
 			Mouse.current != null)
 		{
-			mouseInput = ApplyLookSensitivity(Mouse.current.delta.ReadValue(), isGamepad: false);
+			rawMouse = Mouse.current.delta.ReadValue();
+			mouseInput = ApplyLookSensitivity(rawMouse, isGamepad: false);
 		}
 
+		Vector2 rawPad = Vector2.zero;
 		Vector2 padInput = Vector2.zero;
 		if (Gamepad.current != null)
 		{
-			padInput = ApplyLookSensitivity(Gamepad.current.rightStick.ReadValue(), isGamepad: true);
+			rawPad = Gamepad.current.rightStick.ReadValue();
+			padInput = ApplyLookSensitivity(rawPad, isGamepad: true);
 		}
 
-		LookInput = padInput.sqrMagnitude > mouseInput.sqrMagnitude ? padInput : mouseInput;
+		bool usePad = padInput.sqrMagnitude > mouseInput.sqrMagnitude;
+		if (usePad && rawPad.sqrMagnitude > m_DeviceDetectThresholdSq)
+		{
+			IsUsingGamepad = true;
+		}
+		else if (!usePad && rawMouse.sqrMagnitude > m_DeviceDetectThresholdSq)
+		{
+			IsUsingGamepad = false;
+		}
+
+		LookInput = usePad ? padInput : mouseInput;
 	}
 
 	private Vector2 ApplyLookSensitivity(Vector2 rawInput, bool isGamepad)
@@ -431,48 +479,72 @@ public class PlayerInputReceiver : MonoBehaviour
 		}
 	}
 
+	private void UpdateActiveDeviceFromContext(InputAction.CallbackContext context)
+	{
+		UpdateActiveDeviceFromControl(context.control);
+	}
+
+	private void UpdateActiveDeviceFromControl(InputControl control)
+	{
+		if (control == null)
+		{
+			return;
+		}
+
+		IsUsingGamepad = control.device is Gamepad;
+	}
+
 	private void HandleAimToggle(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnAimTogglePressed?.Invoke();
 	}
 
 	private void HandleConfirm(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnConfirmPressed?.Invoke();
 	}
 
 	private void HandleBrake(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnBrakePressed?.Invoke();
 	}
 
 	private void HandleShoot(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnShootPressed?.Invoke();
 	}
 
 	private void HandleViewReset(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnViewResetPressed?.Invoke();
 	}
 
 	private void HandleLockOn(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnLockOnPressed?.Invoke();
 	}
 
 	private void HandleMoveTrigger(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnMoveActionPressed?.Invoke();
 	}
 
 	private void HandleSubActionStarted(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnSubActionStarted?.Invoke();
 	}
 
 	private void HandleSubActionCanceled(InputAction.CallbackContext context)
 	{
+		UpdateActiveDeviceFromContext(context);
 		OnSubActionReleased?.Invoke();
 	}
 
@@ -486,14 +558,23 @@ public class PlayerInputReceiver : MonoBehaviour
 		// 新フロー移動アクション: マウス右クリック または ゲームパッドR1
 		if (!HasAction(m_MoveTriggerAction))
 		{
-			bool moveActionPressed =
-				(Mouse.current != null &&
-				 Mouse.current.rightButton.wasPressedThisFrame)
-				||
-				(Gamepad.current != null &&
-				 Gamepad.current.rightShoulder.wasPressedThisFrame);
+			bool mouseMovePressed =
+				Mouse.current != null &&
+				Mouse.current.rightButton.wasPressedThisFrame;
+			bool padMovePressed =
+				Gamepad.current != null &&
+				Gamepad.current.rightShoulder.wasPressedThisFrame;
 
-			if (moveActionPressed)
+			if (padMovePressed)
+			{
+				IsUsingGamepad = true;
+			}
+			else if (mouseMovePressed)
+			{
+				IsUsingGamepad = false;
+			}
+
+			if (mouseMovePressed || padMovePressed)
 			{
 				OnMoveActionPressed?.Invoke();
 			}
@@ -502,26 +583,44 @@ public class PlayerInputReceiver : MonoBehaviour
 		// 新フロー干渉サブアクション(押下開始・離し): マウス左クリック または ゲームパッドL1
 		if (!HasAction(m_SubAction))
 		{
-			bool subStarted =
-				(Mouse.current != null &&
-				 Mouse.current.leftButton.wasPressedThisFrame)
-				||
-				(Gamepad.current != null &&
-				 Gamepad.current.leftShoulder.wasPressedThisFrame);
+			bool mouseSubStarted =
+				Mouse.current != null &&
+				Mouse.current.leftButton.wasPressedThisFrame;
+			bool padSubStarted =
+				Gamepad.current != null &&
+				Gamepad.current.leftShoulder.wasPressedThisFrame;
 
-			if (subStarted)
+			if (padSubStarted)
+			{
+				IsUsingGamepad = true;
+			}
+			else if (mouseSubStarted)
+			{
+				IsUsingGamepad = false;
+			}
+
+			if (mouseSubStarted || padSubStarted)
 			{
 				OnSubActionStarted?.Invoke();
 			}
 
-			bool subReleased =
-				(Mouse.current != null &&
-				 Mouse.current.leftButton.wasReleasedThisFrame)
-				||
-				(Gamepad.current != null &&
-				 Gamepad.current.leftShoulder.wasReleasedThisFrame);
+			bool mouseSubReleased =
+				Mouse.current != null &&
+				Mouse.current.leftButton.wasReleasedThisFrame;
+			bool padSubReleased =
+				Gamepad.current != null &&
+				Gamepad.current.leftShoulder.wasReleasedThisFrame;
 
-			if (subReleased)
+			if (padSubReleased)
+			{
+				IsUsingGamepad = true;
+			}
+			else if (mouseSubReleased)
+			{
+				IsUsingGamepad = false;
+			}
+
+			if (mouseSubReleased || padSubReleased)
 			{
 				OnSubActionReleased?.Invoke();
 			}
@@ -530,18 +629,27 @@ public class PlayerInputReceiver : MonoBehaviour
 		// 旧フロー エイム切り替え: Shiftキー または マウス右クリック または ゲームパッドL1
 		if (!HasAction(m_AimToggleAction))
 		{
-			bool aimPressed =
+			bool keyMouseAimPressed =
 				(Keyboard.current != null &&
 				 (Keyboard.current.leftShiftKey.wasPressedThisFrame ||
 				  Keyboard.current.rightShiftKey.wasPressedThisFrame))
 				||
 				(Mouse.current != null &&
-				 Mouse.current.rightButton.wasPressedThisFrame)
-				||
-				(Gamepad.current != null &&
-				 Gamepad.current.leftShoulder.wasPressedThisFrame);
+				 Mouse.current.rightButton.wasPressedThisFrame);
+			bool padAimPressed =
+				Gamepad.current != null &&
+				Gamepad.current.leftShoulder.wasPressedThisFrame;
 
-			if (aimPressed)
+			if (padAimPressed)
+			{
+				IsUsingGamepad = true;
+			}
+			else if (keyMouseAimPressed)
+			{
+				IsUsingGamepad = false;
+			}
+
+			if (keyMouseAimPressed || padAimPressed)
 			{
 				OnAimTogglePressed?.Invoke();
 			}
@@ -550,17 +658,26 @@ public class PlayerInputReceiver : MonoBehaviour
 		// 旧フロー 決定(落下開始): Spaceキー または マウス左クリック または ゲームパッドAボタン
 		if (!HasAction(m_ConfirmAction))
 		{
-			bool confirmPressed =
+			bool keyMouseConfirmPressed =
 				(Keyboard.current != null &&
 				 Keyboard.current.spaceKey.wasPressedThisFrame)
 				||
 				(Mouse.current != null &&
-				 Mouse.current.leftButton.wasPressedThisFrame)
-				||
-				(Gamepad.current != null &&
-				 Gamepad.current.buttonSouth.wasPressedThisFrame);
+				 Mouse.current.leftButton.wasPressedThisFrame);
+			bool padConfirmPressed =
+				Gamepad.current != null &&
+				Gamepad.current.buttonSouth.wasPressedThisFrame;
 
-			if (confirmPressed)
+			if (padConfirmPressed)
+			{
+				IsUsingGamepad = true;
+			}
+			else if (keyMouseConfirmPressed)
+			{
+				IsUsingGamepad = false;
+			}
+
+			if (keyMouseConfirmPressed || padConfirmPressed)
 			{
 				OnConfirmPressed?.Invoke();
 			}
@@ -569,15 +686,24 @@ public class PlayerInputReceiver : MonoBehaviour
 		// ブレーキ(停止): Fキー または Sキー または ゲームパッドBボタン(旧フロー用フォールバック)
 		if (!HasAction(m_BrakeAction))
 		{
-			bool brakePressed =
-				(Keyboard.current != null &&
-				 (Keyboard.current.fKey.wasPressedThisFrame ||
-				  Keyboard.current.sKey.wasPressedThisFrame))
-				||
-				(Gamepad.current != null &&
-				 Gamepad.current.buttonEast.wasPressedThisFrame);
+			bool keyBrakePressed =
+				Keyboard.current != null &&
+				(Keyboard.current.fKey.wasPressedThisFrame ||
+				 Keyboard.current.sKey.wasPressedThisFrame);
+			bool padBrakePressed =
+				Gamepad.current != null &&
+				Gamepad.current.buttonEast.wasPressedThisFrame;
 
-			if (brakePressed)
+			if (padBrakePressed)
+			{
+				IsUsingGamepad = true;
+			}
+			else if (keyBrakePressed)
+			{
+				IsUsingGamepad = false;
+			}
+
+			if (keyBrakePressed || padBrakePressed)
 			{
 				OnBrakePressed?.Invoke();
 			}
@@ -588,6 +714,7 @@ public class PlayerInputReceiver : MonoBehaviour
 			Keyboard.current != null &&
 			Keyboard.current.eKey.wasPressedThisFrame)
 		{
+			IsUsingGamepad = false;
 			OnShootPressed?.Invoke();
 		}
 
@@ -596,21 +723,31 @@ public class PlayerInputReceiver : MonoBehaviour
 			Keyboard.current != null &&
 			Keyboard.current.rKey.wasPressedThisFrame)
 		{
+			IsUsingGamepad = false;
 			OnViewResetPressed?.Invoke();
 		}
 
 		// ロックオン: Lキー または Qキー または ゲームパッドL1(旧フロー用フォールバック)
 		if (!HasAction(m_LockOnAction))
 		{
-			bool lockOnPressed =
-				(Keyboard.current != null &&
-				 (Keyboard.current.lKey.wasPressedThisFrame ||
-				  Keyboard.current.qKey.wasPressedThisFrame))
-				||
-				(Gamepad.current != null &&
-				 Gamepad.current.leftShoulder.wasPressedThisFrame);
+			bool keyLockOnPressed =
+				Keyboard.current != null &&
+				(Keyboard.current.lKey.wasPressedThisFrame ||
+				 Keyboard.current.qKey.wasPressedThisFrame);
+			bool padLockOnPressed =
+				Gamepad.current != null &&
+				Gamepad.current.leftShoulder.wasPressedThisFrame;
 
-			if (lockOnPressed)
+			if (padLockOnPressed)
+			{
+				IsUsingGamepad = true;
+			}
+			else if (keyLockOnPressed)
+			{
+				IsUsingGamepad = false;
+			}
+
+			if (keyLockOnPressed || padLockOnPressed)
 			{
 				OnLockOnPressed?.Invoke();
 			}

@@ -68,6 +68,10 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 	/// </summary>
 	public static bool IsInfiniteEnergyDebugEnabled { get; set; }
 
+	private bool IsInfiniteEnergyActive =>
+		IsInfiniteEnergyDebugEnabled ||
+		(MatchManager.Instance != null && MatchManager.Instance.IsLobbyInfiniteEnergyEnabled);
+
 	private void Awake()
 	{
 		m_GravityMover = GetComponent<IGravityMover>();
@@ -121,7 +125,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 			return;
 		}
 
-		if (IsInfiniteEnergyDebugEnabled)
+		if (IsInfiniteEnergyActive)
 		{
 			if (m_CurrentResource < MaxResource)
 			{
@@ -202,7 +206,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 			return false;
 		}
 
-		if (IsInfiniteEnergyDebugEnabled)
+		if (IsInfiniteEnergyActive)
 		{
 			return true;
 		}
@@ -217,7 +221,7 @@ public class PlayerResourceController : NetworkBehaviour, IPlayerResource
 			return false;
 		}
 
-		if (!IsInfiniteEnergyDebugEnabled && cost > 0.0f)
+		if (!IsInfiniteEnergyActive && cost > 0.0f)
 		{
 			m_CurrentResource = Mathf.Max(0.0f, m_CurrentResource - cost);
 			NotifyResourceChanged();

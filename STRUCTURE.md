@@ -90,8 +90,10 @@ GameRepository/
 │   │   │   └── StageSymmetricSynchronizerEditor.cs
 │   │   ├── Network/                 # 通信接続・ロビー・スポーン・セッション管理
 │   │   │   ├── NetworkConnectManager.cs     # [EntryPoint] 接続初期化・起動制御
+│   │   │   ├── NetworkConnectionApprovalHandler.cs # 許可シーン(Title/Lobby)限定接続承認・試合中途中参加拒否
 │   │   │   ├── ClientNetworkTransform.cs    # Owner権限でのTransform同期
 │   │   │   ├── LobbyManager.cs              # [EntryPoint] ロビー通信同期・ゲーム開始制御
+│   │   │   ├── LobbyTeamSelectPanelController.cs # 途中参加・未所属時・席替え用チーム/観戦選択UI制御
 │   │   │   ├── LobbyUIController.cs         # ロビーUI表示・ロール別パネル制御
 │   │   │   ├── LobbyAppearancePickerUI.cs   # ロビー内キャラ・カラー選択UI制御
 │   │   │   ├── LobbyCharacterDisplayManager.cs # ロビー内3Dモデル表示・台座同期
@@ -116,7 +118,7 @@ GameRepository/
 │   │   │   └── StageObjectBilateralPlacer.cs# 等間隔両端配置コンポーネント
 │   │   ├── Player/                  # プレイヤー制御・入力・物理・外見・リソース
 │   │   │   ├── PlayerController.cs          # [EntryPoint] プレイヤー状態統括・アクション調停・RPC窓口
-│   │   │   ├── Interfaces/                  # モジュール間インターフェース群 (IAimGuide, IBallCarrier, ICameraEffect, IElectricAction, IGravityMover, IGroundDetector, ILockOnProvider, IMovingSurface, IPlayerResource, IPlayerRespawnHandler, ISurfaceMover)
+│   │   │   ├── Interfaces/                  # モジュール間インターフェース群 (IAimAssist, IAimGuide, IBallCarrier, ICameraEffect, IElectricAction, IGravityMover, IGroundDetector, ILockOnProvider, IMovingSurface, IPlayerResource, IPlayerRespawnHandler, ISurfaceMover)
 │   │   │   ├── PlayerNetworkProfile.cs      # プレイヤープロファイル同期
 │   │   │   ├── PlayerAppearance.cs          # 外見(性別モデル・12色・チーム色・電流色ソース)管理
 │   │   │   ├── PlayerAppearanceCatalog.cs   # 外見マテリアル・プレビュー色管理ScriptableObject
@@ -127,6 +129,7 @@ GameRepository/
 │   │   │   ├── GravityMover.cs              # 等速直線移動・空中ホバリング・着地衝突
 │   │   │   ├── PlayerSurfaceMover.cs        # 地上/曲面歩行・運動量転送・姿勢回転
 │   │   │   ├── PlayerGroundDetector.cs      # 接地検知・法線計測
+│   │   │   ├── PlayerAimAssist.cs           # ゲームパッド用エイムアシスト(入力減衰・緩やかな追従補正)
 │   │   │   ├── PlayerAimGuide.cs            # 常時レティクル・地上予備浮上・着地点追跡
 │   │   │   ├── LandingMarkerEffect.cs       # 着地予測マーカー演出
 │   │   │   ├── LockOnManager.cs             # 優先度付きロックオン検索・捕捉
