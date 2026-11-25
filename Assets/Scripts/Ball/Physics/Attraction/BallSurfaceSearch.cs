@@ -1,11 +1,15 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// ボール周辺のAttachSurface探索を担当します。
+/// ボール周辺からAttachSurfaceを探索するPhysics Queryを担当します。
 /// </summary>
 /// <remarks>
-/// 飛行中は26方向の軽量探索、
-/// 停止後はFibonacci Sphereを利用した64方向探索を行います。
+/// 主な処理の流れ:
+/// 1. Flying中は26方向の軽量Ray探索で近いSurfaceを探します。
+/// 2. 停止後はFibonacci Sphereを使った64方向探索で周囲を詳しく確認します。
+/// 3. 各RayのHit距離を比較し、最も近いSurfaceを返します。
+///
+/// 状態遷移や疑似重力の適用は行わず、Surface探索だけを担当します。
 /// </remarks>
 public sealed class BallSurfaceSearch
 {

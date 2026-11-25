@@ -1,13 +1,18 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallSurface Physics中のBall本体のWorld状態を管理します。
+/// BallSurface Physics中のBall本体のWorld中心位置とWorld速度を共通基準として管理します。
 /// </summary>
 /// <remarks>
-/// SurfacePoint / Height / Convex / ConcaveなどはTraversalを計算するための
-/// 補助状態として扱い、Ball本体のWorld位置・World速度はここを共通基準にします。
+/// 主な処理の流れ:
+/// 1. Face上のSurfacePoint・Normal・Height・VelocityからWorld状態を構築します。
+/// 2. Flat・Convex・Concave・VertexなどTraversalの種類が変わってもWorld状態を共通基準として保持します。
+/// 3. 必要に応じて各Traversal固有の補助状態からWorld中心とWorld速度を再構成します。
+/// 4. Controllerへ現在World中心・World速度を公開します。
+/// 5. 遷移前後の位置・速度・エネルギー・角度差を許容値内で確認するためにも使用します。
 ///
-/// Traversal切替そのものではWorldStateを変更しません。
+/// SurfacePointやHeightなどはTraversal計算用の補助表現であり、
+/// Ball本体の連続した運動を判断する基準はこのWorldStateです。
 /// </remarks>
 public sealed partial class BallSurfaceSimulation
 {

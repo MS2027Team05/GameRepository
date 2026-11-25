@@ -3,20 +3,19 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// BallSurfaceとして使用するMeshの構造情報を保持します。
+/// BallSurfaceとして使用するMeshを事前解析し、
+/// Triangle・Edge・隣接関係をSurface Physics向けに保持します。
 /// </summary>
 /// <remarks>
-/// Meshを構成するTriangleについて、
-/// 各Triangleの頂点・法線・隣接Triangle・Edge形状を
-/// 事前に解析して保持します。
+/// 主な処理の流れ:
+/// 1. Meshから各Triangleの頂点と法線を読み取ります。
+/// 2. 頂点位置を基準に共有Edgeを登録し、隣接Triangleを構築します。
+/// 3. 隣接面の関係からBoundary・Flat・Smooth・Convex・ConcaveなどのEdge種別を決定します。
+/// 4. Smooth移動用のCorner NormalとConvex Vertex用のEdge参照を構築します。
+/// 5. 実行中は現在Triangleから必要な隣接情報だけを高速に取得できるようにします。
 ///
-/// Surface Physics実行中にMesh全体を探索し直すのではなく、
-/// 現在Triangleとその隣接Triangleだけを辿れる状態を
-/// 作ることが目的です。
-///
-/// UVやNormalの分割によって同じ位置に別頂点が存在する場合にも
-/// Surfaceを接続できるよう、Edge判定には頂点Indexではなく
-/// 頂点位置を使用します。
+/// UVやNormal分割で同じ位置に別Vertex Indexが存在しても接続できるよう、
+/// Topology判定ではVertex Indexではなく量子化した頂点位置を使用します。
 /// </remarks>
 public sealed class BallSurfaceMeshData
 {

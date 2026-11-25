@@ -2,9 +2,17 @@
 using UnityEngine;
 
 /// <summary>
-/// ボールの描画専用階層を所持ジョイントへ付け替え、解放時に元の階層へ戻します。
-/// 通信と物理の階層は変更しません。
+/// 所持中のボール描画をプレイヤーの所持ジョイントへ追従させます。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. 生成時にVisualRootの元Parent・位置・回転・Scaleを保存します。
+/// 2. 所持開始時にVisualRootだけをHoldPointへ付け替えます。
+/// 3. 所持終了時に保存していた元の階層とTransformへ戻します。
+///
+/// NetworkObjectやRigidbodyを含むボール本体の階層は変更しません。
+/// 通信・物理と見た目の追従を分離するための補助クラスです。
+/// </remarks>
 public sealed class BallHoldAttachment
 {
 	private readonly Transform m_VisualRoot;

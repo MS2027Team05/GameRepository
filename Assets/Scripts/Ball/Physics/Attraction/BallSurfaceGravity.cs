@@ -1,14 +1,17 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// ボールへ作用する疑似重力の対象を管理します。
+/// ボールへ作用する疑似重力の対象と方向を管理します。
 /// </summary>
 /// <remarks>
-/// 飛行中は固定された一点を重力源として使用します。
+/// 主な処理の流れ:
+/// 1. 飛行中は固定点または追跡中のBallSurfaceを重力対象として保持します。
+/// 2. BallSurfaceSourceを追跡する場合はボール位置に応じて最近Triangleを更新します。
+/// 3. 接触後のLocalSurfaceでは接触点と法線を基準に重力方向を計算します。
+/// 4. 対象が無効になった場合は重力情報を破棄します。
 ///
-/// AttachSurfaceへバウンドした後は、
-/// 接触したローカルな表面の法線方向を追跡し、
-/// そのSurfaceを地面として疑似重力を計算します。
+/// このクラスは重力対象の追跡と方向計算だけを担当し、
+/// Rigidbodyへの速度反映はBallPhysicsController側で行います。
 /// </remarks>
 public sealed class BallSurfaceGravity
 {

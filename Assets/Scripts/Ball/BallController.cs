@@ -6,16 +6,21 @@ using Unity.Netcode.Components;
 using UnityEngine;
 
 /// <summary>
-/// ボール本体の所持状態と物理状態を管理します。
+/// ボール本体のゲームプレイ状態を統括します。
+/// 所持・奪取・パス・シュート・解放・リスポーンと、
+/// それらに伴うネットワーク同期を管理します。
 /// </summary>
 /// <remarks>
 /// 主な処理の流れ:
-/// 1. Hostがプレイヤーからの取得要求を検証します。
-/// 2. 取得成功時はプレイヤーへNetworkObjectを親子付けします。
-/// 3. 所持状態をNetworkVariableで全Clientへ同期します。
-/// 4. シュート時は親子関係を解除して物理挙動へ戻します。
-/// 5. 強制解放時も同じく親子関係を解除します。
-/// 6. シュート・解放直後は元所持者のみ一定時間再キャッチを禁止します。
+/// 1. Host側で取得・奪取・パス・シュート要求を検証します。
+/// 2. 所持が成立した場合は所持者情報をNetworkVariableで同期します。
+/// 3. 描画専用のVisualRootだけを所持ジョイントへ付け替えます。
+/// 4. シュート・強制解放時は親子関係と所持状態を解除し、物理処理へ戻します。
+/// 5. 解放直後は元所持者の再取得制限やパス情報を管理します。
+/// 6. リスポーン時は所持・パス・物理状態を初期化して指定位置へ戻します。
+///
+/// Rigidbodyによる自由移動そのものはBallPhysicsControllerへ委譲し、
+/// このクラスはボール全体のゲームプレイ状態とネットワーク上の正本を担当します。
 /// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
@@ -1091,6 +1096,19 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public bool RespawnAtInitialPosition()
 	{
+		return RespawnAtPosition(
+			m_InitialPosition);
+	}
+
+	/// <summary>
+	/// 試合の停止状態を維持し、所持・投球・物理状態を初期化して指定位置へ戻します。
+	/// </summary>
+	/// <param name="respawnPosition">
+	/// ボールを復帰させるWorld座標です。
+	/// </param>
+	public bool RespawnAtPosition(
+		Vector3 respawnPosition)
+	{
 		if (!IsServer || !IsSpawned)
 		{
 			return false;
@@ -1124,7 +1142,7 @@ public class BallController : NetworkBehaviour
 		m_IsGoalHomingInFlight = false;
 		m_CurrentHolderId.Value = 0;
 		ClearHolderAttachment();
-		m_LastReleaseOrigin = m_InitialPosition;
+		m_LastReleaseOrigin = respawnPosition;
 		m_WasFriendlyPassAssisted = false;
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
@@ -1132,9 +1150,32 @@ public class BallController : NetworkBehaviour
 		m_Rigidbody.useGravity = false;
 		m_Rigidbody.linearVelocity = Vector3.zero;
 		m_Rigidbody.angularVelocity = Vector3.zero;
-		m_NetworkTransform.Teleport(m_InitialPosition, m_InitialRotation, transform.localScale);
+		m_NetworkTransform.Teleport(
+			respawnPosition,
+			m_InitialRotation,
+			transform.localScale);
 		SetMatchPaused(IsMatchPaused);
 		return true;
+	}
+
+	/// <summary>
+	/// 場外復帰時にSurfaceから離すためのボール物理Collider半径を取得します。
+	/// </summary>
+	public float GetPhysicsColliderWorldRadius()
+	{
+		if (m_PhysicsCollider == null)
+		{
+			return 0.0f;
+		}
+
+		Vector3 extents =
+			m_PhysicsCollider.bounds.extents;
+
+		return Mathf.Max(
+			extents.x,
+			Mathf.Max(
+				extents.y,
+				extents.z));
 	}
 
 	/// <summary>

@@ -1,22 +1,21 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallSurface上でのボールの移動計算を担当します。
+/// BallSurface上でのボール移動をTriangle単位で計算するSurface Physics本体です。
 /// </summary>
 /// <remarks>
-/// Surface Physicsでは運動を、
+/// 主な処理の流れ:
+/// 1. 接触Triangle・SurfacePoint・入射速度からSimulationを初期化します。
+/// 2. 速度をSurface接線方向とSurface法線方向へ分離して保持します。
+/// 3. 各Physics Stepで法線方向のHeight運動とSurface方向の移動を進めます。
+/// 4. Triangle境界へ到達するとEdge種別に応じたpartial処理へ遷移します。
+/// 5. Flat・Smoothは隣Triangleへ連続移動し、ConvexはEdge回り込み、
+///    Concaveは内角遷移、Vertexは球面パッチとして処理します。
+/// 6. Ball本体のWorld中心とWorld速度はWorldStateを共通基準として維持します。
+/// 7. 接地・バウンド時はSurface Physics専用の速度保持率と上限値を適用します。
 ///
-/// ・Surface接線方向
-/// ・Surface法線方向
-///
-/// の2つへ分離して管理します。
-///
-/// Surface方向はTriangleを展開した空間上で移動し、
-/// 法線方向はHeight / VerticalVelocityとして計算します。
-///
-/// Flat / Smooth Edgeでは頂点ごとに事前生成した
-/// Smooth Normalを補間することで、SphereやTorus上でも
-/// ボール中心の位置とバウンド方向が連続するようにします。
+/// Rigidbodyを直接操作するクラスではありません。
+/// 計算結果のWorld位置・速度はBallPhysicsController.Surface.csがUnity側へ反映します。
 /// </remarks>
 public sealed partial class BallSurfaceSimulation
 {

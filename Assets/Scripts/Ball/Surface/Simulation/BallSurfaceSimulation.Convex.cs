@@ -1,10 +1,24 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Sharp Convex Edgeの回り込み処理と表示Offset計算を担当します。
+/// Sharp Convex EdgeをBall半径に沿って回り込む遷移処理を担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. 共有EdgeのWorld位置・方向と前後Surfaceの法線から回転Arcを構築します。
+/// 2. Ball中心をEdge軸の周囲へ回転させ、角を貫通せず外側から回り込みます。
+/// 3. Vertex球面パッチから入った場合は位置連続性を保つ専用Offsetを使用します。
+/// 4. 回り込み中はWorld速度を現在のArc接線方向へ同期します。
+/// 5. Arc完了後に隣Triangleへ切り替え、通常Surface移動へ戻します。
+/// 6. 1回の角通過で速度減衰が重複しないよう適用済み状態を管理します。
+///
+/// このファイルは「意図したConvex軌道」の計算を担当します。
+/// 同一Mesh内の別壁など、軌道上に存在する非隣接Geometryとの空間衝突は
+/// BallPhysicsController.Surface.csのSphereCastで別途判定します。
+/// </remarks>
 public sealed partial class BallSurfaceSimulation
 {
+
 	/// <summary>
 	/// Vertex球面パッチから入ったEdgeでは、
 	/// 球面との位置連続性を保つため真円Offsetを使用します。
@@ -21,8 +35,13 @@ public sealed partial class BallSurfaceSimulation
 	private bool m_HasAppliedConvexTraversalSpeedRetention;
 
 	/// <summary>
-	/// Sharp Convex Edgeの円弧移動を開始します。
+	/// 現在FaceからSharp Convex Edgeの回り込み状態へ入ります。
 	/// </summary>
+	/// <remarks>
+	/// Edgeを無限直線ではなく有限Segmentとして扱い、
+	/// Ball中心が実際にEdge範囲内へ到達している場合だけ遷移を開始します。
+	/// 現在WorldStateからEdge軸・回転方向・開始半径を構築し、以降のArc移動に必要な状態を保存します。
+	/// </remarks>
 	private bool BeginConvexEdgeTransition(
 		int sourceEdgeIndex,
 		int targetTriangleIndex,
@@ -89,7 +108,7 @@ public sealed partial class BallSurfaceSimulation
 					edgeStart,
 				edgeDirection);
 
-		// Treat the Convex edge as a finite segment, not an infinite line.
+		// Convex Edgeは無限直線ではなく、実際の有限Segmentとして判定します。
 		if (edgeProjectionDistance <
 				-m_TransitionPositionTolerance ||
 			edgeProjectionDistance >
@@ -624,16 +643,11 @@ public sealed partial class BallSurfaceSimulation
 	}
 
 	/// <summary>
-	/// Sharp Convex Edgeの円弧移動を進めます。
+	/// Convex Edgeの回り込みArcを残り時間分だけ進めます。
 	/// </summary>
 	/// <remarks>
-	/// 円弧完了までの時間だけでなく、
-	/// Edge方向速度によって実Edge端のVertexへ到達する時間も計算します。
-	///
-	/// Vertexへ先に到達した場合はSurfacePointをVertexへ固定し、
-	/// Ball中心の運動をVertex球面パッチへ引き継ぎます。
-	/// 球面パッチを出た後は、到達した実Convex Edgeの
-	/// 円柱遷移へ連続的に戻ります。
+	/// Surface速度をEdge軸回りの角速度へ変換してBall中心を回転させます。
+	/// Arc終端へ到達した場合は残り時間を保持したまま隣Triangleへ遷移し、同じPhysics Step内の移動を継続します。
 	/// </remarks>
 	private bool AdvanceConvexEdgeTransition(
 		ref float remainingTime,
@@ -771,7 +785,6 @@ public sealed partial class BallSurfaceSimulation
 			return true;
 		}
 
-
 		m_SurfacePoint +=
 			m_ConvexEdgeDirection *
 				m_ConvexAlongSpeed *
@@ -883,10 +896,16 @@ public sealed partial class BallSurfaceSimulation
 			out completed);
 	}
 
+
+
 	/// <summary>
-	/// Convex Edgeの円弧移動を終了し、
-	/// Neighbor Triangleへ移行します。
+	/// Convex Arcの終端でCurrentTriangleを遷移先へ切り替え、
+	/// 通常のSurface移動へ復帰します。
 	/// </summary>
+	/// <remarks>
+	/// Ball中心とWorld速度の連続性を保った状態でSurface表現を遷移先Triangleへ同期します。
+	/// Vertex球面パッチから連続してきた場合も、速度減衰を重複適用しない状態を維持します。
+	/// </remarks>
 	private bool CompleteConvexEdgeTransition(
 		out int completedEntryEdgeIndex,
 		out bool completed)

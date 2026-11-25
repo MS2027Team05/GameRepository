@@ -1,12 +1,17 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// 空中でConcave Edgeを越える間だけ、
-/// Ball本体のWorld軌道とSurface上の基準点を分離して管理します。
+/// Heightを持ったボールがConcave Edgeを空中で越える場合の専用遷移を担当します。
 /// </summary>
 /// <remarks>
-/// 通常のFlat / Smooth / Convex処理には入らず、
-/// Heightがある状態でConcaveへ入った場合だけ使用します。
+/// 主な処理の流れ:
+/// 1. HeightまたはVerticalVelocityがある状態でConcaveへ入ったことを検出します。
+/// 2. Ball本体のWorld軌道とSurface上の参照点を一時的に分離します。
+/// 3. World軌道を進めながら隣Surfaceとの接触時刻を探索します。
+/// 4. 接触が成立した時点でSurface状態へ再同期し、必要なSurfaceバウンドを適用します。
+/// 5. 遷移完了後は通常のSurface Physics状態へ戻します。
+///
+/// 接地した状態のConcave遷移はBallSurfaceSimulation.Concave.csが担当します。
 /// </remarks>
 public sealed partial class BallSurfaceSimulation
 {
