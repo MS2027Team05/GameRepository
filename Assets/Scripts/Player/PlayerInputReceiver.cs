@@ -675,11 +675,11 @@ public class PlayerInputReceiver : MonoBehaviour
 		{
 			bool keyMouseAimPressed =
 				(Keyboard.current != null &&
-				 (Keyboard.current.leftShiftKey.wasPressedThisFrame ||
-				  Keyboard.current.rightShiftKey.wasPressedThisFrame))
+					(Keyboard.current.leftShiftKey.wasPressedThisFrame ||
+					Keyboard.current.rightShiftKey.wasPressedThisFrame))
 				||
 				(Mouse.current != null &&
-				 Mouse.current.rightButton.wasPressedThisFrame);
+					Mouse.current.rightButton.wasPressedThisFrame);
 			bool padAimPressed =
 				Gamepad.current != null &&
 				Gamepad.current.leftShoulder.wasPressedThisFrame;
