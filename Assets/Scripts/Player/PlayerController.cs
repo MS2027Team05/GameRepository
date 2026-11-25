@@ -4,7 +4,6 @@ using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.Serialization;
-using TMPro;
 
 /// <summary>
 /// プレイヤー全体の「状態管理(ステート)」と「各専門モジュールへの命令ルーティング」を担当するクラス。
@@ -28,11 +27,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	[SerializeField] private float m_ShortTapMaxDuration;
 
 	/// <summary>
-	/// 左トリガー長押し中に中央へ表示する操作案内UI
+	/// 現在の入力デバイスと行動状態に応じた操作補助UIコンポーネント
 	/// </summary>
 	[Header("操作補助UI")]
 	[SerializeField]
-	private TMP_Text m_ActionHelpText;
+	private PlayerActionHelpUI m_ActionHelpUI;
 
 	[Header("移動時の電撃エフェクト")]
 	[SerializeField] private GameObject m_MovingEffect;
@@ -133,7 +132,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		m_PlayerResource = GetComponent<IPlayerResource>();
 		m_ElectricAction = GetComponent<IElectricAction>();
 		m_ChargeProgressUI =
-	GetComponentInChildren<PlayerChargeProgress>(true);
+			GetComponentInChildren<PlayerChargeProgress>(true);
+		if (m_ActionHelpUI == null)
+		{
+			m_ActionHelpUI = GetComponentInChildren<PlayerActionHelpUI>(true);
+		}
 
 		if (m_GravityMover == null)
 		{
@@ -264,6 +267,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		if (!m_IsMatchActionEnabled)
 		{
+			m_ActionHelpUI?.Hide();
 			return;
 		}
 
@@ -353,6 +357,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 
 		UpdateReworkedSubAction();
+		UpdateActionHelpUI();
 
 		// 飛行中の空中WASD操作による着地点マーカーのシフト更新
 		if (CurrentState == EPlayerState.Falling &&
@@ -388,7 +393,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		if (!m_IsSubActionHeld)
 		{
-			UpdateActionHelpUI();
 			return;
 		}
 
@@ -396,7 +400,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			CurrentState == EPlayerState.Stunned)
 		{
 			CancelActiveSubAction();
-			UpdateActionHelpUI();
 			return;
 		}
 
@@ -404,8 +407,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (m_IsChargingElectric)
 		{
 			m_LockOnProvider?.UpdateTargetSearch();
-
-			UpdateActionHelpUI();
 			return;
 		}
 
@@ -413,7 +414,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (m_BallCarrier == null || !m_BallCarrier.HasBall)
 		{
 			CancelActiveSubAction();
-			UpdateActionHelpUI();
 			return;
 		}
 
@@ -462,9 +462,6 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 				Debug.Log("[PlayerController] 追尾パスチャージ完了！");
 			}
 		}
-
-		// 操作案内を更新
-		UpdateActionHelpUI();
 	}
 
 	/// <summary>
@@ -1443,6 +1440,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			{
 				m_GravityMover.OnLanded -= HandleLanded;
 			}
+			m_ActionHelpUI?.Hide();
 			UnbindInputEvents();
 			PlayerInputReceiver.SetCursorLocked(false);
 		}
@@ -1457,83 +1455,51 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		base.OnDestroy();
 	}
 
-
 	/// <summary>
-	/// Ownerが左トリガーを押している間の中央操作案内を更新します。
+	/// 現在の入力デバイスと行動状態に応じて操作補助UIを更新します。
 	/// </summary>
 	private void UpdateActionHelpUI()
 	{
-		if (m_ActionHelpText == null) return;
+		if (m_ActionHelpUI == null)
+		{
+			return;
+		}
 
-		bool show =
+		bool canShow =
 			IsOwner &&
-			m_IsSubActionHeld &&
 			m_IsMatchActionEnabled &&
 			CurrentState != EPlayerState.Stunned;
 
-		m_ActionHelpText.gameObject.SetActive(show);
+		bool hasBall = m_BallCarrier != null && m_BallCarrier.HasBall;
+		bool isPassChargeFull =
+			hasBall &&
+			m_HasStartedPassCharge &&
+			m_BallCarrier.IsPassChargeFull;
+		bool isAllyTarget =
+			m_LockOnProvider != null &&
+			m_LockOnProvider.HasValidTarget &&
+			m_LockOnProvider.CurrentTargetType == ELockOnTargetType.AllyPlayer;
 
-		if (!show) return;
+		bool validElectricTarget =
+			m_LockOnProvider != null &&
+			m_LockOnProvider.HasValidTarget &&
+			(m_LockOnProvider.CurrentTargetType == ELockOnTargetType.Ball ||
+			m_LockOnProvider.CurrentTargetType == ELockOnTargetType.EnemyPlayer);
+		bool isElectricReady =
+			validElectricTarget &&
+			m_ElectricAction != null &&
+			m_ElectricAction.ChargeRatio >= 1.0f;
 
-		string action = "";
+		bool isUsingGamepad = m_InputReceiver != null && m_InputReceiver.IsUsingGamepad;
 
-		// ボール所持中
-		if (m_BallCarrier != null && m_BallCarrier.HasBall)
-		{
-			bool isAllyTarget =
-				m_LockOnProvider != null &&
-				m_LockOnProvider.HasValidTarget &&
-				m_LockOnProvider.CurrentTargetType ==
-				ELockOnTargetType.AllyPlayer;
-
-			// チャージ満タン + 味方ロックオン
-			if (m_HasStartedPassCharge &&
-				m_BallCarrier.IsPassChargeFull &&
-				isAllyTarget)
-			{
-				action = "離すと追尾パス";
-			}
-			else
-			{
-				// それ以外は通常投げ
-				action = "離すとボールを投げる\nたまると追尾パス";
-			}
-		}
-		// ボール非所持
-		else
-		{
-			bool validElectricTarget =
-				m_LockOnProvider != null &&
-				m_LockOnProvider.HasValidTarget &&
-				(
-					m_LockOnProvider.CurrentTargetType ==
-					ELockOnTargetType.Ball ||
-
-					m_LockOnProvider.CurrentTargetType ==
-					ELockOnTargetType.EnemyPlayer
-				);
-
-			// 対象あり + 電撃チャージ満タン
-			if (m_IsChargingElectric &&
-				validElectricTarget &&
-				m_ElectricAction != null &&
-				m_ElectricAction.ChargeRatio >= 1.0f)
-			{
-				action = "離すとボールを奪取\n / 敵をスタン";
-			}
-			else
-			{
-				// それ以外は通常投げ
-				action = "貯まるとボールを奪取\n / 敵をスタン";
-			}
-		}
-
-		// キャンセル案内は常時表示
-		m_ActionHelpText.text =
-			action +
-			(string.IsNullOrEmpty(action)
-				? "右クリックでキャンセル"
-				: "\n右クリックでキャンセル");
+		m_ActionHelpUI.UpdateHelpState(
+			canShow,
+			m_IsSubActionHeld,
+			hasBall,
+			isPassChargeFull,
+			isAllyTarget,
+			m_IsChargingElectric,
+			isElectricReady,
+			isUsingGamepad);
 	}
-
 }

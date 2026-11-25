@@ -752,6 +752,7 @@ GameObject:
   - component: {fileID: 5041149612239333042}
   - component: {fileID: 5545572267577946513}
   - component: {fileID: 6206892268485690236}
+  - component: {fileID: 6206892268485690237}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -865,6 +866,21 @@ MonoBehaviour:
   - {fileID: 7077357125740447800}
   - {fileID: 8917311764080082361}
   - {fileID: 3837238713462390657}
+  - {fileID: 4477500074212401257}
+--- !u!114 &6206892268485690237
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1539110522352152495}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e8ec5798cf34a89bebc7db1bf9f0029, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerActionHelpUI
+  m_HelpText: {fileID: 757816184701976735}
+  m_HideWhenNotHoldingSubAction: 0
 --- !u!1 &1574588748598060794
 GameObject:
   m_ObjectHideFlags: 0
@@ -1322,7 +1338,7 @@ MonoBehaviour:
   m_InputReceiver: {fileID: 60831561983994870}
   m_CinemachineCameraTransform: {fileID: 5892072697104370858}
   m_ShortTapMaxDuration: 0
-  m_ActionHelpText: {fileID: 757816184701976735}
+  m_ActionHelpUI: {fileID: 6206892268485690237}
   m_MovingEffect: {fileID: 392562595453950173}
   m_StartPoint: {fileID: 827173490743744242}
   m_EndPoint: {fileID: 7127360878203389931}
@@ -2836,11 +2852,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 2791049693960956650}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 200, y: 50}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -30, y: 30}
+  m_SizeDelta: {x: 420, y: 110}
+  m_Pivot: {x: 1, y: 0}
 --- !u!222 &2509561218029046022
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -2896,15 +2912,15 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 15
-  m_fontSizeBase: 15
+  m_fontSize: 22
+  m_fontSizeBase: 22
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 0
-  m_HorizontalAlignment: 2
-  m_VerticalAlignment: 512
+  m_HorizontalAlignment: 4
+  m_VerticalAlignment: 1024
   m_textAlignment: 65535
   m_characterSpacing: 0
   m_characterHorizontalScale: 1

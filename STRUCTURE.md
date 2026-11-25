@@ -148,6 +148,7 @@ GameRepository/
 │   │       ├── UIInputReceiver.cs           # UI系統入力検知・InputAction分離
 │   │       ├── UIFocusGlowOutline.cs        # 汎用UIフォーカス発光枠線制御
 │   │       ├── PlayerResourceGaugeUI.cs     # リソースゲージ表示更新
+│   │       ├── PlayerActionHelpUI.cs        # 入力デバイス(マウス/PAD)連動の右下操作補助UI制御
 │   │       ├── PlayerWorldTargetUI.cs       # ボール・ゴール・味方プレイヤーの画面上補助マーカーUI制御
 │   │       ├── PlayerUIResolutionManager.cs # 画面解像度比率に応じたプレイヤーUIスケール調整
 │   │       ├── InGamePauseMenuController.cs # [EntryPoint] Escメニュー・設定連携・ロビー復帰
