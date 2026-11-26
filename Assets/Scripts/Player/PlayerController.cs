@@ -1,4 +1,5 @@
-﻿using System;
+﻿
+using System;
 using System.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Components;
@@ -115,6 +116,10 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	// 最後にログを出したロックオン対象
 	private GameObject m_LastLoggedPassTarget;
+
+	//飛んでるときにスタン食らったか
+	private bool m_IsStunnedOnFlying = false;
+	private float m_StunDuration = 0.0f;
 
 	private void Awake()
 	{
@@ -275,6 +280,13 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (CurrentState == EPlayerState.Falling && m_AimGuide != null)
 		{
 			UpdateMovingEffectPositions(m_AimGuide.TargetLandingPoint);
+		}
+
+		// 飛行中に電撃受けていたら着地したときにスタン
+		if(CurrentState == EPlayerState.Idle && m_IsStunnedOnFlying)
+		{
+			m_StunCoroutine = StartCoroutine(StunRoutine(m_StunDuration));
+			m_IsStunnedOnFlying = false;
 		}
 
 		// 着地した場合、EPlayerStateをIdleに戻してエフェクト非表示
@@ -1401,7 +1413,16 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		{
 			StopCoroutine(m_StunCoroutine);
 		}
-		m_StunCoroutine = StartCoroutine(StunRoutine(duration));
+
+		if (CurrentState == EPlayerState.Falling)
+		{
+			m_IsStunnedOnFlying = true;
+			m_StunDuration = duration;
+		}
+		else
+		{
+			m_StunCoroutine = StartCoroutine(StunRoutine(duration));
+		}
 	}
 
 	private IEnumerator StunRoutine(float duration)
