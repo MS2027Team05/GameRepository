@@ -37,6 +37,11 @@ public interface IBallCarrier
 	void Shoot(Vector3 direction);
 
 	/// <summary>
+	/// 指定した照準座標へ通常シュートを射出します。
+	/// </summary>
+	void ShootAt(Vector3 targetPoint, Vector3 fallbackDirection);
+
+	/// <summary>
 	/// 長押しによる追尾パスチャージおよびキャンセル案内UIの表示を開始します。
 	/// </summary>
 	void BeginPassCharge();

@@ -127,6 +127,25 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	public bool HasValidTarget =>
 		CurrentTarget != null;
 
+	/// <summary>ILockOnProvider: ロックオン検索範囲の正規化半径</summary>
+	public float ReticleSearchRadius =>
+		m_ReticleSearchRadius;
+
+	/// <summary>
+	/// ILockOnProvider: 現在捕捉しているロックオン対象のワールド座標を取得します。
+	/// </summary>
+	public bool TryGetCurrentTargetWorldPosition(out Vector3 worldPosition)
+	{
+		if (CurrentTarget == null)
+		{
+			worldPosition = Vector3.zero;
+			return false;
+		}
+
+		worldPosition = GetTargetPosition(CurrentTarget);
+		return true;
+	}
+
 #if UNITY_EDITOR
 	private void OnValidate()
 	{
@@ -172,23 +191,6 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		}
 
 		m_TargetCamera = Camera.main;
-
-		if (m_TargetCamera != null && m_TargetCamera.isActiveAndEnabled)
-		{
-			return true;
-		}
-
-		Camera[] allCameras = Camera.allCameras;
-		for (int i = 0; i < allCameras.Length; i++)
-		{
-			Camera cam = allCameras[i];
-			if (cam != null && cam.isActiveAndEnabled)
-			{
-				m_TargetCamera = cam;
-				return true;
-			}
-		}
-
 		return false;
 	}
 

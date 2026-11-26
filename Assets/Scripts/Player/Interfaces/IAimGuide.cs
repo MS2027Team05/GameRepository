@@ -55,6 +55,11 @@ public interface IAimGuide
 	void UpdateConstantReticle(Vector3 aimDirection);
 
 	/// <summary>
+	/// シュート時の中央照準座標と照準方向を取得します。着地点の状態は変更しません。
+	/// </summary>
+	bool TryGetShotAim(Vector3 fallbackDirection, out Vector3 targetPoint, out Vector3 aimDirection);
+
+	/// <summary>
 	/// 空中追加移動用に、カメラ照準方向から新しい着地点を評価します。
 	/// 現在追跡中の着地点は変更しません。
 	/// </summary>

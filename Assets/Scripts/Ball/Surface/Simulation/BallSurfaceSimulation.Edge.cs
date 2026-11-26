@@ -1,8 +1,19 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Triangle境界の検出とEdge種別ごとの処理振り分けを担当します。
+/// Surface移動中のTriangle境界検出と、Edge種別ごとの遷移処理の振り分けを担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. 現在Triangle内でSurfaceVelocityによる移動先を計算します。
+/// 2. Barycentric座標から最初に交差するEdgeと交差時刻を求めます。
+/// 3. Edge種別を確認し、Flat・Smooth・Convex・Concave・Boundaryへ処理を振り分けます。
+/// 4. 1Step内に時間が残っていれば隣Triangle上で移動を継続します。
+/// 5. 過剰な連続遷移はTransition上限で停止し、不正な無限ループを防ぎます。
+/// 6. 複数Edgeへ同時到達するVertexケースはVertex処理へ渡します。
+///
+/// 各Edge固有の幾何計算は対応するpartialファイルへ分離しています。
+/// </remarks>
 public sealed partial class BallSurfaceSimulation
 {
 	/// <summary>
@@ -23,6 +34,8 @@ public sealed partial class BallSurfaceSimulation
 		while (remainingTime >
 			m_MinimumCalculationValue)
 		{
+			RecordTraversalTriangles();
+
 			if (transitionCount >=
 				m_MaximumTriangleTransitionsPerStep)
 			{
@@ -41,7 +54,7 @@ public sealed partial class BallSurfaceSimulation
 					ref remainingTime,
 					out bool completed))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("AdvanceConvexVertexSpherePatch");
 				}
 
 				if (!completed)
@@ -77,7 +90,7 @@ public sealed partial class BallSurfaceSimulation
 					out bool completed,
 					out int completedEntryEdgeIndex))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("AdvanceConvexEdgeTransition");
 				}
 
 				if (!completed)
@@ -99,7 +112,7 @@ public sealed partial class BallSurfaceSimulation
 				out Vector3 vertexC,
 				out Vector3 currentNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("CurrentTriangleWorldData");
 			}
 
 			m_SurfacePoint =
@@ -154,7 +167,7 @@ public sealed partial class BallSurfaceSimulation
 				vertexC,
 				out Vector3 startBarycentric))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("StartBarycentric");
 			}
 
 			if (!TryCalculateBarycentric(
@@ -164,7 +177,7 @@ public sealed partial class BallSurfaceSimulation
 				vertexC,
 				out Vector3 endBarycentric))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("EndBarycentric");
 			}
 
 			if (IsInsideTriangle(
@@ -188,7 +201,7 @@ public sealed partial class BallSurfaceSimulation
 				out int simultaneousEdgeIndex,
 				out float crossingFraction))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("FirstSurfaceCrossing");
 			}
 
 			Vector3 crossingPoint;
@@ -232,17 +245,31 @@ public sealed partial class BallSurfaceSimulation
 							remainingTime
 						: 0.0f;
 
-				// 2本のEdgeへほぼ同時に到達した場合も、
-				// Vertex専用の進行方向へ切り替えません。
+				// 2本のEdgeへ同時到達した地点が実Convex Vertexなら、
+				// 片方のEdgeを強制選択せずVertex球面へ直接入ります。
 				//
-				// 「ほんの僅かに片側を先に通った」ものとして、
-				// 決定論的に1本だけを先行Edgeへ選びます。
-				// その後は通常のEdge遷移を連続して処理するため、
-				// Surfaceの展開ルール自体は通常時と同じです。
+				// まずFace上の到達時WorldStateを確定し、
+				// Vertex側はそのWorld位置・World速度をそのまま受け取ります。
+				if (TryBeginDirectConvexVertexSpherePatch(
+					crossingVertex,
+					currentNormal))
+				{
+					remainingTime *=
+						1.0f -
+							Mathf.Clamp01(
+								crossingFraction);
+
+					transitionCount++;
+					continue;
+				}
+
+				// Convex Vertexとして成立しない場合だけ、
+				// 従来どおり決定論的に1本のEdgeへフォールバックします。
 				crossedEdgeIndex =
 					ResolveSimultaneousVertexEdge(
 						crossedEdgeIndex,
-						simultaneousEdgeIndex);
+						simultaneousEdgeIndex,
+						m_SurfaceVelocity);
 			}
 			else
 			{
@@ -311,12 +338,20 @@ public sealed partial class BallSurfaceSimulation
 				out _,
 				out Vector3 neighborNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("NeighborTriangleWorldData");
 			}
 
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Concave)
 			{
+				if (!TrySetWorldStateFromFacePoint(
+					m_CurrentTriangleIndex,
+					crossingPoint,
+					currentNormal))
+				{
+					return ReportInvalidGeometry("ConcaveFaceWorldState");
+				}
+
 				// 空中でConcaveへ入った場合だけ、
 				// Ball本体とMesh上の基準点を分離した専用状態へ入ります。
 				//
@@ -367,6 +402,13 @@ public sealed partial class BallSurfaceSimulation
 			if (edgeType ==
 				BallSurfaceMeshData.EEdgeType.Convex)
 			{
+				if (!TrySetWorldStateFromFacePoint(
+					m_CurrentTriangleIndex,
+					crossingPoint,
+					currentNormal))
+				{
+					return ReportInvalidGeometry("ConvexFaceWorldState");
+				}
 
 				m_SurfacePoint =
 					crossingPoint;
@@ -378,7 +420,7 @@ public sealed partial class BallSurfaceSimulation
 					currentNormal,
 					neighborNormal))
 				{
-					return EAdvanceResult.InvalidGeometry;
+					return ReportInvalidGeometry("BeginConvexEdgeTransition");
 				}
 
 				remainingTime *=
@@ -410,7 +452,7 @@ public sealed partial class BallSurfaceSimulation
 				neighborVertexA,
 				neighborNormal))
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("TransitionFlatOrSmoothEdge");
 			}
 
 			remainingTime *=

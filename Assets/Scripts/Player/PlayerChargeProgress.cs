@@ -25,6 +25,9 @@ public class PlayerChargeProgress : MonoBehaviour
 
 	private Image[] m_Segments;
 
+	// 追尾パスチャージ表示モード
+	private bool m_IsPassChargeMode;
+
 	// 全ての棒で共通使用する白いSprite
 	private static Sprite m_WhiteSprite;
 
@@ -82,7 +85,13 @@ public class PlayerChargeProgress : MonoBehaviour
 		if (m_ElectricAction == null)
 			return;
 
-		// チャージ進捗を取得してUIに反映
+		// 追尾パスチャージ中はPlayerController側から進捗を受け取る
+		if (m_IsPassChargeMode)
+		{
+			return;
+		}
+
+		// 通常は電撃チャージの進捗を表示
 		SetProgress(m_ElectricAction.ChargeRatio);
 	}
 
@@ -193,5 +202,33 @@ public class PlayerChargeProgress : MonoBehaviour
 				? m_ActiveColor
 				: m_InactiveColor;
 		}
+	}
+
+	/// <summary>
+	/// 追尾パスチャージ表示モードを切り替えます。
+	/// </summary>
+	public void SetPassChargeMode(bool isActive)
+	{
+		m_IsPassChargeMode = isActive;
+
+		if (isActive)
+		{
+			// 追尾パスチャージ開始時は0から表示
+			SetProgress(0.0f);
+		}
+	}
+
+	/// <summary>
+	/// 追尾パスチャージの進捗をUIに反映します。
+	/// progressは0～1。
+	/// </summary>
+	public void SetPassChargeProgress(float progress)
+	{
+		if (!m_IsPassChargeMode)
+		{
+			return;
+		}
+
+		SetProgress(progress);
 	}
 }

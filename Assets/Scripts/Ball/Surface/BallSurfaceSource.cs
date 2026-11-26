@@ -1,19 +1,18 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallSurface Physicsで使用する
-/// 1つの惑星・Ground Surfaceを表します。
+/// 1つのStatic MeshColliderをBallSurface Physicsで利用できるSurfaceとして公開します。
 /// </summary>
 /// <remarks>
-/// 同じGameObjectに存在するMeshColliderから
-/// Triangle構造を読み取り、Surface Physics用の
-/// BallSurfaceMeshDataを生成して保持します。
+/// 主な処理の流れ:
+/// 1. 同じGameObjectのNon-Convex MeshColliderから共有Meshを取得します。
+/// 2. BallSurfaceMeshDataを生成し、TriangleとEdgeのTopologyを事前解析します。
+/// 3. 接触点付近へのRaycastからMeshColliderのtriangleIndexを特定します。
+/// 4. 通常Rayで取得できない場合は両側からのFallback探索を行います。
+/// 5. Surface追跡では現在位置に最も近いTriangleとSurface点を取得します。
 ///
-/// Ball側はColliderそのものではなく、
-/// このComponentを1つのSurfaceとして扱います。
-///
-/// 現在は移動・変形しないStaticかつ
-/// Non-ConvexなMeshColliderを対象とします。
+/// Ball側はMeshCollider単体ではなく、このComponentを1つのBallSurfaceとして扱います。
+/// 現在は移動・変形しないStaticなNon-Convex MeshColliderを前提とします。
 /// </remarks>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(MeshCollider))]
@@ -350,8 +349,8 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	/// Mesh全体からWorld座標に最も近いSurface位置を取得します。
 	/// </summary>
 	/// <remarks>
-	/// 通常のFlying追跡では使用せず、
-	/// 追跡Triangleが無効になった場合のFallbackとして使用します。
+	/// Flying・SeekingSurfaceの初回探索、およびFlyingの追跡で
+	/// 全体の再探索が必要な場合に使用します。
 	/// </remarks>
 	public bool TryFindNearestSurface(
 		Vector3 worldPoint,
@@ -415,9 +414,270 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 再初期化候補の球中心と補正経路を同一Meshの全Triangleに対して検証します。
+	/// </summary>
+	internal bool IsBouncePlacementClear(Vector3 start, Vector3 end, float radius,
+		float tolerance, out int blockedTriangle, out float blockedDistance)
+	{
+		blockedTriangle = -1;
+		blockedDistance = 0.0f;
+		if (!IsReady || m_MeshData == null)
+		{
+			return false;
+		}
+
+		float clearance = Mathf.Max(0.0f, radius - tolerance);
+		float clearanceSquared = clearance * clearance;
+		Vector3 delta = end - start;
+		float length = delta.magnitude;
+		for (int index = 0; index < m_MeshData.TriangleCount; index++)
+		{
+			m_MeshData.GetTriangleLocalVertices(index, out Vector3 a, out Vector3 b, out Vector3 c);
+			a = transform.TransformPoint(a);
+			b = transform.TransformPoint(b);
+			c = transform.TransformPoint(c);
+			Vector3 normal = Vector3.Cross(b - a, c - a);
+			if (!(normal.sqrMagnitude > Mathf.Epsilon))
+			{
+				blockedTriangle = index;
+				return false;
+			}
+
+			float endSquared = (end - GetClosestPointOnTriangle(end, a, b, c)).sqrMagnitude;
+			if (!(endSquared >= clearanceSquared))
+			{
+				blockedTriangle = index;
+				blockedDistance = Mathf.Sqrt(endSquared);
+				return false;
+			}
+
+			// 遠い面は補正経路上でも接触しません。
+			float farDistance = clearance + length;
+			if (endSquared >= farDistance * farDistance)
+			{
+				continue;
+			}
+
+			float startSquared = (start - GetClosestPointOnTriangle(start, a, b, c)).sqrMagnitude;
+			// 開始時に重複している場合は、それ以上深く入らない補正だけを許可します。
+			// 球中心が面上にある場合は脱出方向を決められないため補正しません。
+			if (!(startSquared > tolerance * tolerance))
+			{
+				blockedTriangle = index;
+				blockedDistance = Mathf.Sqrt(startSquared);
+				return false;
+			}
+
+			float minimumDistanceSquared = Mathf.Min(startSquared, endSquared);
+			normal.Normalize();
+			float startSide = Vector3.Dot(start - a, normal);
+			float endSide = Vector3.Dot(end - a, normal);
+			if ((startSide < 0.0f && endSide > 0.0f) ||
+				(startSide > 0.0f && endSide < 0.0f))
+			{
+				Vector3 crossing = start + delta * (startSide / (startSide - endSide));
+				if ((crossing - GetClosestPointOnTriangle(crossing, a, b, c)).sqrMagnitude <= tolerance * tolerance)
+				{
+					minimumDistanceSquared = 0.0f;
+				}
+			}
+
+			minimumDistanceSquared = Mathf.Min(minimumDistanceSquared, GetBounceSegmentDistanceSquared(start, end, a, b));
+			minimumDistanceSquared = Mathf.Min(minimumDistanceSquared, GetBounceSegmentDistanceSquared(start, end, b, c));
+			minimumDistanceSquared = Mathf.Min(minimumDistanceSquared, GetBounceSegmentDistanceSquared(start, end, c, a));
+			float required = Mathf.Max(0.0f, Mathf.Min(clearance, Mathf.Sqrt(startSquared)) - tolerance);
+			if (!(minimumDistanceSquared >= required * required))
+			{
+				blockedTriangle = index;
+				blockedDistance = Mathf.Sqrt(minimumDistanceSquared);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/// <summary>
+	/// 有限な2線分間の最近接距離の二乗を取得します。
+	/// </summary>
+	private static float GetBounceSegmentDistanceSquared(Vector3 p1, Vector3 q1, Vector3 p2, Vector3 q2)
+	{
+		Vector3 d1 = q1 - p1;
+		Vector3 d2 = q2 - p2;
+		Vector3 r = p1 - p2;
+		float a = Vector3.Dot(d1, d1);
+		float e = Vector3.Dot(d2, d2);
+		float f = Vector3.Dot(d2, r);
+		float s;
+		float t;
+		const float epsilon = 0.000000000001f;
+		if (a <= epsilon && e <= epsilon)
+		{
+			return r.sqrMagnitude;
+		}
+		if (a <= epsilon)
+		{
+			s = 0.0f;
+			t = Mathf.Clamp01(f / e);
+		}
+		else
+		{
+			float c = Vector3.Dot(d1, r);
+			if (e <= epsilon)
+			{
+				t = 0.0f;
+				s = Mathf.Clamp01(-c / a);
+			}
+			else
+			{
+				float b = Vector3.Dot(d1, d2);
+				float denominator = a * e - b * b;
+				s = denominator > 0.0f ? Mathf.Clamp01((b * f - c * e) / denominator) : 0.0f;
+				t = (b * s + f) / e;
+				if (t < 0.0f)
+				{
+					t = 0.0f;
+					s = Mathf.Clamp01(-c / a);
+				}
+				else if (t > 1.0f)
+				{
+					t = 1.0f;
+					s = Mathf.Clamp01((b - c) / a);
+				}
+			}
+		}
+		return (p1 + d1 * s - p2 - d2 * t).sqrMagnitude;
+	}
+
+	/// <summary>
+	/// 配置先は安全でも直線補正経路が塞がる場合に、外側へ迂回する中継点を探索します。
+	/// 中継点は幾何検証専用で、Rigidbodyの追加移動は行いません。
+	/// </summary>
+	internal bool TryGetBouncePlacementDetour(Vector3 start, Vector3 end, int blockedTriangle,
+		float radius, float tolerance, float budget, out Vector3 waypoint)
+	{
+		waypoint = Vector3.zero;
+		float directLength = Vector3.Distance(start, end);
+		if (!(budget > 0.0f) || !(directLength > tolerance) ||
+			!IsBouncePlacementClear(end, end, radius, tolerance, out _, out _))
+		{
+			return false;
+		}
+
+		// 小さい補正を先に試し、失敗した場合だけ予算内で外側へ広げます。
+		// 中央、始点側、終点側の3箇所を候補とし、全区間を既存の判定で検証します。
+		const int maximumOffsetAttempts = 4;
+		const int waypointPositionCount = 3;
+		for (int offsetIndex = 1; offsetIndex <= maximumOffsetAttempts; offsetIndex++)
+		{
+			float offset = budget * offsetIndex / maximumOffsetAttempts;
+			for (int positionIndex = 0; positionIndex < waypointPositionCount; positionIndex++)
+			{
+				float fraction = positionIndex == 0 ? 0.5f : positionIndex == 1 ? 0.25f : 0.75f;
+				Vector3 basePoint = Vector3.Lerp(start, end, fraction);
+				if (!TryGetTriangleClosestWorldPoint(blockedTriangle, basePoint,
+					out Vector3 closestPoint, out _, out float distanceSquared) ||
+					!(distanceSquared > tolerance * tolerance))
+				{
+					continue;
+				}
+
+				Vector3 away = (basePoint - closestPoint) / Mathf.Sqrt(distanceSquared);
+				Vector3 candidate = basePoint + away * offset;
+				float pathLength = Vector3.Distance(start, candidate) + Vector3.Distance(candidate, end);
+				if (!(pathLength <= radius + tolerance) || !(pathLength <= directLength + budget))
+				{
+					continue;
+				}
+
+				// どちらの区間も全Triangleを検証するため、別の面を通る経路は採用しません。
+				if (IsBouncePlacementClear(start, candidate, radius, tolerance, out _, out _) &&
+					IsBouncePlacementClear(candidate, end, radius, tolerance, out _, out _))
+				{
+					waypoint = candidate;
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	/// 配置候補と重複する面から離れるよう、接触Triangle内の点とHeightを補正します。
+	/// 補正結果は候補であり、呼び出し側で全Triangleと補正経路を再検証します。
+	/// </summary>
+	internal bool TryGetBouncePlacementCorrection(int contactTriangle, int blockedTriangle,
+		Vector3 surfacePoint, Vector3 candidateCenter, float radius, float tolerance,
+		float budget, out Vector3 correctedPoint, out float heightIncrease)
+	{
+		correctedPoint = surfacePoint;
+		heightIncrease = 0.0f;
+		if (!(budget > 0.0f) ||
+			!TryGetTriangleClosestWorldPoint(contactTriangle, surfacePoint,
+				out Vector3 basePoint, out Vector3 faceNormal, out _) ||
+			!TryGetTriangleClosestWorldPoint(blockedTriangle, candidateCenter,
+				out Vector3 blockedPoint, out Vector3 blockedNormal, out float distanceSquared))
+		{
+			return false;
+		}
+
+		// 経路だけが塞がっている場合や、押し出す側を確定できない場合は補正しません。
+		float clearance = Mathf.Max(0.0f, radius - tolerance);
+		if (!(distanceSquared > tolerance * tolerance) ||
+			!(distanceSquared < clearance * clearance))
+		{
+			return false;
+		}
+		float distance = Mathf.Sqrt(distanceSquared);
+		Vector3 away = (candidateCenter - blockedPoint) / distance;
+		if (Vector3.Dot(away, blockedNormal) < -0.0001f)
+		{
+			return false;
+		}
+		float required = radius + tolerance - distance;
+		if (!(required <= budget))
+		{
+			return false;
+		}
+
+		// 接触面内の移動を優先し、Triangleの外にはみ出す位置は採用しません。
+		Vector3 tangent = Vector3.ProjectOnPlane(away, faceNormal);
+		float tangentSquared = tangent.sqrMagnitude;
+		correctedPoint = basePoint;
+		if (tangentSquared > 0.00000001f)
+		{
+			float scale = Mathf.Min(required / tangentSquared, budget / Mathf.Sqrt(tangentSquared));
+			if (!TryGetTriangleClosestWorldPoint(contactTriangle, basePoint + tangent * scale,
+				out correctedPoint, out _, out _))
+			{
+				return false;
+			}
+		}
+
+		Vector3 shift = correctedPoint - basePoint;
+		float remaining = required - Vector3.Dot(shift, away);
+		if (remaining > tolerance * 0.25f)
+		{
+			// 仮初期化で実際に使用したSmooth Normal方向に限りHeightを増やします。
+			Vector3 centerNormal = (candidateCenter - basePoint).normalized;
+			float heightDirection = Vector3.Dot(centerNormal, away);
+			if (heightDirection > 0.0001f)
+			{
+				heightIncrease = Mathf.Min(remaining / heightDirection,
+					Mathf.Max(0.0f, budget - shift.magnitude));
+			}
+		}
+
+		// 微小すぎる補正や予算を超える補正は再試行しません。
+		float correctionDistance = (correctedPoint - surfacePoint).magnitude + heightIncrease;
+		return correctionDistance > tolerance * 0.25f && correctionDistance <= budget;
+	}
+
+	/// <summary>
 	/// 指定Triangle上でWorld座標に最も近い点を取得します。
 	/// </summary>
-	private bool TryGetTriangleClosestWorldPoint(
+	internal bool TryGetTriangleClosestWorldPoint(
 		int triangleIndex,
 		Vector3 worldPoint,
 		out Vector3 closestPoint,
@@ -494,7 +754,7 @@ public sealed class BallSurfaceSource : MonoBehaviour
 	/// <summary>
 	/// 三角形上で指定点に最も近い点を取得します。
 	/// </summary>
-	private static Vector3 GetClosestPointOnTriangle(
+	internal static Vector3 GetClosestPointOnTriangle(
 		Vector3 point,
 		Vector3 vertexA,
 		Vector3 vertexB,
@@ -778,6 +1038,264 @@ public sealed class BallSurfaceSource : MonoBehaviour
 			fallbackRayDistance,
 			out surfaceHit);
 	}
+
+	/// <summary>
+	/// 接触したTriangleと面上の位置を取得します。
+	/// SphereCastなど、接触時のめり込み量がない場合は従来の探索を使用します。
+	/// </summary>
+	public bool TryResolveContactTriangle(
+		Vector3 contactPoint,
+		Vector3 contactNormal,
+		out int triangleIndex,
+		out Vector3 surfacePoint)
+	{
+		return TryResolveContactTriangle(
+			contactPoint,
+			contactNormal,
+			0.0f,
+			out triangleIndex,
+			out surfacePoint);
+	}
+
+	/// <summary>
+	/// Collisionの接触点からTriangleを探索します。
+	/// 通常探索が失敗した場合だけ、負のSeparationから接触点を補正して再探索します。
+	/// 補正後も元の探索距離と法線の条件を使用します。
+	/// </summary>
+	public bool TryResolveContactTriangle(
+		Vector3 contactPoint,
+		Vector3 contactNormal,
+		float contactSeparation,
+		out int triangleIndex,
+		out Vector3 surfacePoint)
+	{
+		triangleIndex = -1;
+		surfacePoint = Vector3.zero;
+
+		if (!IsReady || !(contactNormal.sqrMagnitude > Mathf.Epsilon) ||
+			float.IsNaN(contactPoint.x) || float.IsInfinity(contactPoint.x) ||
+			float.IsNaN(contactPoint.y) || float.IsInfinity(contactPoint.y) ||
+			float.IsNaN(contactPoint.z) || float.IsInfinity(contactPoint.z) ||
+			float.IsNaN(contactNormal.sqrMagnitude) || float.IsInfinity(contactNormal.sqrMagnitude))
+		{
+			Debug.LogWarning(
+				$"[BallSurface][ContactTriangleNotFound] Surface={name} Reason=InvalidSurfaceOrContactInput IsReady={IsReady} ContactPoint={contactPoint.ToString("F6")} ContactNormal={contactNormal.ToString("F6")} RayExecuted=false", this);
+			return false;
+		}
+
+		bool rayFound = TryGetSurfaceHit(contactPoint, contactNormal, out RaycastHit hit);
+		if (rayFound &&
+			hit.triangleIndex >= 0 && hit.triangleIndex < m_MeshData.TriangleCount)
+		{
+			triangleIndex = hit.triangleIndex;
+			surfacePoint = hit.point;
+			return true;
+		}
+
+		float maximumDistance = Mathf.Min(0.05f,
+			Mathf.Max(m_MinimumProbeOffset, m_SurfaceCollider.contactOffset * 2.0f));
+		Vector3 normal = contactNormal.normalized;
+
+		if (TryFindContactTriangleByClosestPoint(
+			contactPoint, normal, maximumDistance,
+			out triangleIndex, out surfacePoint, out _))
+		{
+			return true;
+		}
+
+		// 負のSeparationはめり込みを表します。接触法線方向へその距離だけ戻し、
+		// 補正した点の近くに実際の接触面があるか確認します。
+		// SphereCastなどSeparationがない場合には補正しません。
+		if (contactSeparation < 0.0f && !float.IsInfinity(contactSeparation))
+		{
+			float correctionDistance = -contactSeparation;
+			Vector3 correctedPoint = contactPoint + normal * correctionDistance;
+
+			if (!float.IsNaN(correctedPoint.x) && !float.IsInfinity(correctedPoint.x) &&
+				!float.IsNaN(correctedPoint.y) && !float.IsInfinity(correctedPoint.y) &&
+				!float.IsNaN(correctedPoint.z) && !float.IsInfinity(correctedPoint.z))
+			{
+				// 補正後は広いRay探索を行わず、従来と同じ距離・法線条件で判定します。
+				if (TryFindContactTriangleByClosestPoint(
+					correctedPoint, normal, maximumDistance,
+					out triangleIndex, out surfacePoint, out float normalDot))
+				{
+#if BALL_SURFACE_DIAGNOSTICS
+					Debug.Log(
+						$"[BallSurface][ContactTriangleCorrectionSucceeded] Surface={name} ContactSeparation={contactSeparation:F6} CorrectionDistance={correctionDistance:F6} OriginalPoint={contactPoint.ToString("F6")} CorrectedPoint={correctedPoint.ToString("F6")} Triangle={triangleIndex} SurfacePoint={surfacePoint.ToString("F6")} DistanceBefore={Vector3.Distance(contactPoint, surfacePoint):F6} DistanceAfter={Vector3.Distance(correctedPoint, surfacePoint):F6} MaxDistance={maximumDistance:F6} Angle={Mathf.Acos(Mathf.Clamp(normalDot, -1.0f, 1.0f)) * Mathf.Rad2Deg:F3}deg MaxAngle=60.000deg DistancePass=True AnglePass=True", this);
+#endif
+					return true;
+				}
+
+#if BALL_SURFACE_DIAGNOSTICS
+				Debug.LogWarning(
+					$"[BallSurface][ContactTriangleCorrectionFailed] Surface={name} ContactSeparation={contactSeparation:F6} CorrectionDistance={correctionDistance:F6} OriginalPoint={contactPoint.ToString("F6")} CorrectedPoint={correctedPoint.ToString("F6")} MaxDistance={maximumDistance:F6} MaxAngle=60.000deg", this);
+				LogContactTriangleSearchFailure(correctedPoint, normal, maximumDistance, false, -1, false);
+#endif
+			}
+		}
+
+#if BALL_SURFACE_DIAGNOSTICS
+		LogContactTriangleSearchFailure(contactPoint, normal, maximumDistance, rayFound, hit.triangleIndex);
+#else
+		Debug.LogWarning($"[BallSurface][ContactTriangleNotFound] Surface={name} RayFound={rayFound} ContactSeparation={contactSeparation:F6}", this);
+#endif
+		return false;
+	}
+
+	/// <summary>
+	/// 指定点に近く、接触法線と整合するTriangleの最近接点を取得します。
+	/// 通常探索とめり込み補正後の探索で同じ採用条件を使用します。
+	/// </summary>
+	private bool TryFindContactTriangleByClosestPoint(
+		Vector3 contactPoint,
+		Vector3 normal,
+		float maximumDistance,
+		out int triangleIndex,
+		out Vector3 surfacePoint,
+		out float bestNormalDot)
+	{
+		triangleIndex = -1;
+		surfacePoint = Vector3.zero;
+		float bestDistanceSquared = maximumDistance * maximumDistance;
+		bestNormalDot = -1.0f;
+
+		for (int index = 0; index < m_MeshData.TriangleCount; index++)
+		{
+			if (!TryGetTriangleClosestWorldPoint(index, contactPoint,
+				out Vector3 point, out Vector3 triangleNormal, out float distanceSquared))
+			{
+				continue;
+			}
+
+			float normalDot = Vector3.Dot(normal, triangleNormal);
+			// 法線差が60度を超える面や、距離・法線が不正な候補は採用しません。
+			if (!(normalDot >= 0.5f) || !(distanceSquared <= bestDistanceSquared))
+			{
+				continue;
+			}
+
+			if (triangleIndex >= 0 && distanceSquared == bestDistanceSquared && normalDot <= bestNormalDot)
+			{
+				continue;
+			}
+
+			triangleIndex = index;
+			surfacePoint = point;
+			bestDistanceSquared = distanceSquared;
+			bestNormalDot = normalDot;
+		}
+
+		return triangleIndex >= 0;
+	}
+
+#if BALL_SURFACE_DIAGNOSTICS
+	/// <summary>
+	/// 接触Triangleの補完探索に失敗した場合だけ、距離と法線の判定結果を記録します。
+	/// 診断用の再探索であり、採用条件やSimulation状態は変更しません。
+	/// </summary>
+	private void LogContactTriangleSearchFailure(
+		Vector3 contactPoint,
+		Vector3 contactNormal,
+		float maximumDistance,
+		bool rayFound,
+		int rayTriangleIndex,
+		bool rayExecuted = true)
+	{
+		const float minimumNormalDot = 0.5f;
+		float maximumDistanceSquared = maximumDistance * maximumDistance;
+		int invalidCount = 0;
+		int distanceOnlyCount = 0;
+		int angleOnlyCount = 0;
+		int bothCount = 0;
+		int passedCount = 0;
+		int nearestIndex = -1;
+		float nearestDistanceSquared = float.PositiveInfinity;
+		float nearestNormalDot = 0.0f;
+		Vector3 nearestPoint = Vector3.zero;
+		Vector3 nearestNormal = Vector3.zero;
+		int nearestAnglePassedIndex = -1;
+		float nearestAnglePassedDistanceSquared = float.PositiveInfinity;
+		int bestDistancePassedIndex = -1;
+		float bestDistancePassedDot = float.NegativeInfinity;
+
+		for (int index = 0; index < m_MeshData.TriangleCount; index++)
+		{
+			if (!TryGetTriangleClosestWorldPoint(index, contactPoint,
+				out Vector3 point, out Vector3 triangleNormal, out float distanceSquared))
+			{
+				invalidCount++;
+				continue;
+			}
+
+			float normalDot = Vector3.Dot(contactNormal, triangleNormal);
+			if (float.IsNaN(distanceSquared) || float.IsInfinity(distanceSquared) ||
+				float.IsNaN(normalDot) || float.IsInfinity(normalDot) || distanceSquared < 0.0f)
+			{
+				invalidCount++;
+				continue;
+			}
+
+			bool distancePassed = distanceSquared <= maximumDistanceSquared;
+			bool anglePassed = normalDot >= minimumNormalDot;
+			if (distancePassed && anglePassed)
+			{
+				passedCount++;
+			}
+			else if (!distancePassed && !anglePassed)
+			{
+				bothCount++;
+			}
+			else if (!distancePassed)
+			{
+				distanceOnlyCount++;
+			}
+			else
+			{
+				angleOnlyCount++;
+			}
+
+			if (distanceSquared < nearestDistanceSquared)
+			{
+				nearestIndex = index;
+				nearestDistanceSquared = distanceSquared;
+				nearestNormalDot = normalDot;
+				nearestPoint = point;
+				nearestNormal = triangleNormal;
+			}
+
+			if (anglePassed && distanceSquared < nearestAnglePassedDistanceSquared)
+			{
+				nearestAnglePassedIndex = index;
+				nearestAnglePassedDistanceSquared = distanceSquared;
+			}
+
+			if (distancePassed && normalDot > bestDistancePassedDot)
+			{
+				bestDistancePassedIndex = index;
+				bestDistancePassedDot = normalDot;
+			}
+		}
+
+		string nearestDetails = nearestIndex >= 0
+			? $"Triangle={nearestIndex} Distance={Mathf.Sqrt(nearestDistanceSquared):F6} Angle={Mathf.Acos(Mathf.Clamp(nearestNormalDot, -1.0f, 1.0f)) * Mathf.Rad2Deg:F3}deg NormalDot={nearestNormalDot:F6} DistancePass={nearestDistanceSquared <= maximumDistanceSquared} AnglePass={nearestNormalDot >= minimumNormalDot} Point={nearestPoint.ToString("F6")} Normal={nearestNormal.ToString("F6")}"
+			: "None";
+		string anglePassedDetails = nearestAnglePassedIndex >= 0
+			? $"Triangle={nearestAnglePassedIndex} Distance={Mathf.Sqrt(nearestAnglePassedDistanceSquared):F6}"
+			: "None";
+		string distancePassedDetails = bestDistancePassedIndex >= 0
+			? $"Triangle={bestDistancePassedIndex} Angle={Mathf.Acos(Mathf.Clamp(bestDistancePassedDot, -1.0f, 1.0f)) * Mathf.Rad2Deg:F3}deg NormalDot={bestDistancePassedDot:F6}"
+			: "None";
+
+		Debug.LogWarning(
+			$"[BallSurface][ContactTriangleNotFound] Surface={name} ContactPoint={contactPoint.ToString("F6")} ContactNormal={contactNormal.ToString("F6")}\n" +
+			$"RayExecuted={rayExecuted} RayFound={rayFound} RayTriangle={(rayFound ? rayTriangleIndex : -1)} ContactOffset={m_SurfaceCollider.contactOffset:F6} MaxDistance={maximumDistance:F6} MaxAngle={Mathf.Acos(minimumNormalDot) * Mathf.Rad2Deg:F3}deg MinNormalDot={minimumNormalDot:F6}\n" +
+			$"Triangles={m_MeshData.TriangleCount} Invalid={invalidCount} DistanceOnlyRejected={distanceOnlyCount} AngleOnlyRejected={angleOnlyCount} BothRejected={bothCount} Passed={passedCount}\n" +
+			$"Nearest: {nearestDetails}\n" +
+			$"NearestAnglePassed: {anglePassedDetails}\n" +
+			$"BestAngleWithinDistance: {distancePassedDetails}", this);
+	}
+#endif
 
 	/// <summary>
 	/// ContactPointの両側からMeshColliderへRayを飛ばし、

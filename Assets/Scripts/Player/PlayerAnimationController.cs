@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 地上移動状態を他端末へ同期し、移動状態とボール所持状態をAnimatorへ反映するコンポーネント。
 /// </summary>
-public sealed class PlayerAnimationController : NetworkBehaviour
+public sealed partial class PlayerAnimationController : NetworkBehaviour
 {
 	private static readonly int m_IsMovingHash = Animator.StringToHash("IsMoving");
 	private static readonly int m_HasBallHash = Animator.StringToHash("HasBall");
@@ -13,6 +13,8 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 	[Header("参照")]
 	[SerializeField] private Animator[] m_Animators;
+	[Tooltip("男女それぞれのテンタクル用Animatorです。表示中のモデルを特殊移動と連動させます。")]
+	[SerializeField] private Animator[] m_TentacleAnimators;
 	[SerializeField] private PlayerSurfaceMover m_SurfaceMover;
 	[SerializeField] private PlayerController m_PlayerController;
 
@@ -37,6 +39,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 	private void Awake()
 	{
 		m_BallCarrier = GetComponent<IBallCarrier>();
+		InitializeSpecialMoveAnimation();
 
 		if (m_SurfaceMover == null)
 		{
@@ -51,10 +54,12 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 	public override void OnNetworkSpawn()
 	{
+		m_SpecialMoveState.OnValueChanged += HandleSpecialMoveChanged;
 		m_IsMoving.OnValueChanged += HandleMovingChanged;
 		m_RespawnVersion.OnValueChanged += HandleRespawnChanged;
 		ApplyMovingState(m_IsMoving.Value);
 		ApplyBallState();
+		ApplySpecialMoveState(m_SpecialMoveState.Value);
 	}
 
 	private void Update()
@@ -91,6 +96,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 	public override void OnNetworkDespawn()
 	{
+		m_SpecialMoveState.OnValueChanged -= HandleSpecialMoveChanged;
 		m_IsMoving.OnValueChanged -= HandleMovingChanged;
 		m_RespawnVersion.OnValueChanged -= HandleRespawnChanged;
 	}
@@ -100,8 +106,10 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 	/// </summary>
 	public void ResetForRespawn()
 	{
+		CancelSpecialMoveAnimation();
 		if (!IsSpawned)
 		{
+			m_LocalIsMoving = false;
 			ResetAnimators();
 			return;
 		}
@@ -117,15 +125,27 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 	private void ResetAnimators()
 	{
+		if (m_TentacleAnimators != null)
+		{
+			foreach (Animator animator in m_TentacleAnimators)
+			{
+				if (animator == null || animator.runtimeAnimatorController == null) continue;
+				animator.Rebind();
+				if (animator.isActiveAndEnabled)
+				{
+					animator.Update(0f);
+				}
+			}
+		}
 		if (m_Animators == null) return;
 		foreach (Animator animator in m_Animators)
 		{
 			if (animator == null || animator.runtimeAnimatorController == null) continue;
 			animator.Rebind();
-			animator.SetBool(m_IsMovingHash, false);
-			animator.SetBool(m_HasBallHash, m_BallCarrier != null && m_BallCarrier.HasBall);
 			if (animator.isActiveAndEnabled)
 			{
+				animator.SetBool(m_IsMovingHash, false);
+				animator.SetBool(m_HasBallHash, m_BallCarrier != null && m_BallCarrier.HasBall);
 				animator.Update(0f);
 			}
 		}
@@ -146,7 +166,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 		bool hasBall = m_BallCarrier != null && m_BallCarrier.HasBall;
 		foreach (Animator animator in m_Animators)
 		{
-			if (animator != null)
+			if (IsAnimatorActive(animator))
 			{
 				animator.SetBool(m_HasBallHash, hasBall);
 			}
@@ -162,7 +182,7 @@ public sealed class PlayerAnimationController : NetworkBehaviour
 
 		foreach (Animator animator in m_Animators)
 		{
-			if (animator != null)
+			if (IsAnimatorActive(animator))
 			{
 				animator.SetBool(m_IsMovingHash, isMoving);
 			}

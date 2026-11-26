@@ -1,50 +1,67 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallPhysicsControllerのBallSurface Physics連携処理を定義します。
+/// BallPhysicsControllerとBallSurfaceSimulationを接続し、
+/// BallSurface上の移動・衝突・離脱をRigidbodyへ反映します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. BallSurfaceSourceへの接触地点から開始Triangleを取得します。
+/// 2. BallSurfaceSimulationを初期化し、RigidbodyをKinematicへ切り替えます。
+/// 3. FixedUpdateごとにSurfaceSimulationを進め、計算されたBall中心位置を反映します。
+/// 4. Surface移動経路はSphereCastで確認し、通常Colliderへのすり抜けを防ぎます。
+/// 5. 同一BallSurface内でも今回のSurface移動が管理しないTriangleは別壁として扱います。
+/// 6. 同一Mesh内の別壁へ当たった場合はHit TriangleでSimulationを再初期化し、
+///    Flyingへ切り替えずSurface Physics用バウンドを継続します。
+/// 7. Surface端から離脱する場合は出口位置と速度を一度保留し、
+///    次のFixedUpdateでDynamic Rigidbodyへ戻してFlyingを再開します。
+/// 8. 不正なGeometryや再初期化失敗時は、貫通を避けるため安全停止します。
+///
+/// Surface中は通常のRigidbody衝突解決に任せず、
+/// BallSurfaceSimulationのWorld状態を物理挙動の基準として扱います。
+/// </remarks>
 public partial class BallPhysicsController
 {
+	private bool m_HasPendingSurfaceExit;
+	private Vector3 m_PendingSurfaceExitVelocity;
+
+
+
 	/// <summary>
 	/// BallSurfaceへロックしてSurface Physicsを開始します。
 	/// </summary>
 	private bool TryEnterSurfaceSimulation(
 		BallSurfaceSource surfaceSource,
 		ContactPoint contact,
-		Vector3 incomingVelocity)
+		Vector3 incomingVelocity,
+		out BallSurfaceSimulation.EInitializeResult result)
 	{
-		if (surfaceSource == null ||
-			!surfaceSource.IsReady)
+		if (surfaceSource == null || !surfaceSource.IsReady)
 		{
+			result = BallSurfaceSimulation.EInitializeResult.InvalidSurface;
 			return false;
 		}
 
-		if (!surfaceSource.TryGetSurfaceHit(
-			contact.point,
-			contact.normal,
-			out RaycastHit surfaceHit))
+		if (!surfaceSource.TryResolveContactTriangle(
+			contact.point, contact.normal, contact.separation,
+			out int triangleIndex, out Vector3 surfacePoint))
 		{
+			result = BallSurfaceSimulation.EInitializeResult.ContactTriangleNotFound;
 			return false;
 		}
 
-		if (surfaceHit.triangleIndex <
-			0)
-		{
-			return false;
-		}
-
-		// Transform Scaleなどが変わった場合にも
-		// 現在のBall半径をSurface Simulationへ反映します。
+		// Transform Scaleなどが変わった場合にも現在のBall半径を反映します。
 		ConfigureSurfaceSimulation();
-
 		if (!m_SurfaceSimulation.TryInitialize(
-			surfaceSource,
-			surfaceHit.triangleIndex,
-			surfaceHit.point,
-			incomingVelocity))
+			surfaceSource, triangleIndex, surfacePoint, incomingVelocity, out result))
 		{
 			return false;
 		}
+
+		// 初期化の成功後に以前の出口保留状態を破棄します。
+		ClearPendingSurfaceExit();
+
+		BeginSurfaceTrace("EnterSurface", true);
 
 		// Dynamic Rigidbodyの間に速度を停止します。
 		m_Rigidbody.linearVelocity =
@@ -78,6 +95,18 @@ public partial class BallPhysicsController
 	/// </summary>
 	private void UpdateSurfaceSimulation()
 	{
+		BeginSurfaceTrace("FixedUpdate");
+
+		// Surface端へ到達したFrameではKinematicのまま出口位置を確定し、
+		// 次のFixedUpdate開始時にDynamicへ戻します。
+		// FixedUpdate途中でDynamicへ戻すと、その直後のPhysics更新で
+		// 1Step分が追加で進むため、二重進行を避けます。
+		if (m_HasPendingSurfaceExit)
+		{
+			CompletePendingSurfaceExit();
+			return;
+		}
+
 		if (!m_SurfaceSimulation.IsInitialized)
 		{
 			Debug.LogWarning(
@@ -93,6 +122,8 @@ public partial class BallPhysicsController
 			m_SurfaceSimulation.Advance(
 				Time.fixedDeltaTime);
 
+		RecordSurfaceTrace($"Advance={result} AfterTriangle={m_SurfaceSimulation.CurrentTriangleIndex} HasLastEdge={m_SurfaceSimulation.HasLastEdge} LastEdgeTriangle={m_SurfaceSimulation.LastEdgeTriangleIndex} LastEdge={m_SurfaceSimulation.LastEdgeIndex} LastEdgeType={m_SurfaceSimulation.LastEdgeType}");
+
 		switch (result)
 		{
 			case BallSurfaceSimulation.EAdvanceResult.Moved:
@@ -103,8 +134,14 @@ public partial class BallPhysicsController
 			case BallSurfaceSimulation.EAdvanceResult.ConcaveEdgeReached:
 			case BallSurfaceSimulation.EAdvanceResult.BoundaryEdgeReached:
 			case BallSurfaceSimulation.EAdvanceResult.UnsupportedEdgeReached:
-				ApplySurfacePosition(
-					false);
+				if (!BeginPendingSurfaceExit())
+				{
+					Debug.LogWarning(
+						$"{name}: Surface出口のWorld状態を取得できなかったため停止します。 Result={result}",
+						this);
+
+					StopSurfaceMotionSafely();
+				}
 				break;
 
 			case BallSurfaceSimulation.EAdvanceResult.NotInitialized:
@@ -143,6 +180,8 @@ public partial class BallPhysicsController
 			targetColliderCenter -
 			colliderCenterOffset;
 
+		RecordSurfaceTrace($"ApplyTarget={targetColliderCenter.ToString("F6")} Immediate={immediate} Triangle={m_SurfaceSimulation.CurrentTriangleIndex}");
+
 		if (!immediate &&
 			TryHandleSurfaceObstacleCollision(
 				targetColliderCenter,
@@ -153,170 +192,104 @@ public partial class BallPhysicsController
 
 		if (immediate)
 		{
+			RecordSurfaceTrace("Apply=DirectPosition (SphereCastSkipped)");
 			m_Rigidbody.position =
 				targetRigidbodyPosition;
 		}
 		else
 		{
+			RecordSurfaceTrace("Apply=MovePosition");
 			m_Rigidbody.MovePosition(
 				targetRigidbodyPosition);
 		}
 	}
 
+
 	/// <summary>
-	/// Surface Physics中のBall中心移動経路に、
-	/// Ball LayerのCollision Matrix上で衝突対象となる
-	/// 通常Colliderが存在するか確認します。
+	/// Surface端へ到達したWorld位置と速度を保持し、
+	/// 次のFixedUpdateでFlyingへ戻す準備をします。
 	/// </summary>
-	/// <remarks>
-	/// BallSurfaceSourceを持つColliderはSurface Physics側で扱うため、
-	/// この通常衝突処理から除外します。
-	/// </remarks>
-	private bool TryHandleSurfaceObstacleCollision(
-		Vector3 targetColliderCenter,
-		Vector3 colliderCenterOffset)
+	private bool BeginPendingSurfaceExit()
 	{
-		Vector3 currentColliderCenter =
-			m_Rigidbody.position +
+		if (!m_SurfaceSimulation.TryGetWorldCenter(
+			out Vector3 worldCenter) ||
+			!m_SurfaceSimulation.TryGetWorldVelocity(
+				out Vector3 worldVelocity))
+		{
+			return false;
+		}
+
+		Vector3 colliderCenterOffset =
+			transform.TransformVector(
+				m_BallCollider.center);
+
+		// このFixedUpdateではKinematicを維持したまま、
+		// Surface計算で到達した正確な出口位置だけを反映します。
+		m_Rigidbody.position =
+			worldCenter -
 			colliderCenterOffset;
 
-		Vector3 displacement =
-			targetColliderCenter -
-			currentColliderCenter;
+		m_PendingSurfaceExitVelocity =
+			worldVelocity;
 
-		float moveDistance =
-			displacement.magnitude;
+		m_HasPendingSurfaceExit =
+			true;
 
-		if (moveDistance <=
-			m_MinimumCalculationDistance)
-		{
-			return false;
-		}
+		m_SurfaceSimulation.Reset();
+		m_SurfaceGravity.Clear();
 
-		Vector3 moveDirection =
-			displacement /
-			moveDistance;
+		return true;
+	}
 
-		float castRadius =
-			Mathf.Max(
-				GetBallWorldRadius() -
-					m_MinimumCalculationDistance,
-				m_MinimumCalculationDistance);
+	/// <summary>
+	/// 前FixedUpdateで確定したSurface出口速度をRigidbodyへ渡し、
+	/// 通常のFlying状態へ戻します。
+	/// </summary>
+	private void CompletePendingSurfaceExit()
+	{
+		Vector3 exitVelocity =
+			m_PendingSurfaceExitVelocity;
 
-		int hitCount =
-			Physics.SphereCastNonAlloc(
-				currentColliderCenter,
-				castRadius,
-				moveDirection,
-				m_SurfaceObstacleHits,
-				moveDistance,
-				m_BallCollisionMask,
-				QueryTriggerInteraction.Ignore);
+		ClearPendingSurfaceExit();
 
-		if (hitCount <=
-			0)
-		{
-			return false;
-		}
-
-		bool hasObstacleHit =
+		m_Rigidbody.isKinematic =
 			false;
 
-		RaycastHit nearestHit =
-			default;
+		m_Rigidbody.linearVelocity =
+			exitVelocity;
 
-		float nearestDistance =
-			float.PositiveInfinity;
+		m_Rigidbody.angularVelocity =
+			Vector3.zero;
 
-		for (int hitIndex = 0;
-			hitIndex < hitCount;
-			hitIndex++)
-		{
-			RaycastHit hit =
-				m_SurfaceObstacleHits[hitIndex];
+		m_FlightDirection =
+			exitVelocity.sqrMagnitude >
+				Mathf.Epsilon
+				? exitVelocity.normalized
+				: Vector3.zero;
 
-			Collider hitCollider =
-				hit.collider;
-
-			if (hitCollider == null ||
-				hitCollider.attachedRigidbody ==
-					m_Rigidbody)
-			{
-				continue;
-			}
-
-			// BallSurface同士の乗り換えは別機能として扱うため、
-			// 今回の通常Collider衝突からは除外します。
-			if (hitCollider.GetComponent<BallSurfaceSource>() !=
-				null)
-			{
-				continue;
-			}
-
-			if (hit.distance >=
-				nearestDistance)
-			{
-				continue;
-			}
-
-			hasObstacleHit =
-				true;
-
-			nearestHit =
-				hit;
-
-			nearestDistance =
-				hit.distance;
-		}
-
-		if (!hasObstacleHit)
-		{
-			return false;
-		}
-
-		if (!TryGetSurfaceWorldVelocity(
-			out Vector3 incomingVelocity))
-		{
-			Debug.LogWarning(
-				$"{name}: Surface Physics中の障害物衝突速度を取得できなかったため停止します。",
-				this);
-
-			StopSurfaceMotionSafely();
-			return true;
-		}
-
-		float safeMoveDistance =
-			Mathf.Max(
-				0.0f,
-				nearestHit.distance -
-					m_MinimumCalculationDistance);
-
-		Vector3 safeColliderCenter =
-			currentColliderCenter +
-			moveDirection *
-				safeMoveDistance;
-
-		m_Rigidbody.position =
-			safeColliderCenter -
-			colliderCenterOffset;
-
-		Vector3 bounceVelocity =
-			CalculateBounceVelocity(
-				incomingVelocity,
-				nearestHit.normal);
-
-		ApplyBounceVelocity(
-			bounceVelocity);
+		m_PrePhysicsVelocity =
+			exitVelocity;
 
 		m_SurfaceGravity.Clear();
 
 		m_NextAttractSearchTime =
-			Time.time;
+			Time.time +
+			m_AttractSearchInterval;
 
 		ChangeMotionState(
 			EBallMotionState.Flying);
+	}
 
-		return true;
+	/// <summary>
+	/// 保留中のSurface出口状態を破棄します。
+	/// </summary>
+	private void ClearPendingSurfaceExit()
+	{
+		m_HasPendingSurfaceExit =
+			false;
+
+		m_PendingSurfaceExitVelocity =
+			Vector3.zero;
 	}
 
 	/// <summary>
@@ -325,21 +298,8 @@ public partial class BallPhysicsController
 	private bool TryGetSurfaceWorldVelocity(
 		out Vector3 worldVelocity)
 	{
-		worldVelocity =
-			Vector3.zero;
-
-		if (!m_SurfaceSimulation.TryGetCurrentSurfaceNormal(
-			out Vector3 surfaceNormal))
-		{
-			return false;
-		}
-
-		worldVelocity =
-			m_SurfaceSimulation.SurfaceVelocity +
-			surfaceNormal *
-				m_SurfaceSimulation.VerticalVelocity;
-
-		return true;
+		return m_SurfaceSimulation.TryGetWorldVelocity(
+			out worldVelocity);
 	}
 
 	/// <summary>
@@ -373,7 +333,12 @@ public partial class BallPhysicsController
 	}
 
 	/// <summary>
-	/// SphereColliderの実ワールド半径を取得します。	/// </summary>
+	/// SphereColliderのScaleを考慮したWorld空間上の実半径を取得します。
+	/// </summary>
+	/// <remarks>
+	/// 非一様Scaleの場合でもColliderを内側へ小さく見積もらないよう、XYZの最大Scaleを使用します。
+	/// Surface Offset、SphereCast、場外復帰位置などの安全距離計算に使用します。
+	/// </remarks>
 	private float GetBallWorldRadius()
 	{
 		Vector3 lossyScale =
@@ -466,13 +431,14 @@ public partial class BallPhysicsController
 	/// </summary>
 	private void StopSurfaceMotionSafely()
 	{
+		DumpSurfaceTrace();
 		m_SurfaceSimulation.Reset();
 
-		m_Rigidbody.linearVelocity =
-			Vector3.zero;
-
-		m_Rigidbody.angularVelocity =
-			Vector3.zero;
+		if (!m_Rigidbody.isKinematic)
+		{
+			m_Rigidbody.linearVelocity = Vector3.zero;
+			m_Rigidbody.angularVelocity = Vector3.zero;
+		}
 
 		m_Rigidbody.isKinematic =
 			true;

@@ -316,7 +316,7 @@ MonoBehaviour:
   m_SensorCollider: {fileID: 5519193905326050400}
   m_VisualRoot: {fileID: 890395514728678959}
   m_ShootPower: 50
-  m_RepickupDelay: 0.2
+  m_RepickupDelay: 0.5
   m_PassBonusMinSpeed: 2
   m_ElectricStealPullDuration: 0.5
 --- !u!114 &1323764943930010185
@@ -498,6 +498,10 @@ MonoBehaviour:
   m_IsRespawnEnabled: 1
   m_MinBounds: {x: -150, y: 40, z: -150}
   m_MaxBounds: {x: 150, y: 150, z: 150}
+  m_RespawnGroundMask:
+    serializedVersion: 2
+    m_Bits: 128
+  m_GroundSearchRadius: 100
 --- !u!1 &8410741667192059326
 GameObject:
   m_ObjectHideFlags: 0

@@ -2,33 +2,26 @@
 using UnityEngine;
 
 /// <summary>
-/// フリー状態のボールに関する物理挙動全体を管理します。
+/// 未所持ボールの物理状態を統括するステートマシンです。
+/// Rigidbody飛行、Surface探索、BallSurface Physics、追尾移動を管理します。
 /// </summary>
 /// <remarks>
-/// このクラスはボール物理の司令塔として、
-/// 状態遷移、Rigidbodyへの速度反映、衝突処理、
-/// 各専門クラスへの処理委譲を担当します。
-///
 /// 主な処理の流れ:
-/// 1. シュート後は射出方向を維持しながら減速します。
-/// 2. 一定速度以下になるとAttachSurfaceを探索します。
-/// 3. 発見したSurface上の一点へ疑似重力を掛けます。
-/// 4. AttachSurfaceへ高速で接触した場合はバウンドします。
-/// 5. バウンド後は接触したLocalSurfaceを地面として扱います。
-/// 6. LocalSurface上では専用の減速を適用します。
-/// 7. 接触状態で十分低速になった場合はSurfaceへ吸着します。
-/// 8. AttachSurface以外への衝突は反射のみ行います。
+/// 1. シュート後はFlyingとしてRigidbody速度を維持しながら減速します。
+/// 2. 速度低下後は共通の最近接点探索でAttachSurfaceを探し、必要に応じて疑似重力へ移行します。
+/// 3. BallSurfaceSourceへ接触した場合はRigidbody移動からSurface Physicsへ切り替えます。
+/// 4. Surface中はTriangleを追跡し、Flat・Smooth・Convex・Concave・Vertexを専用処理で移動します。
+/// 5. Surface移動経路上の通常Colliderや同一Mesh内の別壁も衝突対象として処理します。
+/// 6. 同一BallSurface内の別壁ではHit Triangleへ再接続し、Surface状態のままバウンドを継続します。
+/// 7. Surfaceから離脱する場合は出口位置と速度を確定し、次のPhysics StepからFlyingへ戻します。
+/// 8. 通常Colliderとの衝突・追尾パスなどは各partialファイルへ処理を分割しています。
 /// 9. 物理状態の確定はHost側だけで行います。
 ///
-/// 専門処理:
-/// BallBounce
-///     バウンド判定・反射速度計算を担当します。
-///
-/// BallSurfaceGravity
-///     固定点重力・接触後のSurface重力を担当します。
-///
-/// BallSurfaceSearch
-///     AttachSurfaceの周辺探索を担当します。
+/// partialファイルの責務:
+/// BallPhysicsController.Air.cs      : Flying・疑似重力・Surface探索
+/// BallPhysicsController.Collision.cs: 通常Collision・Rigidbodyバウンド
+/// BallPhysicsController.Surface.cs  : BallSurface Physicsとの接続・離脱・障害物判定
+/// BallPhysicsController.Homing.cs   : 追尾パス
 /// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
@@ -138,7 +131,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	[SerializeField] private float m_AttractStartSpeed;
 
 	[Tooltip(
-		"飛行中にAttachSurfaceを探す最大距離です。")]
+		"飛行中にAttachSurfaceの最近接点を探す最大距離です。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_AttractSearchDistance;
 
@@ -235,7 +228,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	[Header("停止後のAttachSurface探索")]
 
 	[Tooltip(
-		"停止後にAttachSurfaceを探す最大距離です。")]
+		"停止後にAttachSurfaceの最近接点を探す最大距離です。")]
 	[Min(0.0f)]
 	[SerializeField] private float m_SurfaceSearchRadius;
 
@@ -301,6 +294,11 @@ public partial class BallPhysicsController : NetworkBehaviour
 			return speedSquared > stopSpeed * stopSpeed;
 		}
 	}
+
+	/// <summary>
+	/// 追尾パス状態(Homing)で飛行中か取得します。
+	/// </summary>
+	public bool IsHoming => m_MotionState == EBallMotionState.Homing;
 
 	/// <summary>
 	/// 通常飛行中に維持する進行方向です。
@@ -507,6 +505,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	private void ResetInternalState()
 	{
 		ClearHomingState();
+		ClearPendingSurfaceExit();
 
 		ChangeMotionState(
 			EBallMotionState.Idle);
@@ -530,6 +529,7 @@ public partial class BallPhysicsController : NetworkBehaviour
 	public void ResetMotionState()
 	{
 		ClearHomingState();
+		ClearPendingSurfaceExit();
 
 		if (!IsServer)
 		{

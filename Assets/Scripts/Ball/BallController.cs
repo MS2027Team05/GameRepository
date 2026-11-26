@@ -6,16 +6,21 @@ using Unity.Netcode.Components;
 using UnityEngine;
 
 /// <summary>
-/// ボール本体の所持状態と物理状態を管理します。
+/// ボール本体のゲームプレイ状態を統括します。
+/// 所持・奪取・パス・シュート・解放・リスポーンと、
+/// それらに伴うネットワーク同期を管理します。
 /// </summary>
 /// <remarks>
 /// 主な処理の流れ:
-/// 1. Hostがプレイヤーからの取得要求を検証します。
-/// 2. 取得成功時はプレイヤーへNetworkObjectを親子付けします。
-/// 3. 所持状態をNetworkVariableで全Clientへ同期します。
-/// 4. シュート時は親子関係を解除して物理挙動へ戻します。
-/// 5. 強制解放時も同じく親子関係を解除します。
-/// 6. シュート・解放直後は元所持者のみ一定時間再キャッチを禁止します。
+/// 1. Host側で取得・奪取・パス・シュート要求を検証します。
+/// 2. 所持が成立した場合は所持者情報をNetworkVariableで同期します。
+/// 3. 描画専用のVisualRootだけを所持ジョイントへ付け替えます。
+/// 4. シュート・強制解放時は親子関係と所持状態を解除し、物理処理へ戻します。
+/// 5. 解放直後は元所持者の再取得制限やパス情報を管理します。
+/// 6. リスポーン時は所持・パス・物理状態を初期化して指定位置へ戻します。
+///
+/// Rigidbodyによる自由移動そのものはBallPhysicsControllerへ委譲し、
+/// このクラスはボール全体のゲームプレイ状態とネットワーク上の正本を担当します。
 /// </remarks>
 [RequireComponent(typeof(NetworkObject))]
 [RequireComponent(typeof(Rigidbody))]
@@ -70,12 +75,22 @@ public class BallController : NetworkBehaviour
 	private Quaternion m_InitialRotation;
 	public bool IsMatchPaused { get; private set; }
 
+	private const float m_RepickupClearDistance = 2.2f;
+	private const float m_MaxRepickupLockDuration = 1.0f;
+
 	private bool m_HasRepickupLock;
 	private ulong m_LastHolderClientId;
+	private Transform m_LastHolderTransform;
 	private float m_RepickupUnlockTime;
+	private float m_RepickupLockMaxTime;
 
 	private bool m_IsStealing;
 	private Coroutine m_ElectricStealCoroutine;
+
+	/// <summary>
+	/// 電撃によるボール奪取処理が進行中か取得します。
+	/// </summary>
+	public bool IsStealing => m_IsStealing;
 
 	// Host側で、最後の正常なシュートが味方パスとして受取可能か記録します。
 	private bool m_IsPassInFlight;
@@ -268,6 +283,7 @@ public class BallController : NetworkBehaviour
 			return;
 		}
 
+		UpdateRepickupLock();
 		UpdatePassBonusEligibility();
 		UpdateShotInFlight();
 	}
@@ -372,11 +388,7 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		if (m_HasRepickupLock &&
-			Time.time >= m_RepickupUnlockTime)
-		{
-			m_HasRepickupLock = false;
-		}
+		UpdateRepickupLock();
 
 		if (m_HasRepickupLock &&
 			holderClientId == m_LastHolderClientId)
@@ -424,6 +436,7 @@ public class BallController : NetworkBehaviour
 
 		m_HasHolder.Value =
 			true;
+		ClearRepickupLock();
 		m_IsShotInFlight.Value = false;
 
 		// 所持確定時に一度だけ判定し、強制ドロップや敵からの取得では付与しません。
@@ -554,6 +567,7 @@ public class BallController : NetworkBehaviour
 		m_CurrentPassChainCount = 0;
 		m_IsGoalHomingInFlight = false;
 		m_WasFriendlyPassAssisted = false;
+		ClearRepickupLock();
 		m_BallPhysics?.ResetMotionState();
 
 		// 移動中は物理挙動と当たり判定を停止
@@ -628,9 +642,6 @@ public class BallController : NetworkBehaviour
 				targetPosition,
 				smoothT);
 
-			Debug.Log(
-	$"[BallController] 引き寄せ中 Position: {transform.position}");
-
 			yield return null;
 		}
 
@@ -688,6 +699,27 @@ public class BallController : NetworkBehaviour
 
 		m_IsStealing = false;
 		m_ElectricStealCoroutine = null;
+	}
+
+	/// <summary>
+	/// サーバー側で追尾パスが味方ターゲットへ到達した際、通信ラグを待たずに所持確定を試みます。
+	/// </summary>
+	public bool TryCompleteHomingPassCatch(Transform targetTransform)
+	{
+		if (!IsServer || targetTransform == null)
+		{
+			return false;
+		}
+
+		NetworkObject targetNetworkObject = targetTransform.GetComponentInParent<NetworkObject>();
+		if (targetNetworkObject == null || !targetNetworkObject.IsSpawned)
+		{
+			return false;
+		}
+
+		return TrySetHolder(
+			targetNetworkObject.OwnerClientId,
+			targetNetworkObject.NetworkObjectId);
 	}
 
 	/// <summary>
@@ -749,26 +781,17 @@ public class BallController : NetworkBehaviour
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
 
-		ETeamType passerTeam = ETeamType.None;
+		TryGetCurrentHolderInfo(
+			out Transform previousHolderTransform,
+			out ETeamType passerTeam);
 
-		if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
-			m_CurrentHolderNetworkObjectId.Value,
-			out NetworkObject previousHolderObject))
-		{
-			PlayerNetworkProfile profile =
-				previousHolderObject.GetComponent<PlayerNetworkProfile>();
-
-			if (profile != null)
-			{
-				passerTeam = profile.Team;
-			}
-		}
-
-		StartRepickupLock(previousHolderClientId);
+		StartRepickupLock(
+			previousHolderClientId,
+			previousHolderTransform);
 
 		if (!DetachFromHolder())
 		{
-			m_HasRepickupLock = false;
+			ClearRepickupLock();
 			return false;
 		}
 
@@ -782,14 +805,14 @@ public class BallController : NetworkBehaviour
 		m_IsGoalHomingInFlight = !useTransform;
 		m_LastReleaseOrigin = transform.position;
 
-		// 対象の種類によって追尾方法を切り替える
+		// 対象の種類によって追尾方法を切り替える(初速は通常投げと統一)
 		if (useTransform)
 		{
-			m_BallPhysics.BeginHoming(target);
+			m_BallPhysics.BeginHoming(target, m_ShootPower);
 		}
 		else
 		{
-			m_BallPhysics.BeginHoming(targetPosition);
+			m_BallPhysics.BeginHoming(targetPosition, m_ShootPower);
 		}
 
 		// 味方へのロックオンパス(useTransform=true)とそれ以外のシュート/投げを区別して通知します。
@@ -804,8 +827,25 @@ public class BallController : NetworkBehaviour
 	/// <summary>
 	/// Host上で所持中のボールを指定方向へ射出します。
 	/// </summary>
-	public bool TryShoot(
-		Vector3 shootDirection)
+	public bool TryShoot(Vector3 shootDirection)
+	{
+		return TryShootInternal(shootDirection, false, Vector3.zero);
+	}
+
+	/// <summary>
+	/// Hostの射出位置から照準座標へ向かう通常シュートを実行します。
+	/// </summary>
+	public bool TryShootAt(Vector3 targetPoint, Vector3 fallbackDirection)
+	{
+		if (float.IsNaN(targetPoint.sqrMagnitude) || float.IsInfinity(targetPoint.sqrMagnitude))
+		{
+			return false;
+		}
+
+		return TryShootInternal(fallbackDirection, true, targetPoint);
+	}
+
+	private bool TryShootInternal(Vector3 shootDirection, bool useTargetPoint, Vector3 targetPoint)
 	{
 		if (!IsServer || !CanPlayMatch() || m_IsStealing)
 		{
@@ -817,37 +857,46 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		if (shootDirection.sqrMagnitude <=
-			Mathf.Epsilon)
+		float directionSquared = shootDirection.sqrMagnitude;
+		if (float.IsNaN(directionSquared) || float.IsInfinity(directionSquared) ||
+			directionSquared <= 0.000001f)
 		{
 			return false;
 		}
 
 		shootDirection.Normalize();
+		if (useTargetPoint)
+		{
+			// DetachFromHolderと同じHost側の所持姿勢を使用します。
+			UpdateHeldPose();
+			Vector3 shotCenter = m_PhysicsCollider is SphereCollider sphere
+				? sphere.transform.TransformPoint(sphere.center)
+				: transform.position;
+			Vector3 toTarget = targetPoint - shotCenter;
+			float targetDistanceSquared = toTarget.sqrMagnitude;
+			// 近すぎる照準や射出位置より後ろの照準で逆方向へ投げないようにします。
+			if (!float.IsNaN(targetDistanceSquared) && !float.IsInfinity(targetDistanceSquared) &&
+				targetDistanceSquared > 0.000001f && Vector3.Dot(toTarget, shootDirection) > 0.0f)
+			{
+				shootDirection = toTarget.normalized;
+			}
+		}
 
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
 
-		// TryShoot成功時のみ使用するパス元チームを先に取得しておきます。
-		ETeamType passerTeam = ETeamType.None;
-		if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
-			m_CurrentHolderNetworkObjectId.Value,
-			out NetworkObject previousHolderObject))
-		{
-			PlayerNetworkProfile profile = previousHolderObject.GetComponent<PlayerNetworkProfile>();
-			if (profile != null)
-			{
-				passerTeam = profile.Team;
-			}
-		}
+		// TryShoot成功時のみ使用するパス元チーム・位置参照を先に取得しておきます。
+		TryGetCurrentHolderInfo(
+			out Transform previousHolderTransform,
+			out ETeamType passerTeam);
 
 		StartRepickupLock(
-			previousHolderClientId);
+			previousHolderClientId,
+			previousHolderTransform);
 
 		if (!DetachFromHolder())
 		{
-			m_HasRepickupLock =
-				false;
+			ClearRepickupLock();
 
 			return false;
 		}
@@ -895,13 +944,17 @@ public class BallController : NetworkBehaviour
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
 
+		TryGetCurrentHolderInfo(
+			out Transform previousHolderTransform,
+			out _);
+
 		StartRepickupLock(
-			previousHolderClientId);
+			previousHolderClientId,
+			previousHolderTransform);
 
 		if (!DetachFromHolder())
 		{
-			m_HasRepickupLock =
-				false;
+			ClearRepickupLock();
 
 			return;
 		}
@@ -929,13 +982,42 @@ public class BallController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 指定プレイヤーに対する再キャッチ禁止時間を開始します。
+	/// 現在の所持者のTransformと所属チームを取得します。
+	/// </summary>
+	private void TryGetCurrentHolderInfo(
+		out Transform holderTransform,
+		out ETeamType holderTeam)
+	{
+		holderTransform = null;
+		holderTeam = ETeamType.None;
+
+		if (NetworkManager != null &&
+			NetworkManager.SpawnManager != null &&
+			NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+				m_CurrentHolderNetworkObjectId.Value,
+				out NetworkObject currentHolderObject))
+		{
+			holderTransform = currentHolderObject.transform;
+			PlayerNetworkProfile profile = currentHolderObject.GetComponent<PlayerNetworkProfile>();
+			if (profile != null)
+			{
+				holderTeam = profile.Team;
+			}
+		}
+	}
+
+	/// <summary>
+	/// 指定プレイヤーに対する再キャッチ禁止状態を開始します。
 	/// </summary>
 	private void StartRepickupLock(
-		ulong holderClientId)
+		ulong holderClientId,
+		Transform holderTransform)
 	{
 		m_LastHolderClientId =
 			holderClientId;
+
+		m_LastHolderTransform =
+			holderTransform;
 
 		m_RepickupUnlockTime =
 			Time.time +
@@ -943,8 +1025,67 @@ public class BallController : NetworkBehaviour
 				0.0f,
 				m_RepickupDelay);
 
-		m_HasRepickupLock =
-			m_RepickupDelay > 0.0f;
+		m_RepickupLockMaxTime =
+			Time.time +
+			Mathf.Max(
+				Mathf.Max(0.0f, m_RepickupDelay),
+				m_MaxRepickupLockDuration);
+
+		m_HasRepickupLock = true;
+	}
+
+	/// <summary>
+	/// 追尾パス飛行状態・経過時間・離脱距離に基づき再キャッチ禁止を解除できるか更新します。
+	/// </summary>
+	private void UpdateRepickupLock()
+	{
+		if (!m_HasRepickupLock)
+		{
+			return;
+		}
+
+		// 追尾パス飛行中は、壁バウンド等で投球者付近を通過しても自己キャッチしないようロックを維持します。
+		if (m_BallPhysics != null && m_BallPhysics.IsHoming)
+		{
+			return;
+		}
+
+		if (Time.time < m_RepickupUnlockTime)
+		{
+			return;
+		}
+
+		if (HasClearedThrowerPickupRange() ||
+			Time.time >= m_RepickupLockMaxTime ||
+			(m_BallPhysics != null && !m_BallPhysics.IsMoving))
+		{
+			ClearRepickupLock();
+		}
+	}
+
+	/// <summary>
+	/// ボールが投球者の取得判定圏外へ離れたか判定します。
+	/// </summary>
+	private bool HasClearedThrowerPickupRange()
+	{
+		if (m_LastHolderTransform == null)
+		{
+			return true;
+		}
+
+		float sqrDistance = (transform.position - m_LastHolderTransform.position).sqrMagnitude;
+		return sqrDistance >= m_RepickupClearDistance * m_RepickupClearDistance;
+	}
+
+	/// <summary>
+	/// 再キャッチ禁止状態を初期化します。
+	/// </summary>
+	private void ClearRepickupLock()
+	{
+		m_HasRepickupLock = false;
+		m_LastHolderTransform = null;
+		m_RepickupUnlockTime = 0.0f;
+		m_RepickupLockMaxTime = 0.0f;
 	}
 
 	private bool CanPlayMatch()
@@ -987,9 +1128,49 @@ public class BallController : NetworkBehaviour
 	}
 
 	/// <summary>
+	/// 場外復帰時の初期候補位置です。
+	/// </summary>
+	internal Vector3 InitialRespawnPosition => m_InitialPosition;
+
+	/// <summary>
+	/// 初期回転で復帰する際の球中心OffsetとWorld半径を取得します。
+	/// Colliderの無効化中もboundsに依存せず計算します。
+	/// </summary>
+	internal bool TryGetRespawnSphere(out Vector3 centerOffset, out float radius, out SphereCollider sphere)
+	{
+		centerOffset = Vector3.zero;
+		radius = 0.0f;
+		sphere = m_PhysicsCollider as SphereCollider;
+		if (sphere == null)
+		{
+			return false;
+		}
+
+		Vector3 scale = sphere.transform.lossyScale;
+		radius = sphere.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Max(Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
+		Vector3 currentOffset = sphere.transform.TransformPoint(sphere.center) - transform.position;
+		centerOffset = m_InitialRotation * Quaternion.Inverse(transform.rotation) * currentOffset;
+		return radius > 0.0f && !float.IsInfinity(radius) &&
+			!float.IsNaN(centerOffset.sqrMagnitude) && !float.IsInfinity(centerOffset.sqrMagnitude);
+	}
+
+	/// <summary>
 	/// 試合の停止状態を維持し、所持・投球・物理状態を初期化して生成時の位置へ戻します。
 	/// </summary>
 	public bool RespawnAtInitialPosition()
+	{
+		return RespawnAtPosition(
+			m_InitialPosition);
+	}
+
+	/// <summary>
+	/// 試合の停止状態を維持し、所持・投球・物理状態を初期化して指定位置へ戻します。
+	/// </summary>
+	/// <param name="respawnPosition">
+	/// ボールを復帰させるWorld座標です。
+	/// </param>
+	public bool RespawnAtPosition(
+		Vector3 respawnPosition)
 	{
 		if (!IsServer || !IsSpawned)
 		{
@@ -1016,16 +1197,15 @@ public class BallController : NetworkBehaviour
 
 		m_IsPassInFlight = false;
 		m_LastPasserTeam = ETeamType.None;
-		m_HasRepickupLock = false;
+		ClearRepickupLock();
 		m_LastHolderClientId = 0;
 		m_LastPasserClientId = 0;
 		m_LastAssistClientId = 0;
 		m_CurrentPassChainCount = 0;
 		m_IsGoalHomingInFlight = false;
-		m_RepickupUnlockTime = 0f;
 		m_CurrentHolderId.Value = 0;
 		ClearHolderAttachment();
-		m_LastReleaseOrigin = m_InitialPosition;
+		m_LastReleaseOrigin = respawnPosition;
 		m_WasFriendlyPassAssisted = false;
 		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
@@ -1033,9 +1213,32 @@ public class BallController : NetworkBehaviour
 		m_Rigidbody.useGravity = false;
 		m_Rigidbody.linearVelocity = Vector3.zero;
 		m_Rigidbody.angularVelocity = Vector3.zero;
-		m_NetworkTransform.Teleport(m_InitialPosition, m_InitialRotation, transform.localScale);
+		m_NetworkTransform.Teleport(
+			respawnPosition,
+			m_InitialRotation,
+			transform.localScale);
 		SetMatchPaused(IsMatchPaused);
 		return true;
+	}
+
+	/// <summary>
+	/// 場外復帰時にSurfaceから離すためのボール物理Collider半径を取得します。
+	/// </summary>
+	public float GetPhysicsColliderWorldRadius()
+	{
+		if (m_PhysicsCollider == null)
+		{
+			return 0.0f;
+		}
+
+		Vector3 extents =
+			m_PhysicsCollider.bounds.extents;
+
+		return Mathf.Max(
+			extents.x,
+			Mathf.Max(
+				extents.y,
+				extents.z));
 	}
 
 	/// <summary>
@@ -1117,7 +1320,7 @@ public class BallController : NetworkBehaviour
 		bool parentSucceeded =
 			NetworkObject.TrySetParent(
 				holderNetworkObject,
-				false);
+				true);
 
 		if (!parentSucceeded)
 		{
@@ -1139,9 +1342,10 @@ public class BallController : NetworkBehaviour
 
 		if (m_NetworkTransform != null && m_NetworkTransform.CanCommitToTransform)
 		{
+			bool useLocalSpace = m_NetworkTransform.InLocalSpace;
 			m_NetworkTransform.Teleport(
-				transform.position,
-				transform.rotation,
+				useLocalSpace ? transform.localPosition : transform.position,
+				useLocalSpace ? transform.localRotation : transform.rotation,
 				transform.localScale);
 		}
 

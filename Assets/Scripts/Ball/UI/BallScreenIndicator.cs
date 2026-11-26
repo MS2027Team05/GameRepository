@@ -3,16 +3,20 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// ボールの画面上での位置を示すインジケーターを管理します。
+/// ボールの画面内・画面外位置と所持状態に応じて、追跡用Indicatorを切り替えます。
 /// </summary>
 /// <remarks>
 /// 主な処理の流れ:
-/// 1. ボールが近距離か確認します。
-/// 2. 遠距離かつ画面内なら画面内用Indicatorを表示します。
-/// 3. 画面外なら画面外用Indicatorを画面端へ表示します。
-/// 4. ボールの所持状態に応じて表示するIndicatorを切り替えます。
-/// 5. IndicatorはGameObject単位で切り替え、
-///    MainとGlowをまとめて表示・非表示にします。
+/// 1. 通常プレイまたは観戦状態に応じて使用Cameraを取得します。
+/// 2. ボールのViewport位置とCameraからの距離を計算します。
+/// 3. 近距離かつ画面内ならIndicatorを非表示にします。
+/// 4. 遠距離の画面内ではボール位置へIndicatorを配置します。
+/// 5. 画面外では方向ベクトルからCanvas端の位置と矢印角度を計算します。
+/// 6. Free・自分・味方・敵・観戦中の保持者に応じて表示Prefabを切り替えます。
+/// 7. 所持者のTeamを取得し、Red・BlueのInspector設定色を表示中Indicatorへ適用します。
+/// 8. PlayerNetworkProfileは所持者変更時だけ取り直し、毎FrameのGetComponentを避けます。
+///
+/// IndicatorはGameObject単位で切り替え、MainやGlowなど子Graphicをまとめて表示します。
 /// </remarks>
 public class BallScreenIndicator : MonoBehaviour
 {
@@ -59,6 +63,13 @@ public class BallScreenIndicator : MonoBehaviour
 
 	[Tooltip("画面外インジケーターの向きを補正する角度です。")]
 	[SerializeField] private float m_ArrowAngleOffset;
+
+	[Header("チームカラー")]
+	[Tooltip("Red Teamがボールを所持しているときにIndicatorへ適用する色です。")]
+	[SerializeField] private Color m_RedTeamColor = Color.red;
+
+	[Tooltip("Blue Teamがボールを所持しているときにIndicatorへ適用する色です。")]
+	[SerializeField] private Color m_BlueTeamColor = Color.blue;
 
 	private Camera m_TargetCamera;
 	private Canvas m_Canvas;
@@ -131,7 +142,7 @@ public class BallScreenIndicator : MonoBehaviour
 		}
 
 		Vector3 ballPosition =
-			m_BallController.transform.position;
+			m_BallController.VisualTransform.position;
 
 		Vector3 viewportPosition =
 			m_TargetCamera.WorldToViewportPoint(
@@ -489,12 +500,12 @@ public class BallScreenIndicator : MonoBehaviour
 		{
 			case ETeamType.Red:
 				teamColor =
-					Color.red;
+					m_RedTeamColor;
 				break;
 
 			case ETeamType.Blue:
 				teamColor =
-					Color.blue;
+					m_BlueTeamColor;
 				break;
 
 			default:
@@ -626,8 +637,13 @@ public class BallScreenIndicator : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 画面外にあるボール方向へIndicatorを配置します。
+	/// 画面外のボール方向をCanvas中心からの2D方向へ変換し、
+	/// Indicatorを画面端へ配置して矢印を回転させます。
 	/// </summary>
+	/// <remarks>
+	/// ボールがCamera背面にある場合はViewport方向を反転し、画面上で正しい追跡方向を示します。
+	/// Canvas半サイズとScreenMarginからX・Yそれぞれの到達倍率を求め、小さい方を採用して矩形の画面端へ固定します。
+	/// </remarks>
 	private void UpdateOffscreenIndicatorTransform(
 		RectTransform indicatorTransform,
 		Vector3 viewportPosition)

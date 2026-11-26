@@ -230,6 +230,45 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	}
 
 	/// <summary>
+	/// 通常シュートの照準座標を発射時に取得します。
+	/// 着地点の追跡状態や移動用マーカーは変更しません。
+	/// </summary>
+	public bool TryGetShotAim(Vector3 fallbackDirection, out Vector3 targetPoint, out Vector3 aimDirection)
+	{
+		targetPoint = Vector3.zero;
+		aimDirection = fallbackDirection.normalized;
+		if (!(m_MaxAimDistance > 0.0f) || float.IsInfinity(m_MaxAimDistance))
+		{
+			return false;
+		}
+
+		Ray ray;
+		Camera camera = Camera.main;
+		if (camera != null)
+		{
+			// 実際に描画されるカメラの画面中央を基準にします。
+			ray = camera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
+		}
+		else
+		{
+			Transform cameraTransform = GetAimCameraTransform();
+			if (cameraTransform == null || aimDirection.sqrMagnitude <= 0.000001f)
+			{
+				return false;
+			}
+			ray = new Ray(cameraTransform.position, aimDirection);
+		}
+
+		aimDirection = ray.direction.normalized;
+		// 移動用の照準Layerと射程を共用します。空間の場合もRay上に目標を設定します。
+		targetPoint = Physics.Raycast(ray, out RaycastHit hit, m_MaxAimDistance,
+			m_AimTargetLayers, QueryTriggerInteraction.Ignore)
+			? hit.point
+			: ray.GetPoint(m_MaxAimDistance);
+		return true;
+	}
+
+	/// <summary>
 	/// レティクルの方向にある移動先を判定する。
 	/// </summary>
 	private bool TryEvaluateAimTarget(

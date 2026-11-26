@@ -50,6 +50,11 @@ public class LobbyUIController : MonoBehaviour
 	[SerializeField] private Button m_DebugToggleSceneButton;
 	[SerializeField] private TextMeshProUGUI m_DebugTargetSceneText;
 	[SerializeField] private Button m_DebugForceStartButton;
+	[SerializeField] private Toggle m_DebugModeToggle;
+
+	[Header("チーム選択パネル連携(任意)")]
+	[SerializeField] private LobbyTeamSelectPanelController m_TeamSelectPanel;
+	[SerializeField] private Button m_ChangeTeamButton;
 
 	private void Awake()
 	{
@@ -66,6 +71,11 @@ public class LobbyUIController : MonoBehaviour
 		if (m_AppearancePickerUI == null)
 		{
 			m_AppearancePickerUI = GetComponentInChildren<LobbyAppearancePickerUI>(true);
+		}
+
+		if (m_TeamSelectPanel == null)
+		{
+			m_TeamSelectPanel = FindFirstObjectByType<LobbyTeamSelectPanelController>();
 		}
 
 		if (m_AppearancePickerUI != null)
@@ -93,10 +103,16 @@ public class LobbyUIController : MonoBehaviour
 			m_TitleOverlay.OnTitleShown += HandleTitleShown;
 		}
 
+		if (m_TeamSelectPanel != null)
+		{
+			m_TeamSelectPanel.OnPanelClosed += HandleTeamSelectPanelClosed;
+		}
+
 		RefreshAllUI();
 
 		// タイトル画面が表示されていなければ初期選択
-		if (m_TitleOverlay == null || !m_TitleOverlay.IsTitleActive)
+		if ((m_TitleOverlay == null || !m_TitleOverlay.IsTitleActive) &&
+			(m_TeamSelectPanel == null || !m_TeamSelectPanel.IsPanelOpen))
 		{
 			SetLobbyInitialSelectedButton();
 		}
@@ -115,6 +131,11 @@ public class LobbyUIController : MonoBehaviour
 		{
 			m_TitleOverlay.OnTitleDismissed -= HandleTitleDismissed;
 			m_TitleOverlay.OnTitleShown -= HandleTitleShown;
+		}
+
+		if (m_TeamSelectPanel != null)
+		{
+			m_TeamSelectPanel.OnPanelClosed -= HandleTeamSelectPanelClosed;
 		}
 	}
 
@@ -294,6 +315,11 @@ public class LobbyUIController : MonoBehaviour
 			m_DebugCycleMinPlayersButton.gameObject.SetActive(active);
 		}
 
+		if (m_DebugModeToggle != null)
+		{
+			m_DebugModeToggle.gameObject.SetActive(active);
+		}
+
 		// デバッグパネル表示時も、兼任ホストの初期選択はREADYボタンにする
 		if (active)
 		{
@@ -331,6 +357,8 @@ public class LobbyUIController : MonoBehaviour
 
 	private void ShowLoadingPanel()
 	{
+		m_TeamSelectPanel?.ClosePanel();
+
 		if (m_AppearancePickerUI != null)
 		{
 			m_AppearancePickerUI.ClosePicker();
@@ -352,6 +380,8 @@ public class LobbyUIController : MonoBehaviour
 
 	private void ShowDisconnectNoticePanel()
 	{
+		m_TeamSelectPanel?.ClosePanel();
+
 		if (m_AppearancePickerUI != null)
 		{
 			m_AppearancePickerUI.ClosePicker();
@@ -493,6 +523,11 @@ public class LobbyUIController : MonoBehaviour
 			m_BackToTitleButton.onClick.AddListener(ReturnToTitleOverlay);
 		}
 
+		if (m_ChangeTeamButton != null)
+		{
+			m_ChangeTeamButton.onClick.AddListener(() => m_TeamSelectPanel?.OpenManual());
+		}
+
 		// デバッグ操作
 		if (m_DebugCycleMinPlayersButton != null)
 		{
@@ -508,6 +543,16 @@ public class LobbyUIController : MonoBehaviour
 		{
 			m_DebugForceStartButton.onClick.AddListener(() => m_LobbyManager?.ForceStartGameDebug());
 		}
+
+		if (m_DebugModeToggle != null)
+		{
+			m_DebugModeToggle.onValueChanged.AddListener(isOn =>
+			{
+				MatchManager.IsInfiniteTimeDebugEnabled = isOn;
+				MatchManager.IsInfiniteEnergyLobbyDebugEnabled = isOn;
+				PlayerResourceController.IsInfiniteEnergyDebugEnabled = isOn;
+			});
+		}
 	}
 
 	private void RefreshAllUI()
@@ -522,6 +567,18 @@ public class LobbyUIController : MonoBehaviour
 		UpdateDebugControls();
 	}
 
+	private void HandleTeamSelectPanelClosed()
+	{
+		if (m_TitleOverlay != null && m_TitleOverlay.IsTitleActive)
+		{
+			SetInitialSelectedButton(m_TitleStartButton);
+			return;
+		}
+
+		RefreshAllUI();
+		SetLobbyInitialSelectedButton();
+	}
+
 	private void UpdatePlayerControls()
 	{
 		if (!m_LobbyManager.TryGetLocalPlayerData(out var localPlayer))
@@ -529,15 +586,31 @@ public class LobbyUIController : MonoBehaviour
 			return;
 		}
 
+		bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
+		bool isPlayerHost = NetworkConnectManager.IsPlayerHost;
+		bool isTitleActive = m_TitleOverlay != null && m_TitleOverlay.IsTitleActive;
+
 		// 観戦者へ切り替わった場合はプレイヤー操作パネルを非表示にする
-		if (localPlayer.Team == ETeamType.Spectator || SpectatorDisplayManager.IsLocalSpectator)
+		if ((isServer && !isPlayerHost) || localPlayer.Team == ETeamType.Spectator || SpectatorDisplayManager.IsLocalSpectator)
 		{
 			if (m_AppearancePickerUI != null)
 			{
 				m_AppearancePickerUI.ClosePicker();
 			}
 			SetPanelActive(m_PlayerControlPanel, false);
+			SetDebugControlsActive(false);
 			return;
+		}
+
+		// 観戦者からプレイヤー枠へ復帰した際に操作パネルを再表示する
+		if (!isTitleActive && m_PlayerControlPanel != null && !m_PlayerControlPanel.activeSelf)
+		{
+			bool shouldSelectDefault = m_TeamSelectPanel == null || !m_TeamSelectPanel.IsPanelOpen;
+			SetPanelActive(m_PlayerControlPanel, true, shouldSelectDefault ? m_ReadyButton : null);
+			if (isServer && isPlayerHost)
+			{
+				SetDebugControlsActive(true);
+			}
 		}
 
 		bool isSeated = localPlayer.Team != ETeamType.None;
@@ -583,6 +656,11 @@ public class LobbyUIController : MonoBehaviour
 			// 準備完了状態ではタイトルに戻れないよう制御
 			m_BackToTitleButton.interactable = !isReady;
 		}
+
+		if (m_ChangeTeamButton != null)
+		{
+			m_ChangeTeamButton.interactable = !isReady;
+		}
 	}
 
 	private void UpdateHostControls()
@@ -611,6 +689,12 @@ public class LobbyUIController : MonoBehaviour
 		if (m_DebugTargetSceneText != null)
 		{
 			m_DebugTargetSceneText.text = $"[Debug] 遷移先: {m_LobbyManager.TargetSceneName}";
+		}
+
+		if (m_DebugModeToggle != null)
+		{
+			bool isDebugMode = MatchManager.IsInfiniteTimeDebugEnabled && MatchManager.IsInfiniteEnergyLobbyDebugEnabled;
+			m_DebugModeToggle.SetIsOnWithoutNotify(isDebugMode);
 		}
 	}
 }

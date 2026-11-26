@@ -1,8 +1,18 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// BallPhysicsControllerの通常衝突・バウンド処理を定義します。
+/// BallPhysicsControllerの通常CollisionとRigidbodyバウンドを担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. Surface状態以外でOnCollisionEnterを受け取ります。
+/// 2. BallSurfaceSourceへの接触ならSurface Physicsの初期化を優先します。
+/// 3. 従来のAttachSurfaceでは速度に応じてバウンドまたは吸着を選択します。
+/// 4. その他のColliderでは接触法線を使って通常の反射速度を計算します。
+/// 5. 反射速度をRigidbodyへ適用し、必要に応じてFlyingへ戻します。
+///
+/// Surface Physics中のSphereCast障害物判定はBallPhysicsController.Surface.cs側で処理します。
+/// </remarks>
 public partial class BallPhysicsController
 {
 	/// <summary>
@@ -44,6 +54,17 @@ public partial class BallPhysicsController
 			GetIncomingVelocity(
 				collision);
 
+		if (m_MotionState ==
+			EBallMotionState.Homing)
+		{
+			HandleHomingCollision(
+				collision.collider,
+				contact,
+				incomingVelocity);
+
+			return;
+		}
+
 		// BallSurfaceSourceが存在する面では、
 		// Rigidbody反射ではなくSurface Physicsへ移行します。
 		BallSurfaceSource surfaceSource =
@@ -54,13 +75,14 @@ public partial class BallPhysicsController
 			if (TryEnterSurfaceSimulation(
 				surfaceSource,
 				contact,
-				incomingVelocity))
+				incomingVelocity,
+				out BallSurfaceSimulation.EInitializeResult initializeResult))
 			{
 				return;
 			}
 
 			Debug.LogWarning(
-				$"{name}: BallSurfaceへ接触しましたがSurface Physicsの初期化に失敗したため、接触地点付近で停止します。 Surface={surfaceSource.name}",
+				$"{name}: BallSurfaceへ接触しましたがSurface Physicsの初期化に失敗したため、接触地点付近で停止します。 Result={initializeResult} Surface={surfaceSource.name} ContactPoint={contact.point.ToString("F6")} ContactNormal={contact.normal.ToString("F6")} BallCenter={(m_Rigidbody.position + transform.TransformVector(m_BallCollider.center)).ToString("F6")} BallRadius={GetBallWorldRadius():F6} IncomingVelocity={incomingVelocity.ToString("F6")} ContactCount={collision.contactCount} ContactSeparation={contact.separation:F6} Collider={collision.collider.name}",
 				this);
 
 			StopSafelyAtSurfaceContact(
