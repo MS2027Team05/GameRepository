@@ -191,23 +191,6 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 		}
 
 		m_TargetCamera = Camera.main;
-
-		if (m_TargetCamera != null && m_TargetCamera.isActiveAndEnabled)
-		{
-			return true;
-		}
-
-		Camera[] allCameras = Camera.allCameras;
-		for (int i = 0; i < allCameras.Length; i++)
-		{
-			Camera cam = allCameras[i];
-			if (cam != null && cam.isActiveAndEnabled)
-			{
-				m_TargetCamera = cam;
-				return true;
-			}
-		}
-
 		return false;
 	}
 
