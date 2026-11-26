@@ -19,7 +19,7 @@ using UnityEngine;
 public class BallOutOfBoundsRespawner : NetworkBehaviour
 {
 	[Header("場外復帰")]
-	[Tooltip("有効にすると、設定範囲外へ出た未所持のボールを初期スポーン地点へ戻します。")]
+	[Tooltip("有効にすると、設定範囲外へ出た未所持のボールを安全な場内位置へ戻します。")]
 	[SerializeField] private bool m_IsRespawnEnabled;
 
 	[Header("場外判定範囲(ワールド座標)")]
@@ -36,21 +36,24 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 	[Tooltip("最後に場内だった位置からGroundを探索する半径です。")]
 	[SerializeField] private float m_GroundSearchRadius;
 
-	private const int m_MaxGroundCandidateCount =
-		64;
-
-	private readonly Collider[] m_GroundCandidates =
-		new Collider[m_MaxGroundCandidateCount];
+	private const int m_InitialCandidateCount = 64;
+	private const int m_MaximumCandidateCount = 4096;
+	private const float m_RespawnRetryInterval = 0.5f;
+	private Collider[] m_GroundCandidates = new Collider[m_InitialCandidateCount];
+	private Collider[] m_PlacementCandidates = new Collider[m_InitialCandidateCount];
+	private readonly BallSurfaceSearch m_SurfaceSearch = new BallSurfaceSearch();
+	private Rigidbody m_Rigidbody;
 
 	private BallController m_BallController;
 	private bool m_AreBoundsValid;
-	private bool m_IsRespawnRequested;
+	private float m_NextRespawnAttemptTime;
 	private Vector3 m_LastValidPosition;
 	private bool m_HasLastValidPosition;
 
 	private void Awake()
 	{
 		m_BallController = GetComponent<BallController>();
+		m_Rigidbody = GetComponent<Rigidbody>();
 	}
 
 	public override void OnNetworkSpawn()
@@ -60,7 +63,7 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 			return;
 		}
 
-		m_IsRespawnRequested = false;
+		m_NextRespawnAttemptTime = 0.0f;
 		m_AreBoundsValid = AreBoundsValid() && !IsOutsideBounds(transform.position);
 		m_LastValidPosition = transform.position;
 		m_HasLastValidPosition = m_AreBoundsValid;
@@ -92,188 +95,174 @@ public class BallOutOfBoundsRespawner : NetworkBehaviour
 
 		if (!IsOutsideBounds(transform.position))
 		{
-			m_LastValidPosition =
-				transform.position;
-
-			m_HasLastValidPosition =
-				true;
-
-			m_IsRespawnRequested = false;
+			m_LastValidPosition = transform.position;
+			m_HasLastValidPosition = true;
+			m_NextRespawnAttemptTime = 0.0f;
 			return;
 		}
 
-		if (m_IsRespawnRequested)
+		if (Time.fixedTime < m_NextRespawnAttemptTime)
 		{
 			return;
 		}
 
-		m_IsRespawnRequested = true;
-
-		bool respawnSucceeded =
-			false;
-
-		if (m_HasLastValidPosition &&
-			TryFindNearestGroundRespawnPosition(
-				m_LastValidPosition,
-				out Vector3 respawnPosition))
+		// 失敗しても永久に復帰不能にならないよう、次の試行時刻を設定します。
+		m_NextRespawnAttemptTime = Time.fixedTime + m_RespawnRetryInterval;
+		if (!m_BallController.TryGetRespawnSphere(out Vector3 centerOffset,
+			out float radius, out SphereCollider sphere))
 		{
-			respawnSucceeded =
-				m_BallController.RespawnAtPosition(
-					respawnPosition);
-		}
-		else
-		{
-			Debug.LogWarning(
-				"[BallOutOfBoundsRespawner] 近くのGroundを取得できなかったため、初期スポーン地点へ戻します。",
-				this);
-
-			respawnSucceeded =
-				m_BallController.RespawnAtInitialPosition();
+			Debug.LogWarning("[BallOutOfBoundsRespawner] 復帰用のSphereColliderを取得できません。", this);
+			return;
 		}
 
-		if (!respawnSucceeded)
+		Vector3 respawnPosition = Vector3.zero;
+		bool hasPosition = m_HasLastValidPosition && TryFindNearestGroundRespawnPosition(
+			m_LastValidPosition, centerOffset, radius, sphere, out respawnPosition);
+		if (!hasPosition)
 		{
-			Debug.LogWarning(
-				"[BallOutOfBoundsRespawner] ボールの場外復帰に失敗しました。",
-				this);
+			respawnPosition = m_BallController.InitialRespawnPosition;
+			if (!IsPlacementClear(respawnPosition, centerOffset, radius, sphere))
+			{
+				Debug.LogWarning("[BallOutOfBoundsRespawner] 安全な復帰先がないため、次回再試行します。", this);
+				return;
+			}
+		}
+
+		if (!m_BallController.RespawnAtPosition(respawnPosition))
+		{
+			Debug.LogWarning("[BallOutOfBoundsRespawner] ボールの場外復帰に失敗しました。次回再試行します。", this);
 		}
 	}
 
 	/// <summary>
-	/// 最後に場内だった位置の周囲から最も近いGround Surfaceを探し、
-	/// Ball Colliderが埋まらない復帰World座標を取得します。
+	/// Groundごとの最近接点から、安全に配置できる候補を選択します。
 	/// </summary>
-	/// <remarks>
-	/// OverlapSphereNonAllocで候補Colliderを列挙し、各ColliderのClosestPointから実SurfaceへRaycastします。
-	/// 最終位置はBall半径とPhysics.defaultContactOffsetの分だけSurface法線方向へ離します。
-	/// 範囲外になる候補は採用しません。
-	/// </remarks>
-	private bool TryFindNearestGroundRespawnPosition(
-		Vector3 referencePosition,
-		out Vector3 respawnPosition)
+	private bool TryFindNearestGroundRespawnPosition(Vector3 referencePosition, Vector3 centerOffset,
+		float radius, SphereCollider sphere, out Vector3 respawnPosition)
 	{
-		respawnPosition =
-			default;
-
-		if (m_GroundSearchRadius <=
-				0.0f ||
-			m_RespawnGroundMask.value ==
-				0)
+		respawnPosition = Vector3.zero;
+		if (!(m_GroundSearchRadius > 0.0f) || float.IsInfinity(m_GroundSearchRadius) ||
+			m_RespawnGroundMask.value == 0 ||
+			!TryCollectOverlaps(referencePosition, m_GroundSearchRadius, m_RespawnGroundMask,
+				ref m_GroundCandidates, out int candidateCount))
 		{
 			return false;
 		}
 
-		int candidateCount =
-			Physics.OverlapSphereNonAlloc(
-				referencePosition,
-				m_GroundSearchRadius,
-				m_GroundCandidates,
-				m_RespawnGroundMask,
+		float clearance = radius + Mathf.Max(Physics.defaultContactOffset, sphere.contactOffset);
+		float nearestDistanceSquared = m_GroundSearchRadius * m_GroundSearchRadius;
+		bool found = false;
+		for (int index = 0; index < candidateCount; index++)
+		{
+			Collider ground = m_GroundCandidates[index];
+			if (ground == null || (m_Rigidbody != null && ground.attachedRigidbody == m_Rigidbody) ||
+				!ground.enabled || !ground.gameObject.activeInHierarchy ||
+				ground.bounds.SqrDistance(referencePosition) > nearestDistanceSquared ||
+				!m_SurfaceSearch.TryGetCandidateSurface(ground, referencePosition, out BallSurfaceSearch.SearchResult candidate))
+			{
+				continue;
+			}
+
+			Vector3 toPoint = candidate.Point - referencePosition;
+			float distanceSquared = toPoint.sqrMagnitude;
+			if (!(distanceSquared > 0.00000001f) || !(distanceSquared <= nearestDistanceSquared))
+			{
+				continue;
+			}
+
+			float distance = Mathf.Sqrt(distanceSquared);
+			Vector3 point;
+			Vector3 normal;
+			// 最近接点への短いRayから実際の接触法線を取得します。
+			if (ground.Raycast(new Ray(referencePosition, toPoint / distance), out RaycastHit hit,
+				distance + clearance))
+			{
+				point = hit.point;
+				normal = hit.normal.normalized;
+			}
+			else if (candidate.SurfaceSource != null &&
+				candidate.SurfaceSource.TryGetTriangleClosestWorldPoint(candidate.TriangleIndex,
+					referencePosition, out point, out normal, out _) &&
+				Vector3.Dot(referencePosition - point, normal) > 0.0f)
+			{
+				// Edge付近でRayが外れた場合は、表側からの幾何法線を使用します。
+			}
+			else
+			{
+				continue;
+			}
+
+			if (!(normal.sqrMagnitude > 0.000001f))
+			{
+				continue;
+			}
+			Vector3 position = point + normal * clearance - centerOffset;
+			if (!IsPlacementClear(position, centerOffset, radius, sphere))
+			{
+				continue;
+			}
+
+			nearestDistanceSquared = distanceSquared;
+			respawnPosition = position;
+			found = true;
+		}
+
+		System.Array.Clear(m_GroundCandidates, 0, candidateCount);
+		return found;
+	}
+
+	/// <summary>
+	/// 実際の球中心で周囲の衝突対象との重複を確認します。
+	/// </summary>
+	private bool IsPlacementClear(Vector3 position, Vector3 centerOffset, float radius, SphereCollider sphere)
+	{
+		Vector3 center = position + centerOffset;
+		if (float.IsNaN(center.sqrMagnitude) || float.IsInfinity(center.sqrMagnitude) || IsOutsideBounds(position) ||
+			!TryCollectOverlaps(center, radius, ~0, ref m_PlacementCandidates, out int count))
+		{
+			return false;
+		}
+
+		bool clear = true;
+		for (int index = 0; index < count; index++)
+		{
+			Collider other = m_PlacementCandidates[index];
+			if (other == null || other == sphere || (m_Rigidbody != null && other.attachedRigidbody == m_Rigidbody) ||
+				Physics.GetIgnoreLayerCollision(sphere.gameObject.layer, other.gameObject.layer) ||
+				Physics.GetIgnoreCollision(sphere, other))
+			{
+				continue;
+			}
+			clear = false;
+			break;
+		}
+
+		System.Array.Clear(m_PlacementCandidates, 0, count);
+		return clear;
+	}
+
+	/// <summary>
+	/// 配列が満杯の場合は拡張して再探索します。上限到達時は候補を確定しません。
+	/// </summary>
+	private static bool TryCollectOverlaps(Vector3 center, float radius, int layerMask,
+		ref Collider[] candidates, out int count)
+	{
+		while (true)
+		{
+			count = Physics.OverlapSphereNonAlloc(center, radius, candidates, layerMask,
 				QueryTriggerInteraction.Ignore);
-
-		if (candidateCount <=
-			0)
-		{
-			return false;
+			if (count < candidates.Length)
+			{
+				return true;
+			}
+			if (candidates.Length >= m_MaximumCandidateCount)
+			{
+				System.Array.Clear(candidates, 0, count);
+				count = 0;
+				return false;
+			}
+			candidates = new Collider[Mathf.Min(candidates.Length * 2, m_MaximumCandidateCount)];
 		}
-
-		float ballRadius =
-			Mathf.Max(
-				m_BallController.GetPhysicsColliderWorldRadius(),
-				0.0f);
-
-		float surfaceClearance =
-			ballRadius +
-			Mathf.Max(
-				Physics.defaultContactOffset,
-				0.0f);
-
-		float nearestDistanceSquared =
-			float.PositiveInfinity;
-
-		bool hasRespawnPosition =
-			false;
-
-		for (int candidateIndex = 0;
-			candidateIndex < candidateCount;
-			candidateIndex++)
-		{
-			Collider groundCollider =
-				m_GroundCandidates[candidateIndex];
-
-			if (groundCollider == null ||
-				!groundCollider.enabled ||
-				!groundCollider.gameObject.activeInHierarchy)
-			{
-				continue;
-			}
-
-			Vector3 closestPoint =
-				groundCollider.ClosestPoint(
-					referencePosition);
-
-			Vector3 toSurface =
-				closestPoint -
-				referencePosition;
-
-			float surfaceDistanceSquared =
-				toSurface.sqrMagnitude;
-
-			if (surfaceDistanceSquared <=
-					Mathf.Epsilon ||
-				surfaceDistanceSquared >=
-					nearestDistanceSquared)
-			{
-				continue;
-			}
-
-			float surfaceDistance =
-				Mathf.Sqrt(
-					surfaceDistanceSquared);
-
-			Vector3 surfaceDirection =
-				toSurface /
-				surfaceDistance;
-
-			if (!groundCollider.Raycast(
-				new Ray(
-					referencePosition,
-					surfaceDirection),
-				out RaycastHit groundHit,
-				surfaceDistance +
-					surfaceClearance))
-			{
-				continue;
-			}
-
-			if (groundHit.normal.sqrMagnitude <=
-				Mathf.Epsilon)
-			{
-				continue;
-			}
-
-			Vector3 candidateRespawnPosition =
-				groundHit.point +
-				groundHit.normal.normalized *
-					surfaceClearance;
-
-			if (IsOutsideBounds(
-				candidateRespawnPosition))
-			{
-				continue;
-			}
-
-			nearestDistanceSquared =
-				surfaceDistanceSquared;
-
-			respawnPosition =
-				candidateRespawnPosition;
-
-			hasRespawnPosition =
-				true;
-		}
-
-		return hasRespawnPosition;
 	}
 
 	/// <summary>

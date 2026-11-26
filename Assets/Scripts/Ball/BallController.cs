@@ -827,8 +827,25 @@ public class BallController : NetworkBehaviour
 	/// <summary>
 	/// Host上で所持中のボールを指定方向へ射出します。
 	/// </summary>
-	public bool TryShoot(
-		Vector3 shootDirection)
+	public bool TryShoot(Vector3 shootDirection)
+	{
+		return TryShootInternal(shootDirection, false, Vector3.zero);
+	}
+
+	/// <summary>
+	/// Hostの射出位置から照準座標へ向かう通常シュートを実行します。
+	/// </summary>
+	public bool TryShootAt(Vector3 targetPoint, Vector3 fallbackDirection)
+	{
+		if (float.IsNaN(targetPoint.sqrMagnitude) || float.IsInfinity(targetPoint.sqrMagnitude))
+		{
+			return false;
+		}
+
+		return TryShootInternal(fallbackDirection, true, targetPoint);
+	}
+
+	private bool TryShootInternal(Vector3 shootDirection, bool useTargetPoint, Vector3 targetPoint)
 	{
 		if (!IsServer || !CanPlayMatch() || m_IsStealing)
 		{
@@ -840,13 +857,30 @@ public class BallController : NetworkBehaviour
 			return false;
 		}
 
-		if (shootDirection.sqrMagnitude <=
-			Mathf.Epsilon)
+		float directionSquared = shootDirection.sqrMagnitude;
+		if (float.IsNaN(directionSquared) || float.IsInfinity(directionSquared) ||
+			directionSquared <= 0.000001f)
 		{
 			return false;
 		}
 
 		shootDirection.Normalize();
+		if (useTargetPoint)
+		{
+			// DetachFromHolderと同じHost側の所持姿勢を使用します。
+			UpdateHeldPose();
+			Vector3 shotCenter = m_PhysicsCollider is SphereCollider sphere
+				? sphere.transform.TransformPoint(sphere.center)
+				: transform.position;
+			Vector3 toTarget = targetPoint - shotCenter;
+			float targetDistanceSquared = toTarget.sqrMagnitude;
+			// 近すぎる照準や射出位置より後ろの照準で逆方向へ投げないようにします。
+			if (!float.IsNaN(targetDistanceSquared) && !float.IsInfinity(targetDistanceSquared) &&
+				targetDistanceSquared > 0.000001f && Vector3.Dot(toTarget, shootDirection) > 0.0f)
+			{
+				shootDirection = toTarget.normalized;
+			}
+		}
 
 		ulong previousHolderClientId =
 			m_CurrentHolderId.Value;
@@ -1091,6 +1125,33 @@ public class BallController : NetworkBehaviour
 		bool resetSucceeded = RespawnAtInitialPosition();
 		SetMatchPaused(true);
 		return resetSucceeded;
+	}
+
+	/// <summary>
+	/// 場外復帰時の初期候補位置です。
+	/// </summary>
+	internal Vector3 InitialRespawnPosition => m_InitialPosition;
+
+	/// <summary>
+	/// 初期回転で復帰する際の球中心OffsetとWorld半径を取得します。
+	/// Colliderの無効化中もboundsに依存せず計算します。
+	/// </summary>
+	internal bool TryGetRespawnSphere(out Vector3 centerOffset, out float radius, out SphereCollider sphere)
+	{
+		centerOffset = Vector3.zero;
+		radius = 0.0f;
+		sphere = m_PhysicsCollider as SphereCollider;
+		if (sphere == null)
+		{
+			return false;
+		}
+
+		Vector3 scale = sphere.transform.lossyScale;
+		radius = sphere.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Max(Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
+		Vector3 currentOffset = sphere.transform.TransformPoint(sphere.center) - transform.position;
+		centerOffset = m_InitialRotation * Quaternion.Inverse(transform.rotation) * currentOffset;
+		return radius > 0.0f && !float.IsInfinity(radius) &&
+			!float.IsNaN(centerOffset.sqrMagnitude) && !float.IsInfinity(centerOffset.sqrMagnitude);
 	}
 
 	/// <summary>

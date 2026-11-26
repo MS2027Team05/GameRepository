@@ -43,11 +43,10 @@ public sealed partial class BallSurfaceSimulation
 		InvalidTriangleGeometry,
 		PointOutsideTriangle,
 		InvalidNormal,
-		InvalidWorldState
+		InvalidWorldState,
+		InvalidPlacement
 	}
 
-	// 接触点補正は実際の接触面から大きく移動させない範囲に制限します。
-	private const float m_MaximumInitialPointCorrection = 0.01f;
 	private const float m_BarycentricTolerance = 0.0001f;
 	private const float m_EntryEdgeIgnoreFraction = 0.0001f;
 	private const float m_MinimumCalculationValue = 0.000001f;
@@ -101,13 +100,60 @@ public sealed partial class BallSurfaceSimulation
 	private const float m_VertexCrossingFractionTolerance = 0.001f;
 
 
-	// 初期化を仮計算する専用Simulationです。初回のみ生成して再利用します。
-	private BallSurfaceSimulation m_InitializationCandidate;
 
 	private BallSurfaceSource m_SurfaceSource;
 	private BallSurfaceMeshData m_MeshData;
 
 	private int m_CurrentTriangleIndex;
+
+	// 1回のAdvanceで実際に支持・遷移に使用したTriangleを再利用可能なSetに保持します。
+	private readonly System.Collections.Generic.HashSet<int> m_TraversalTriangles =
+		new System.Collections.Generic.HashSet<int>();
+
+	/// <summary>
+	/// 今回のSurface移動が管理するTriangleか判定します。
+	/// </summary>
+	public bool IsTraversalTriangle(int triangleIndex)
+	{
+		return m_IsInitialized && triangleIndex >= 0 &&
+			(triangleIndex == m_CurrentTriangleIndex || m_TraversalTriangles.Contains(triangleIndex));
+	}
+
+	/// <summary>
+	/// 現在の支持面と実行中のEdge / Vertex遷移の構成面を記録します。
+	/// </summary>
+	private void RecordTraversalTriangles()
+	{
+		if (m_CurrentTriangleIndex >= 0)
+		{
+			m_TraversalTriangles.Add(m_CurrentTriangleIndex);
+		}
+
+		if (m_IsConvexEdgeTransition && m_ConvexTargetTriangleIndex >= 0)
+		{
+			m_TraversalTriangles.Add(m_ConvexTargetTriangleIndex);
+		}
+
+		// Vertex球面パッチを構成する実Convex Edgeの両面を含めます。
+		if (!m_IsConvexVertexSpherePatch || m_ConvexVertexSphereIncidentEdges == null || m_MeshData == null)
+		{
+			return;
+		}
+
+		foreach (BallSurfaceMeshData.ConvexEdgeReference edge in m_ConvexVertexSphereIncidentEdges)
+		{
+			if (edge.TriangleIndex >= 0)
+			{
+				m_TraversalTriangles.Add(edge.TriangleIndex);
+			}
+
+			if (m_MeshData.TryGetNeighbor(edge.TriangleIndex, edge.EdgeIndex,
+				out int neighborTriangleIndex, out _) && neighborTriangleIndex >= 0)
+			{
+				m_TraversalTriangles.Add(neighborTriangleIndex);
+			}
+		}
+	}
 
 	private Vector3 m_SurfacePoint;
 	private Vector3 m_SurfaceVelocity;
@@ -340,235 +386,32 @@ public sealed partial class BallSurfaceSimulation
 				ballRadius);
 	}
 
-	/// <summary>
-	/// Collisionの入射速度からSurface Physicsを開始します。
-	/// </summary>
-	public bool TryInitialize(
-		BallSurfaceSource surfaceSource,
-		int triangleIndex,
-		Vector3 surfacePoint,
-		Vector3 incomingVelocity)
+
+	// 直近の内部失敗を記録し、Advanceが失敗した場合だけ出力します。
+	private string m_LastGeometryFailure;
+
+	private bool RecordGeometryFailure(string reason,
+		[System.Runtime.CompilerServices.CallerMemberName] string member = "",
+		[System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
 	{
-		return TryInitialize(surfaceSource, triangleIndex, surfacePoint, incomingVelocity, out _);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+		m_LastGeometryFailure = $"Function={member} Line={line} Reason={reason}";
+#endif
+		return false;
 	}
 
-	/// <summary>
-	/// 初期化結果の詳細を返し、成功した場合だけSurface状態を更新します。
-	/// </summary>
-	public bool TryInitialize(
-		BallSurfaceSource surfaceSource,
-		int triangleIndex,
-		Vector3 surfacePoint,
-		Vector3 incomingVelocity,
-		out EInitializeResult result)
+	private EAdvanceResult ReportInvalidGeometry(string reason,
+		[System.Runtime.CompilerServices.CallerMemberName] string member = "",
+		[System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
 	{
-		// 成功するまで現在のSurface・Edge・Vertex・World状態を変更しません。
-		if (m_InitializationCandidate == null)
-		{
-			m_InitializationCandidate = new BallSurfaceSimulation();
-		}
-
-		BallSurfaceSimulation candidate = m_InitializationCandidate;
-		candidate.ConfigurePhysics(
-			m_GravityAcceleration,
-			m_BounceSpeedThreshold,
-			m_BounceNormalRetention,
-			m_BounceTangentialRetention,
-			m_MinBounceNormalSpeed,
-			m_MaxBounceNormalSpeed,
-			m_MaxBounceTangentialSpeed,
-			m_GroundedDeceleration,
-			m_GroundedStopSpeedThreshold,
-			m_BallRadius);
-
-		result = candidate.InitializeCandidate(
-			surfaceSource,
-			triangleIndex,
-			surfacePoint,
-			incomingVelocity);
-
-		if (result != EInitializeResult.Success)
-		{
-			candidate.Reset();
-			return false;
-		}
-
-		// 初期化成功時はFace状態から開始するため、古い遷移情報を消去して
-		// 検証済みのFace状態とWorld状態だけを確定します。
-		Reset();
-		m_SurfaceSource = candidate.m_SurfaceSource;
-		m_MeshData = candidate.m_MeshData;
-		m_CurrentTriangleIndex = candidate.m_CurrentTriangleIndex;
-		m_SurfacePoint = candidate.m_SurfacePoint;
-		m_SurfaceVelocity = candidate.m_SurfaceVelocity;
-		m_Height = candidate.m_Height;
-		m_VerticalVelocity = candidate.m_VerticalVelocity;
-		m_IsInitialized = true;
-		SetWorldState(candidate.m_WorldCenter, candidate.m_WorldVelocity);
-		candidate.Reset();
-		return true;
-	}
-
-	/// <summary>
-	/// 仮計算用Simulationに接触面の状態とバウンド結果を構築します。
-	/// </summary>
-	private EInitializeResult InitializeCandidate(
-		BallSurfaceSource surfaceSource,
-		int triangleIndex,
-		Vector3 surfacePoint,
-		Vector3 incomingVelocity)
-	{
-		Reset();
-
-		if (surfaceSource == null || !surfaceSource.IsReady)
-		{
-			return EInitializeResult.InvalidSurface;
-		}
-
-		BallSurfaceMeshData meshData = surfaceSource.MeshData;
-		if (meshData == null || triangleIndex < 0 ||
-			triangleIndex >= meshData.TriangleCount)
-		{
-			return EInitializeResult.InvalidTriangle;
-		}
-
-		if (!IsFiniteInitializationVector(surfacePoint) ||
-			!IsFiniteInitializationVector(incomingVelocity))
-		{
-			return EInitializeResult.InvalidInput;
-		}
-
-		m_SurfaceSource = surfaceSource;
-		m_MeshData = meshData;
-		m_CurrentTriangleIndex = triangleIndex;
-
-		if (!TryGetTriangleWorldData(
-			triangleIndex,
-			out Vector3 vertexA,
-			out Vector3 vertexB,
-			out Vector3 vertexC,
-			out Vector3 triangleNormal) ||
-			!IsFiniteInitializationVector(triangleNormal) ||
-			triangleNormal.sqrMagnitude <= m_MinimumCalculationValue * m_MinimumCalculationValue)
-		{
-			return EInitializeResult.InvalidTriangleGeometry;
-		}
-
-		Vector3 projectedPoint = ProjectPointToPlane(surfacePoint, vertexA, triangleNormal);
-		if (!TryCalculateBarycentric(
-			projectedPoint, vertexA, vertexB, vertexC, out Vector3 barycentric) ||
-			!IsFiniteInitializationVector(barycentric))
-		{
-			return EInitializeResult.InvalidTriangleGeometry;
-		}
-
-		// 面の外へわずかにはみ出した点は同じTriangleの最近接点へ補正します。
-		// 許容範囲を広げて別の壁や離れた点を採用することはしません。
-		if (barycentric.x < 0.0f || barycentric.y < 0.0f || barycentric.z < 0.0f)
-		{
-			Vector3 correctedPoint = BallSurfaceSource.GetClosestPointOnTriangle(
-				projectedPoint, vertexA, vertexB, vertexC);
-			float correctionLimit = Mathf.Max(
-				m_MinimumCalculationValue,
-				Mathf.Min(m_MaximumInitialPointCorrection,
-					Mathf.Min(surfaceSource.SurfaceCollider.contactOffset, m_BallRadius * 0.02f)));
-
-			if (!IsFiniteInitializationVector(correctedPoint) ||
-				(correctedPoint - projectedPoint).sqrMagnitude > correctionLimit * correctionLimit ||
-				!TryCalculateBarycentric(correctedPoint, vertexA, vertexB, vertexC, out barycentric) ||
-				!IsFiniteInitializationVector(barycentric) || !IsInsideTriangle(barycentric))
-			{
-				return EInitializeResult.PointOutsideTriangle;
-			}
-
-			projectedPoint = correctedPoint;
-		}
-
-		m_SurfacePoint = projectedPoint;
-
-		if (!TryGetSmoothWorldNormal(triangleIndex, projectedPoint, out Vector3 smoothNormal) ||
-			!IsFiniteInitializationVector(smoothNormal) ||
-			smoothNormal.sqrMagnitude <= m_MinimumCalculationValue * m_MinimumCalculationValue)
-		{
-			return EInitializeResult.InvalidNormal;
-		}
-
-		// 入射速度はSmooth Normalを基準に
-		// Surface方向と高さ方向へ分離します。
-		Vector3 desiredSurfaceVelocity =
-			Vector3.ProjectOnPlane(
-				incomingVelocity,
-				smoothNormal);
-
-		float desiredSurfaceSpeed =
-			desiredSurfaceVelocity.magnitude;
-
-		// SurfacePoint自体はTriangle平面上を移動するため、
-		// 最終的なSurfaceVelocityは現在Triangleへ投影します。
-		Vector3 triangleSurfaceVelocity =
-			Vector3.ProjectOnPlane(
-				desiredSurfaceVelocity,
-				triangleNormal);
-
-		if (desiredSurfaceSpeed >
-				m_MinimumCalculationValue &&
-			triangleSurfaceVelocity.sqrMagnitude >
-				m_MinimumCalculationValue *
-					m_MinimumCalculationValue)
-		{
-			m_SurfaceVelocity =
-				triangleSurfaceVelocity.normalized *
-					desiredSurfaceSpeed;
-		}
-		else
-		{
-			m_SurfaceVelocity =
-				Vector3.zero;
-		}
-
-		float incomingNormalSpeed =
-			Vector3.Dot(
-				incomingVelocity,
-				smoothNormal);
-
-		float impactSpeed =
-			Mathf.Max(
-				0.0f,
-				-incomingNormalSpeed);
-
-		m_Height =
-			0.0f;
-
-		m_VerticalVelocity =
-			0.0f;
-
-		m_IsInitialized =
-			true;
-
-		HandleSurfaceImpact(
-			impactSpeed);
-
-		if (!RefreshWorldStateFromCurrentTraversal() ||
-			!m_HasWorldState ||
-			!IsFiniteInitializationVector(m_WorldCenter) ||
-			!IsFiniteInitializationVector(m_WorldVelocity) ||
-			!IsFiniteInitializationVector(m_SurfaceVelocity) ||
-			float.IsNaN(m_VerticalVelocity) || float.IsInfinity(m_VerticalVelocity))
-		{
-			return EInitializeResult.InvalidWorldState;
-		}
-
-		return EInitializeResult.Success;
-	}
-
-	/// <summary>
-	/// 初期化に使用する座標・速度が有限の値であるか確認します。
-	/// </summary>
-	private static bool IsFiniteInitializationVector(Vector3 value)
-	{
-		return !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
-			!float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
-			!float.IsNaN(value.z) && !float.IsInfinity(value.z);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if BALL_SURFACE_DIAGNOSTICS
+		Debug.LogWarning($"[BallSurface][InvalidGeometry] Function={member} Line={line} Reason={reason} LastInnerFailure={m_LastGeometryFailure ?? "None"} Surface={m_SurfaceSource?.name} Triangle={m_CurrentTriangleIndex} LastEdgeTriangle={m_LastEdgeTriangleIndex} LastEdge={m_LastEdgeIndex} LastEdgeType={m_LastEdgeType} Convex={m_IsConvexEdgeTransition} Vertex={m_IsConvexVertexSpherePatch} Concave={m_IsConcaveAirborneTransfer} ConvexTarget={m_ConvexTargetTriangleIndex} SurfacePoint={m_SurfacePoint.ToString("F6")} WorldCenter={m_WorldCenter.ToString("F6")} WorldVelocity={m_WorldVelocity.ToString("F6")} Height={m_Height:F6} VerticalVelocity={m_VerticalVelocity:F6} Radius={m_BallRadius:F6} ConvexAngle={m_ConvexCurrentAngle:F6} ConvexSignedAngle={m_ConvexSignedAngle:F6} ConvexCrossSpeed={m_ConvexCrossSpeed:F6}");
+#else
+		Debug.LogWarning($"[BallSurface][InvalidGeometry] Function={member} Line={line} Reason={reason} LastInnerFailure={m_LastGeometryFailure ?? "None"} Triangle={m_CurrentTriangleIndex}");
+#endif
+#endif
+		return EAdvanceResult.InvalidGeometry;
 	}
 
 	/// <summary>
@@ -578,6 +421,8 @@ public sealed partial class BallSurfaceSimulation
 		float deltaTime)
 	{
 		ClearLastEdge();
+		m_LastGeometryFailure = null;
+		m_TraversalTriangles.Clear();
 
 		if (!m_IsInitialized ||
 			m_SurfaceSource == null ||
@@ -585,6 +430,8 @@ public sealed partial class BallSurfaceSimulation
 		{
 			return EAdvanceResult.NotInitialized;
 		}
+
+		RecordTraversalTriangles();
 
 		if (deltaTime <=
 			0.0f)
@@ -611,6 +458,8 @@ public sealed partial class BallSurfaceSimulation
 					AdvanceConcaveAirborneTransfer(
 						concaveStepTime,
 						out float unusedConcaveTime);
+
+				RecordTraversalTriangles();
 
 				if (concaveResult !=
 					EAdvanceResult.Moved)
@@ -670,9 +519,11 @@ public sealed partial class BallSurfaceSimulation
 				AdvanceSurfaceMotion(
 					stepTime);
 
+			RecordTraversalTriangles();
+
 			if (!RefreshWorldStateFromCurrentTraversal())
 			{
-				return EAdvanceResult.InvalidGeometry;
+				return ReportInvalidGeometry("RefreshWorldStateFromCurrentTraversal");
 			}
 
 			if (surfaceResult !=
@@ -1201,6 +1052,8 @@ public sealed partial class BallSurfaceSimulation
 
 	public void Reset()
 	{
+		m_TraversalTriangles.Clear();
+
 		m_SurfaceSource =
 			null;
 
