@@ -97,6 +97,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	private bool m_IsSubActionHeld;
 	// R1移動アクションの押下状態
 	private bool m_IsMoveActionHeld;
+	// Aim終了前の解放を記録し、終了後に一度だけ移動を実行する。
+	private bool m_IsMoveActionPending;
+	private Vector3 m_ReleasedMoveAimDirection;
 
 	private bool m_IsChargingElectric;
 	private bool m_HasStartedPassCharge;
@@ -222,6 +225,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (CurrentState == EPlayerState.Falling)
 		{
 			CurrentState = EPlayerState.Idle;
+			m_IsMoveActionHeld = false;
+			m_IsMoveActionPending = false;
+			m_AnimationController?.PlaySpecialMoveLanding();
 		}
 
 		m_AimGuide?.EndLandingTracking();
@@ -276,6 +282,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
+		UpdatePendingMoveAction();
+
 		// 飛行中は移動中エフェクトの始点と終点を現在の座標に更新
 		if (CurrentState == EPlayerState.Falling && m_AimGuide != null)
 		{
@@ -283,7 +291,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		}
 
 		// 飛行中に電撃受けていたら着地したときにスタン
-		if(CurrentState == EPlayerState.Idle && m_IsStunnedOnFlying)
+		if (CurrentState == EPlayerState.Idle && m_IsStunnedOnFlying)
 		{
 			m_StunCoroutine = StartCoroutine(StunRoutine(m_StunDuration));
 			m_IsStunnedOnFlying = false;
@@ -295,8 +303,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_GroundDetector.IsGrounded &&
 			(m_GravityMover == null || !m_GravityMover.IsFalling))
 		{
-			CurrentState = EPlayerState.Idle;
-			m_AimGuide?.EndLandingTracking();
+			HandleLanded();
 		}
 
 		// 通常状態のとき、移動中エフェクトを非表示にする
@@ -477,31 +484,27 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	}
 
 	/// <summary>
-	/// 新フロー: R1(右クリック)押下時の処理。
-	/// L1チャージ中であればキャンセルのみを実行して移動暴発を防ぎ、
-	/// 通常時は地上予備浮上移動または空中即時再移動を実行します。
+	/// Aim終了とボタン解放の両方を満たした後、確定した照準方向へ移動します。
+	/// 移動先・リソースを検証し、予備浮上または空中追加移動を開始した場合に成功を返します。
 	/// </summary>
-	private void ExecuteMoveAction()
+	private bool ExecuteMoveAction(Vector3 aimDirection)
 	{
 		if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned)
 		{
-			return;
+			return false;
 		}
 
 		// L1長押しチャージ中のR1入力はキャンセル専用として消費し、移動を発火させない
 		if (m_IsSubActionHeld || CurrentState == EPlayerState.ChargingSubAction)
 		{
 			CancelActiveSubAction();
-			return;
+			return false;
 		}
 
 		if (m_AimGuide == null || m_AimGuide.IsTakingOff)
 		{
-			return;
+			return false;
 		}
-
-		// 押下フレームの最新照準方向を取得
-		Vector3 aimDirection = GetAimDirection();
 
 		// GravityMover.IsFallingで空中か地上かを判定
 		bool isAirborne = m_GravityMover != null && m_GravityMover.IsFalling;
@@ -514,7 +517,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			// 既に1回使用済みなら不発
 			if (m_UsedAimMove)
 			{
-				return;
+				return false;
 			}
 
 			// 空中追加移動専用の照準判定を行う。
@@ -525,7 +528,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 				out Vector3 airTargetNormal,
 				out Vector3 airMoveDirection))
 			{
-				return;
+				return false;
 			}
 
 			// 新しい着地点までの距離からリソース消費量を計算
@@ -539,7 +542,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			if (m_PlayerResource != null &&
 				!m_PlayerResource.CanAfford(airMoveCost))
 			{
-				return;
+				return false;
 			}
 
 			// 新しい着地点をGravityMoverに設定
@@ -551,7 +554,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			if (!m_GravityMover.StartFalling(airMoveDirection))
 			{
 				// 開始に失敗した場合は使用回数を消費しない
-				return;
+				return false;
 			}
 
 			// 移動開始に成功した場合のみ着地点マーカーを更新
@@ -569,9 +572,10 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			// 移動開始に成功したのでリソースを消費
 			m_PlayerResource?.TryConsume(airMoveCost);
 
+			m_AnimationController?.PlaySpecialMoveJump();
 			CompleteFallStart(airTargetPoint, airTargetNormal);
 
-			return;
+			return true;
 		}
 
 		// =====================================================
@@ -583,7 +587,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		if (!m_AimGuide.CanFall)
 		{
-			return;
+			return false;
 		}
 
 		float moveCost = m_PlayerResource != null
@@ -592,65 +596,69 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		if (m_PlayerResource != null && !m_PlayerResource.CanAfford(moveCost))
 		{
-			return;
+			return false;
 		}
 
-		// 地上移動: 予備浮上後の飛行開始直前にリソースを消費する。
+		if (m_GravityMover == null || m_AnimationController == null) return false;
+
+		// 着地点は解放時に確定し、飛行方向は浮上完了後の位置から計算します。
 		Vector3 groundTargetPoint = m_AimGuide.TargetLandingPoint;
 		Vector3 groundTargetNormal = m_AimGuide.TargetLandingNormal;
 
 		RotatePlayerTowardAim(aimDirection);
+		m_AnimationController.PlaySpecialMoveJump();
 
 		m_AimGuide.StartGroundTakeoff(() =>
+			CompleteGroundTakeoff(groundTargetPoint, groundTargetNormal, moveCost));
+		return true;
+	}
+
+	/// <summary>
+	/// Jump中の予備浮上を終えた位置から飛行を開始し、表示をFallへ切り替えます。
+	/// </summary>
+	private void CompleteGroundTakeoff(Vector3 targetPoint, Vector3 targetNormal, float moveCost)
+	{
+		if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned ||
+			m_GravityMover == null || m_AimGuide == null ||
+			(m_PlayerResource != null && !m_PlayerResource.CanAfford(moveCost)))
 		{
-			if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned)
-			{
-				return;
-			}
+			CancelGroundMoveAction();
+			return;
+		}
 
-			Vector3 toTarget = groundTargetPoint - transform.position;
+		Vector3 toTarget = targetPoint - transform.position;
+		Vector3 launchDirection = toTarget.sqrMagnitude > 0.001f
+			? toTarget.normalized
+			: m_AimGuide.AimMoveDirection;
 
-			Vector3 launchDirection = toTarget.sqrMagnitude > 0.001f
-				? toTarget.normalized
-				: m_AimGuide.AimMoveDirection;
+		if (launchDirection.sqrMagnitude <= 0.0001f)
+		{
+			CancelGroundMoveAction();
+			return;
+		}
+		m_GravityMover.SetFallingTarget(targetPoint, targetNormal);
+		if (!m_GravityMover.StartFalling(launchDirection))
+		{
+			CancelGroundMoveAction();
+			return;
+		}
 
-			if (m_GravityMover == null || launchDirection.sqrMagnitude <= 0.0001f)
-			{
-				return;
-			}
+		m_PlayerResource?.TryConsume(moveCost);
+		m_UsedAimMove = false;
+		m_AimGuide.SetAdditionalMoveAimVisible(true);
+		m_AnimationController?.PlaySpecialMoveFall();
+		CompleteFallStart(targetPoint, targetNormal);
+	}
 
-			// 予備浮上中のスタンや消費で残量不足になった場合は飛行しない。
-			if (m_PlayerResource != null && !m_PlayerResource.CanAfford(moveCost))
-			{
-				return;
-			}
-
-			m_GravityMover.SetFallingTarget(
-				groundTargetPoint,
-				groundTargetNormal);
-
-			// 通常飛行を開始
-			if (!m_GravityMover.StartFalling(launchDirection))
-			{
-				return;
-			}
-
-			// 実際に飛行が開始されたタイミングでリソースを消費
-			m_PlayerResource?.TryConsume(moveCost);
-
-			// 通常飛行が実際に始まったので、空中追加移動の使用回数をリセット
-			m_UsedAimMove = false;
-
-			// 次の飛行が始まったので、空中移動用エイムを表示する。
-			m_AimGuide.SetAdditionalMoveAimVisible(true);
-
-			CompleteFallStart(groundTargetPoint, groundTargetNormal);
-		});
+	private void CancelGroundMoveAction()
+	{
+		m_AimGuide?.CancelGroundTakeoff();
+		CancelPendingMoveAction(false);
 	}
 
 	/// <summary>
 	/// R1押下時の処理。
-	/// この時点では移動を発動せず、押下状態だけを記録します。
+	/// この時点では移動を発動せず、プレイヤーとテンタクルのAimを開始します。
 	/// </summary>
 	private void HandleMoveActionPressed()
 	{
@@ -668,17 +676,19 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			return;
 		}
 
-		if (m_AimGuide == null || m_AimGuide.IsTakingOff)
+		if (m_AimGuide == null || m_AimGuide.IsTakingOff || m_IsMoveActionHeld || m_IsMoveActionPending)
 		{
 			return;
 		}
 
+		if (m_GravityMover != null && m_GravityMover.IsFalling && m_UsedAimMove) return;
+		if (m_AnimationController == null || !m_AnimationController.BeginSpecialMoveAim()) return;
 		m_IsMoveActionHeld = true;
 	}
 
 	/// <summary>
 	/// R1解放時の処理。
-	/// 押下状態を確認してから移動処理を実行します。
+	/// Aim終了前なら解放を予約し、完了後に移動処理を実行します。
 	/// </summary>
 	private void HandleMoveActionReleased()
 	{
@@ -692,17 +702,53 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		if (!m_IsMatchActionEnabled ||
 			CurrentState == EPlayerState.Stunned)
 		{
+			m_AnimationController?.CancelSpecialMoveAnimation();
 			return;
 		}
 
 		if (m_IsSubActionHeld ||
 			CurrentState == EPlayerState.ChargingSubAction)
 		{
+			m_AnimationController?.CancelSpecialMoveAnimation();
 			return;
 		}
 
-		ExecuteMoveAction();
+		m_ReleasedMoveAimDirection = GetAimDirection();
+		m_IsMoveActionPending = true;
+		UpdatePendingMoveAction();
 	}
+
+	private void UpdatePendingMoveAction()
+	{
+		if (!m_IsMoveActionPending) return;
+		if (!m_IsMatchActionEnabled || CurrentState == EPlayerState.Stunned || m_IsSubActionHeld)
+		{
+			CancelPendingMoveAction();
+			return;
+		}
+		if (m_AnimationController != null && !m_AnimationController.IsSpecialMoveAimComplete) return;
+
+		m_IsMoveActionPending = false;
+		if (!ExecuteMoveAction(m_ReleasedMoveAimDirection))
+		{
+			CancelPendingMoveAction();
+		}
+	}
+
+	private void CancelPendingMoveAction(bool resumeFlight = true)
+	{
+		m_IsMoveActionHeld = false;
+		m_IsMoveActionPending = false;
+		if (resumeFlight && m_GravityMover != null && m_GravityMover.IsFalling)
+		{
+			m_AnimationController?.PlaySpecialMoveFall();
+		}
+		else
+		{
+			m_AnimationController?.CancelSpecialMoveAnimation();
+		}
+	}
+
 	private void CompleteFallStart(Vector3 targetPoint, Vector3 targetNormal)
 	{
 		CurrentState = EPlayerState.Falling;
@@ -811,7 +857,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 	private void CancelAllActiveActionsAndEffects()
 	{
-		m_IsMoveActionHeld = false;
+		CancelPendingMoveAction(false);
 
 		CancelActiveSubAction();
 		m_AimGuide?.CancelGroundTakeoff();
@@ -836,6 +882,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		{
 			return;
 		}
+
+		if (m_IsMoveActionHeld || m_IsMoveActionPending) CancelPendingMoveAction();
 
 		// パスモード中の左クリックは、パス実行用の短押しとして扱う
 		if (m_IsPassModeActive)

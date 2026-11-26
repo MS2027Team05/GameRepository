@@ -179,3 +179,9 @@ GameRepository/
 - `PlayerAppearance`が外見・所属チームの変更時に発光を再適用し、Play中はカタログの設定変更通知も購読する。
 - 描画への上書きと解除は`PlayerEmissionController`へ分離する。既存の本体・チームカラーRendererの先頭スロットだけを`MaterialPropertyBlock`で調整し、Emissionが有効かつEmission Mapが設定されたマテリアルを対象にする。元のマテリアルアセットと追加のアウトライン用スロットは変更しない。
 - 共通設定の無効化やコンポーネントの無効化・破棄時には、保存したスロット別プロパティを復元する。Bloomの設定はこの制御に含まない。
+
+### 特殊移動アニメーションの連携
+
+- `Assets/Scripts/Player/PlayerController.cs`が移動ボタンの押下・解放予約・移動成立・着地を扱う。Aim途中の解放はAim完了まで保留する。地上ではInspectorに設定された高さ・時間で予備浮上し、浮上完了時にJumpを打ち切って、浮上完了位置からの飛行とFallを開始する。浮上中に中断した場合は飛行を開始しない。
+- `Assets/Scripts/Player/PlayerAnimationController.cs`と部分クラス`PlayerAnimationController.SpecialMove.cs`が通常移動と特殊移動の表示を分担する。特殊移動の段階・開始時刻・更新番号をOwnerから同期し、男女それぞれのプレイヤー・テンタクル用Animatorを配列で保持し、表示中モデルの同名動作を同時に開始する。モデル切り替え時は同期済みの段階と経過時間を再適用する。
+- `Assets/Animation/`のプレイヤー・テンタクル用Animatorが再生終了による遷移を管理する。Aim後はStandbyをループし、Jump後はプレイヤーがFall、テンタクルがIdleとなる。プレイヤーのLanding終了後は移動・ボール所持状態で通常状態に戻る。予備浮上の高さ・時間とカメラ補正は`PlayerAimGuide`が担当し、`IAimGuide.StartGroundTakeoff(Action)`の完了通知を飛行・Fallへの切り替え基準にする。
