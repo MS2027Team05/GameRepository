@@ -62,14 +62,26 @@ public class MatchManager : NetworkBehaviour
 	[Tooltip("クライアント応答が揃わない場合のリプレイ強制終了タイムアウト(秒、0以下で既定値10秒)。")]
 	[SerializeField] private float m_ReplayTimeoutSeconds;
 
+	private const float m_SceneReadyTimeoutSeconds = 15.0f;
+
 	private readonly NetworkVariable<double> m_CountdownEndTime = new NetworkVariable<double>();
 	private readonly NetworkVariable<ETeamType> m_GoalScoringTeam = new NetworkVariable<ETeamType>(
 		ETeamType.None,
 		NetworkVariableReadPermission.Everyone,
 		NetworkVariableWritePermission.Server);
+	private readonly NetworkVariable<bool> m_IsInfiniteTimeEnabled = new NetworkVariable<bool>(
+		false,
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Server);
+	private readonly NetworkVariable<bool> m_IsLobbyDebugInfiniteEnergyEnabled = new NetworkVariable<bool>(
+		false,
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Server);
 	private double m_PlayTimeRemaining;
 	private bool m_IsStartRequested;
 	private bool m_IsGoalProcessing;
+	private readonly HashSet<ulong> m_SceneReadyClients = new HashSet<ulong>();
+	private double m_SceneReadyDeadlineTime;
 	private readonly HashSet<ulong> m_PendingGoalEffectClients = new HashSet<ulong>();
 	private readonly HashSet<ulong> m_PendingReplayClients = new HashSet<ulong>();
 	private uint m_GoalEffectSequence;
@@ -140,11 +152,28 @@ public class MatchManager : NetworkBehaviour
 	/// </summary>
 	public event Action<ETeamType> GoalScored;
 
+	/// <summary>
+	/// 時間無制限デバッグ設定の変化を通知します。
+	/// </summary>
+	public event Action<bool> InfiniteTimeEnabledChanged;
+
+	/// <summary>
+	/// ロビーまたはスタッフメニューから設定可能な時間無制限フラグ。
+	/// </summary>
+	public static bool IsInfiniteTimeDebugEnabled { get; set; }
+
+	/// <summary>
+	/// ロビーのデバッグモードで有効化された全端末向けの燃料無制限フラグ。
+	/// </summary>
+	public static bool IsInfiniteEnergyLobbyDebugEnabled { get; set; }
+
 	public EMatchState MatchState => m_MatchState.Value;
 	public int RemainingTimeSeconds => m_RemainingTimeSeconds.Value;
 	public int RedScore => m_RedScore.Value;
 	public int BlueScore => m_BlueScore.Value;
 	public ETeamType GoalScoringTeam => m_GoalScoringTeam.Value;
+	public bool IsInfiniteTimeEnabled => IsSpawned ? m_IsInfiniteTimeEnabled.Value : IsInfiniteTimeDebugEnabled;
+	public bool IsLobbyInfiniteEnergyEnabled => IsSpawned && m_IsLobbyDebugInfiniteEnergyEnabled.Value;
 	public int CountdownRemainingSeconds => m_MatchState.Value == EMatchState.Countdown && NetworkManager != null
 		? Mathf.Max(0, Mathf.CeilToInt((float)(m_CountdownEndTime.Value - NetworkManager.ServerTime.Time)))
 		: 0;
@@ -186,12 +215,19 @@ public class MatchManager : NetworkBehaviour
 		if (IsServer)
 		{
 			NetworkManager.OnClientDisconnectCallback += HandleGoalEffectClientDisconnected;
+			m_IsInfiniteTimeEnabled.Value = IsInfiniteTimeDebugEnabled;
+			m_IsLobbyDebugInfiniteEnergyEnabled.Value = IsInfiniteEnergyLobbyDebugEnabled;
 			ResetMatch();
 
 			if (m_StartAutomatically)
 			{
 				StartMatch();
 			}
+		}
+
+		if (IsClient)
+		{
+			StartCoroutine(NotifySceneReadyAfterFirstFramesCoroutine());
 		}
 
 		NotifyCurrentValues();
@@ -206,6 +242,7 @@ public class MatchManager : NetworkBehaviour
 		m_ReplayPlayer?.Stop();
 		m_IsLocalGoalEffectPending = false;
 		m_LocalGoalEffectCount = 0;
+		m_SceneReadyClients.Clear();
 		m_PendingGoalEffectClients.Clear();
 		m_PendingReplayClients.Clear();
 		UnsubscribeFromNetworkVariables();
@@ -312,7 +349,8 @@ public class MatchManager : NetworkBehaviour
 			return;
 		}
 
-		if (m_IsStartRequested && m_PlayerSpawner.IsSpawned && m_PlayerSpawner.IsReady && m_Ball.IsSpawned)
+		bool areClientsReady = AreAllDisplayClientsSceneReady() || NetworkManager.ServerTime.Time >= m_SceneReadyDeadlineTime;
+		if (m_IsStartRequested && m_PlayerSpawner.IsSpawned && m_PlayerSpawner.IsReady && m_Ball.IsSpawned && areClientsReady)
 		{
 			m_IsStartRequested = false;
 			BeginRestartPreparation();
@@ -351,7 +389,7 @@ public class MatchManager : NetworkBehaviour
 			m_PlayerSpawner.SetMatchActionsEnabled(true);
 		}
 
-		if (m_MatchState.Value != EMatchState.Playing)
+		if (m_MatchState.Value != EMatchState.Playing || m_IsInfiniteTimeEnabled.Value)
 		{
 			return;
 		}
@@ -438,8 +476,84 @@ public class MatchManager : NetworkBehaviour
 
 		m_RemainingTimeSeconds.Value = m_MatchDurationSeconds;
 		m_PlayTimeRemaining = m_MatchDurationSeconds;
-		// シーン内NetworkObjectの生成順に依存しないよう、必要な生成完了まで待ちます。
+		m_SceneReadyDeadlineTime = NetworkManager != null
+			? NetworkManager.ServerTime.Time + m_SceneReadyTimeoutSeconds
+			: 0d;
+		// シーン内NetworkObjectの生成および全端末のGameScene読み込み完了まで待ちます。
 		m_IsStartRequested = true;
+	}
+
+	/// <summary>
+	/// サーバー権限で試合の時間無制限デバッグ設定を切り替えます。
+	/// </summary>
+	public void SetInfiniteTimeDebugEnabled(bool enabled)
+	{
+		IsInfiniteTimeDebugEnabled = enabled;
+		if (!IsServer || !IsSpawned)
+		{
+			return;
+		}
+
+		if (m_IsInfiniteTimeEnabled.Value == enabled)
+		{
+			return;
+		}
+
+		if (m_MatchState.Value == EMatchState.Playing && NetworkManager != null)
+		{
+			if (enabled)
+			{
+				m_PlayTimeRemaining = Math.Max(0d, m_MatchEndTime - NetworkManager.ServerTime.Time);
+				m_RemainingTimeSeconds.Value = Mathf.CeilToInt((float)m_PlayTimeRemaining);
+			}
+			else
+			{
+				m_MatchEndTime = NetworkManager.ServerTime.Time + Math.Max(1d, m_PlayTimeRemaining);
+			}
+		}
+
+		m_IsInfiniteTimeEnabled.Value = enabled;
+	}
+
+	private IEnumerator NotifySceneReadyAfterFirstFramesCoroutine()
+	{
+		// シーン読み込み直後の初回描画スパイクを越えてから準備完了を報告します。
+		yield return null;
+		yield return null;
+
+		if (IsSpawned)
+		{
+			NotifySceneReadyServerRpc();
+		}
+	}
+
+	[Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+	private void NotifySceneReadyServerRpc(RpcParams rpcParams = default)
+	{
+		m_SceneReadyClients.Add(rpcParams.Receive.SenderClientId);
+	}
+
+	private bool AreAllDisplayClientsSceneReady()
+	{
+		if (NetworkManager == null)
+		{
+			return true;
+		}
+
+		foreach (var client in NetworkManager.ConnectedClientsList)
+		{
+			if (client.ClientId == Unity.Netcode.NetworkManager.ServerClientId && !IsHost)
+			{
+				continue;
+			}
+
+			if (!m_SceneReadyClients.Contains(client.ClientId))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private void BeginRestartPreparation()
@@ -454,7 +568,11 @@ public class MatchManager : NetworkBehaviour
 			m_MatchState.Value = EMatchState.Waiting;
 			return;
 		}
-		m_PlayerSpawner.ResetPlayersForRestart();
+		if (!m_PlayerSpawner.ResetPlayersForRestart(m_GoalScoringTeam.Value))
+		{
+			Debug.LogError("[MatchManager] プレイヤーの配置地点が未設定のため、開始待ちへ戻します。", this);
+			m_MatchState.Value = EMatchState.Waiting;
+		}
 	}
 
 	/// <summary>
@@ -510,7 +628,7 @@ public class MatchManager : NetworkBehaviour
 	{
 		if (!isActiveAndEnabled || !IsSpawned || !IsServer ||
 			m_MatchState.Value != EMatchState.Playing ||
-			NetworkManager.ServerTime.Time >= m_MatchEndTime ||
+			(!m_IsInfiniteTimeEnabled.Value && NetworkManager.ServerTime.Time >= m_MatchEndTime) ||
 			m_IsGoalProcessing ||
 			(m_LimitGoalScore && m_HasScoredGoal))
 		{
@@ -528,8 +646,11 @@ public class MatchManager : NetworkBehaviour
 			return false;
 		}
 
-		m_PlayTimeRemaining = Math.Max(0d, m_MatchEndTime - NetworkManager.ServerTime.Time);
-		m_RemainingTimeSeconds.Value = Mathf.CeilToInt((float)m_PlayTimeRemaining);
+		if (!m_IsInfiniteTimeEnabled.Value)
+		{
+			m_PlayTimeRemaining = Math.Max(0d, m_MatchEndTime - NetworkManager.ServerTime.Time);
+			m_RemainingTimeSeconds.Value = Mathf.CeilToInt((float)m_PlayTimeRemaining);
+		}
 
 		float shotDistance = (m_Ball != null && goalPosition != Vector3.zero)
 			? Vector3.Distance(m_Ball.LastReleaseOrigin, goalPosition)
@@ -727,6 +848,7 @@ public class MatchManager : NetworkBehaviour
 
 	private void HandleGoalEffectClientDisconnected(ulong clientId)
 	{
+		m_SceneReadyClients.Remove(clientId);
 		m_PendingGoalEffectClients.Remove(clientId);
 		m_PendingReplayClients.Remove(clientId);
 	}
@@ -908,6 +1030,7 @@ public class MatchManager : NetworkBehaviour
 		m_RemainingTimeSeconds.OnValueChanged += HandleRemainingTimeChanged;
 		m_RedScore.OnValueChanged += HandleRedScoreChanged;
 		m_BlueScore.OnValueChanged += HandleBlueScoreChanged;
+		m_IsInfiniteTimeEnabled.OnValueChanged += HandleInfiniteTimeEnabledChanged;
 	}
 
 	private void UnsubscribeFromNetworkVariables()
@@ -916,6 +1039,7 @@ public class MatchManager : NetworkBehaviour
 		m_RemainingTimeSeconds.OnValueChanged -= HandleRemainingTimeChanged;
 		m_RedScore.OnValueChanged -= HandleRedScoreChanged;
 		m_BlueScore.OnValueChanged -= HandleBlueScoreChanged;
+		m_IsInfiniteTimeEnabled.OnValueChanged -= HandleInfiniteTimeEnabledChanged;
 	}
 
 	private void NotifyCurrentValues()
@@ -924,6 +1048,7 @@ public class MatchManager : NetworkBehaviour
 		RemainingTimeChanged?.Invoke(m_RemainingTimeSeconds.Value);
 		RedScoreChanged?.Invoke(m_RedScore.Value);
 		BlueScoreChanged?.Invoke(m_BlueScore.Value);
+		InfiniteTimeEnabledChanged?.Invoke(IsInfiniteTimeEnabled);
 	}
 
 	private void HandleMatchStateChanged(EMatchState previousValue, EMatchState newValue)
@@ -966,5 +1091,10 @@ public class MatchManager : NetworkBehaviour
 	private void HandleBlueScoreChanged(int previousValue, int newValue)
 	{
 		BlueScoreChanged?.Invoke(newValue);
+	}
+
+	private void HandleInfiniteTimeEnabledChanged(bool previousValue, bool newValue)
+	{
+		InfiniteTimeEnabledChanged?.Invoke(newValue);
 	}
 }

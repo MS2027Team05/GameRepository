@@ -324,6 +324,13 @@ public class GravityMover : NetworkBehaviour, IGravityMover
 
 		if (m_IsFalling && collision.contactCount > 0)
 		{
+			// 接地対象レイヤー(m_GroundLayerMask)に含まれない対象(他プレイヤー等)との接触では着地しません。
+			if (m_GroundLayerMask.value != 0 &&
+				(m_GroundLayerMask.value & (1 << collision.gameObject.layer)) == 0)
+			{
+				return;
+			}
+
 			ContactPoint contact = collision.GetContact(0);
 			Vector3 hitNormal = contact.normal;
 

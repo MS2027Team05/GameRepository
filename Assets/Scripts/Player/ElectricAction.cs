@@ -1,5 +1,6 @@
 ﻿// ElectricAction.cs
 
+using System.Collections;
 using System;
 using Unity.Netcode;
 using UnityEngine;
@@ -309,6 +310,7 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 		return null;
 	}
 
+
 	/// <summary>
 	/// Host側で電撃命中処理を実行します。
 	/// </summary>
@@ -338,36 +340,71 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 		if (distance > m_MaxHitDistance)
 			return;
 
+		PlayerBallCarrier attackerCarrier =
+			GetComponent<PlayerBallCarrier>();
+
+		PlayerNetworkProfile attackerProfile =
+			GetComponent<PlayerNetworkProfile>();
+
+		if (attackerCarrier == null || attackerProfile == null)
+			return;
+
+		// 攻撃側がすでにボールを持っている場合は奪取できません。
+		if (attackerCarrier.HasBall)
+			return;
+
+
 		// ボールに命中した場合
 		if (targetType == ELockOnTargetType.Ball)
 		{
 			BallController ball =
 				targetNetworkObject.GetComponent<BallController>();
 
-			PlayerBallCarrier attackerCarrier =
-				GetComponent<PlayerBallCarrier>();
+			if (ball == null)
+				return;
 
-			if (ball == null || attackerCarrier == null)
+			// 誰も所持していないボールの場合
+			// スタン処理は行わず、そのまま引き寄せます。
+			if (!ball.HasHolder)
 			{
-				Debug.LogWarning(
-					"[Electric Debug] ボール奪取失敗：BallControllerまたはPlayerBallCarrierがありません。");
+				Debug.Log(
+					"[Electric Debug] 未所持ボールに電撃が命中。引き寄せを開始します。");
+
+				bool pullStarted = ball.TryStealHolder(
+					OwnerClientId,
+					NetworkObjectId);
+
+				if (!pullStarted)
+				{
+					Debug.Log(
+						"[Electric Debug] 未所持ボールの引き寄せに失敗しました。");
+				}
+
 				return;
 			}
 
-			// 攻撃者がすでにボールを持っていないことを確認
-			if (attackerCarrier.HasBall)
+			// 現在の所持者を取得
+			PlayerController previousHolder =
+				FindPlayerControllerByClientId(ball.CurrentHolderId);
+
+			if (previousHolder == null)
+				return;
+
+			PlayerNetworkProfile previousProfile =
+				previousHolder.GetComponent<PlayerNetworkProfile>();
+
+			// 敵チームのボールだけ奪取可能
+			if (previousProfile == null ||
+				previousProfile.Team == ETeamType.None ||
+				previousProfile.Team == attackerProfile.Team)
 			{
-				Debug.LogWarning(
-					"[Electric Debug] ボール奪取失敗：すでにボールを所持しています。");
 				return;
 			}
 
 			Debug.Log(
 				"[Electric Debug] ボールに電撃が命中。奪取処理を開始します。");
 
-			ball.TryStealHolder(
-				OwnerClientId,
-				NetworkObjectId);
+			TryStealAndStun(ball, previousHolder);
 
 			return;
 		}
@@ -378,38 +415,16 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 			PlayerController enemy =
 				targetNetworkObject.GetComponent<PlayerController>();
 
-			if (enemy == null)
-			{
-				Debug.LogWarning(
-					"[Electric Debug] 敵のPlayerControllerが見つかりません。");
+			if (enemy == null || enemy == GetComponent<PlayerController>())
 				return;
-			}
-
-			// 自分自身には命中させない
-			if (enemy == this)
-			{
-				return;
-			}
-
-			PlayerNetworkProfile attackerProfile =
-				GetComponent<PlayerNetworkProfile>();
 
 			PlayerNetworkProfile enemyProfile =
 				targetNetworkObject.GetComponent<PlayerNetworkProfile>();
 
-			if (attackerProfile == null || enemyProfile == null)
+			if (enemyProfile == null ||
+				enemyProfile.Team == ETeamType.None ||
+				attackerProfile.Team == ETeamType.None)
 			{
-				Debug.LogWarning(
-					"[Electric Debug] チーム判定用Profileが見つかりません。");
-				return;
-			}
-
-			// チーム情報で味方・敵を判定
-			if (attackerProfile.Team == ETeamType.None ||
-				enemyProfile.Team == ETeamType.None)
-			{
-				Debug.LogWarning(
-					"[Electric Debug] チームが設定されていません。");
 				return;
 			}
 
@@ -421,60 +436,147 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 				return;
 			}
 
-			Debug.Log(
-				$"[Electric Debug] 敵に電撃が命中。Enemy={enemy.name}");
-
-			// 攻撃側のボール所持状態を確認
-			PlayerBallCarrier attackerCarrier =
-				GetComponent<PlayerBallCarrier>();
-
-			// 敵側のボール所持状態を確認
 			PlayerBallCarrier enemyCarrier =
 				enemy.GetComponent<PlayerBallCarrier>();
 
-			if (attackerCarrier == null || enemyCarrier == null)
+			if (enemyCarrier == null || !enemyCarrier.HasBall)
 			{
-				Debug.LogWarning(
-					"[Electric Debug] PlayerBallCarrierが見つかりません。");
+				Debug.Log(
+					"[Electric Debug] 敵はボールを所持していません。スタンしません。");
 				return;
 			}
 
-			// 攻撃側がボールを持っていない場合のみ奪取を試みる
-			if (!attackerCarrier.HasBall && enemyCarrier.HasBall)
+			// 敵が所持しているボールを検索
+			BallController[] balls =
+				FindObjectsByType<BallController>(
+					FindObjectsSortMode.None);
+
+			foreach (BallController ball in balls)
 			{
-				BallController[] balls =
-					FindObjectsByType<BallController>(FindObjectsSortMode.None);
+				if (ball == null || !ball.HasHolder)
+					continue;
 
-				foreach (BallController ball in balls)
-				{
-					if (ball == null || !ball.HasHolder)
-					{
-						continue;
-					}
+				if (ball.CurrentHolderId != enemy.OwnerClientId)
+					continue;
 
-					// 対象の敵が所持しているボールを検索
-					if (ball.CurrentHolderId != enemy.OwnerClientId)
-					{
-						continue;
-					}
+				Debug.Log(
+					"[Electric Debug] 敵に電撃が命中。ボール奪取を試みます。");
 
-					bool stolen = ball.TryStealHolder(
-						OwnerClientId,
-						NetworkObjectId);
+				TryStealAndStun(ball, enemy);
 
-					Debug.Log(
-						$"[Electric Debug] 敵からボールを奪取: {stolen}");
+				break;
+			}
+		}
+	}
 
-					break;
-				}
+	/// <summary>
+	/// 指定されたClientIdのプレイヤーを検索します。
+	/// </summary>
+	private PlayerController FindPlayerControllerByClientId(
+		ulong clientId)
+	{
+		if (NetworkManager.Singleton == null ||
+			NetworkManager.Singleton.SpawnManager == null)
+		{
+			return null;
+		}
+
+		foreach (NetworkObject networkObject in
+			NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
+		{
+			if (networkObject == null ||
+				networkObject.OwnerClientId != clientId)
+			{
+				continue;
 			}
 
-			// ボール奪取の成否にかかわらず敵をスタンさせる
-			enemy.ApplyStunOwnerRpc(m_StunDuration);
-			OnServerEnemyStunned?.Invoke(OwnerClientId, enemy.OwnerClientId);
+			PlayerController player =
+				networkObject.GetComponent<PlayerController>();
 
-			Debug.Log(
-				$"[Electric Debug] 敵をスタンさせました。Duration={m_StunDuration}");
+			if (player != null)
+				return player;
 		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// ボール奪取を開始し、実際に奪取が完了した場合だけ
+	/// 元の所持者にスタンを適用します。
+	/// </summary>
+	private void TryStealAndStun(
+		BallController ball,
+		PlayerController previousHolder)
+	{
+		if (!IsServer ||
+			ball == null ||
+			previousHolder == null ||
+			!ball.HasHolder ||
+			ball.IsStealing)
+		{
+			return;
+		}
+
+		// 奪取開始
+		bool stealStarted = ball.TryStealHolder(
+			OwnerClientId,
+			NetworkObjectId);
+
+		if (!stealStarted)
+		{
+			Debug.Log(
+				"[Electric Debug] ボール奪取に失敗しました。スタンしません。");
+			return;
+		}
+
+		// 実際の奪取完了を待ってからスタンさせます。
+		StartCoroutine(
+			WaitForStealAndApplyStun(ball, previousHolder));
+	}
+
+	/// <summary>
+	/// ボールの所持者切り替えが完了するまで待機します。
+	/// </summary>
+	private IEnumerator WaitForStealAndApplyStun(
+		BallController ball,
+		PlayerController previousHolder)
+	{
+		// 電撃による引き寄せ・所持者切り替えの完了を待つ
+		while (ball != null &&
+			   ball.IsSpawned &&
+			   ball.IsStealing)
+		{
+			yield return null;
+		}
+
+		// ボールが消滅した場合は終了
+		if (ball == null || !ball.IsSpawned)
+			yield break;
+
+		// 実際に攻撃者が所持者になったか確認
+		if (!ball.HasHolder ||
+			ball.CurrentHolderId != OwnerClientId)
+		{
+			Debug.Log(
+				"[Electric Debug] ボール奪取が完了しませんでした。スタンしません。");
+			yield break;
+		}
+
+		// 元の所持者がまだ有効か確認
+		if (previousHolder == null ||
+			!previousHolder.IsSpawned)
+		{
+			yield break;
+		}
+
+		// 奪取成功後にだけスタンを適用
+		previousHolder.ApplyStunOwnerRpc(m_StunDuration);
+
+		OnServerEnemyStunned?.Invoke(
+			OwnerClientId,
+			previousHolder.OwnerClientId);
+
+		Debug.Log(
+			$"[Electric Debug] ボール奪取成功。敵をスタンさせました。Duration={m_StunDuration}");
 	}
 }

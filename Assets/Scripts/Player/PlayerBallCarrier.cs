@@ -26,6 +26,7 @@ public class PlayerBallCarrier :
 	[SerializeField] private Transform m_WomanBallHoldPoint;
 
 	private const float m_PickupRetryInterval = 0.10f;
+	private const float m_LocalPickupSuppressDuration = 0.25f;
 
 	[Header("追尾パス設定")]
 	[Tooltip("追尾パスのチャージ完了に必要な時間です(秒)。")]
@@ -39,6 +40,7 @@ public class PlayerBallCarrier :
 	private bool m_IsPassCharging;
 	private float m_PassChargeRatio;
 	private float m_NextPickupRetryTime;
+	private float m_LocalPickupSuppressUntil;
 
 	/// <summary>
 	/// このプレイヤーが現在ボールを所持しているか取得します。
@@ -168,7 +170,8 @@ public class PlayerBallCarrier :
 		bool ignoreRetryInterval)
 	{
 		if (!IsOwner ||
-			m_HasBall)
+			m_HasBall ||
+			Time.time < m_LocalPickupSuppressUntil)
 		{
 			return;
 		}
@@ -290,23 +293,44 @@ public class PlayerBallCarrier :
 			return;
 		}
 
+		m_LocalPickupSuppressUntil =
+			Time.time +
+			m_LocalPickupSuppressDuration;
+
 		RequestShootServerRpc(
-			direction.normalized);
+			direction.normalized,
+			false,
+			Vector3.zero);
 	}
 
 	/// <summary>
-	/// Host上でこのプレイヤーが所持するボールを取得し、
-	/// 指定方向へのシュートを試みます。
+	/// 所持中のボールを照準座標へ射出するようHostへ要求します。
 	/// </summary>
-	/// <param name="shootDirection">
-	/// ボールを射出する方向です。
-	/// </param>
-	[ServerRpc]
-	private void RequestShootServerRpc(
-		Vector3 shootDirection)
+	public void ShootAt(Vector3 targetPoint, Vector3 fallbackDirection)
 	{
-		if (shootDirection.sqrMagnitude <=
-			Mathf.Epsilon)
+		if (!IsOwner || !m_HasBall || fallbackDirection.sqrMagnitude <= 0.000001f ||
+			float.IsNaN(fallbackDirection.sqrMagnitude) || float.IsInfinity(fallbackDirection.sqrMagnitude) ||
+			float.IsNaN(targetPoint.sqrMagnitude) || float.IsInfinity(targetPoint.sqrMagnitude))
+		{
+			return;
+		}
+
+		m_LocalPickupSuppressUntil =
+			Time.time +
+			m_LocalPickupSuppressDuration;
+
+		RequestShootServerRpc(fallbackDirection.normalized, true, targetPoint);
+	}
+
+	/// <summary>
+	/// Hostで所持権を確認し、通常シュートの方向または照準座標を処理します。
+	/// </summary>
+	[ServerRpc]
+	private void RequestShootServerRpc(Vector3 shootDirection, bool useTargetPoint, Vector3 targetPoint)
+	{
+		float directionSquared = shootDirection.sqrMagnitude;
+		if (directionSquared <= 0.000001f || float.IsNaN(directionSquared) || float.IsInfinity(directionSquared) ||
+			(useTargetPoint && (float.IsNaN(targetPoint.sqrMagnitude) || float.IsInfinity(targetPoint.sqrMagnitude))))
 		{
 			return;
 		}
@@ -323,8 +347,10 @@ public class PlayerBallCarrier :
 			return;
 		}
 
-		if (!ballController.TryShoot(
-			shootDirection))
+		bool succeeded = useTargetPoint
+			? ballController.TryShootAt(targetPoint, shootDirection)
+			: ballController.TryShoot(shootDirection);
+		if (!succeeded)
 		{
 			Debug.LogWarning(
 				"[PlayerBallCarrier] " +
@@ -572,6 +598,10 @@ public class PlayerBallCarrier :
 				$"{targetObject.name} / Position={targetPosition}"
 			);
 
+			m_LocalPickupSuppressUntil =
+				Time.time +
+				m_LocalPickupSuppressDuration;
+
 			RequestHomingPassToPositionServerRpc(
 				targetPosition
 			);
@@ -594,6 +624,10 @@ public class PlayerBallCarrier :
 
 			return;
 		}
+
+		m_LocalPickupSuppressUntil =
+			Time.time +
+			m_LocalPickupSuppressDuration;
 
 		RequestHomingPassServerRpc(
 			targetNetworkObject.NetworkObjectId

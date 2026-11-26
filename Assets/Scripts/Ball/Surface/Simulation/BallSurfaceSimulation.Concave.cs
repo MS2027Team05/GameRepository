@@ -1,9 +1,17 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Concave EdgeでBall中心を維持したまま
-/// 隣Surfaceへ遷移する処理を担当します。
+/// Concave EdgeでBall中心の連続性を保ちながら隣Surfaceへ遷移します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. Concave Edgeへ到達する前にBall半径とHeightを考慮した遷移位置を求めます。
+/// 2. 遷移先TriangleとEdgeを確定します。
+/// 3. Ball中心のWorld位置を維持したままSurfacePointを隣面へ切り替えます。
+/// 4. SurfaceVelocityだけを新しいSurface法線へ回転し、HeightとVerticalVelocityを保持します。
+///
+/// Heightを持ったまま空中でConcaveを越えるケースはConcaveAirborne側で処理します。
+/// </remarks>
 public sealed partial class BallSurfaceSimulation
 {
 	/// <summary>
@@ -322,7 +330,8 @@ public sealed partial class BallSurfaceSimulation
 				crossedEdgeIndex =
 					ResolveSimultaneousVertexEdge(
 						crossedEdgeIndex,
-						simultaneousEdgeIndex);
+						simultaneousEdgeIndex,
+						currentSurfaceVelocity);
 			}
 
 			BallSurfaceMeshData.EEdgeType edgeType =

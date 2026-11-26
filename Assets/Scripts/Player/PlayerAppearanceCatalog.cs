@@ -41,7 +41,66 @@ public sealed class PlayerAppearanceCatalog : ScriptableObject
 	[SerializeField] private Color m_BlueTeamDisplayColor;
 	[SerializeField] private Color m_DefaultTeamDisplayColor;
 
+	[Header("プレイヤー共通の発光設定")]
+	[Tooltip("有効にすると、Emission Mapを持つ本体とチームカラーの発光を一括調整します。")]
+	[SerializeField] private bool m_UseEmissionSettings;
+	[Tooltip("全プレイヤー共通の発光倍率です。0で発光を停止し、1を超える値で明るくします。")]
+	[Min(0.0f)]
+	[SerializeField] private float m_EmissionIntensity;
+	[Tooltip("赤チームの発光色です。明るさは共通の発光倍率で調整します。")]
+	[ColorUsage(false, false)]
+	[SerializeField] private Color m_RedTeamEmissionColor;
+	[Tooltip("青チームの発光色です。明るさは共通の発光倍率で調整します。")]
+	[ColorUsage(false, false)]
+	[SerializeField] private Color m_BlueTeamEmissionColor;
+	[Tooltip("ロビーなど、チーム未確定時の発光色です。")]
+	[ColorUsage(false, false)]
+	[SerializeField] private Color m_DefaultEmissionColor;
+
+	/// <summary>発光設定の変更を表示側へ通知します。</summary>
+	public event Action EmissionSettingsChanged;
+
+	public bool UseEmissionSettings { get => m_UseEmissionSettings; }
+
 	public ColorMaterialEntry[] ColorEntries { get => m_ColorEntries; }
+
+	/// <summary>
+	/// チーム別の発光色に全プレイヤー共通の倍率を掛けたHDRカラーを返します。
+	/// </summary>
+	public Color GetEmissionColor(ETeamType team)
+	{
+		Color color = team switch
+		{
+			ETeamType.Red => m_RedTeamEmissionColor,
+			ETeamType.Blue => m_BlueTeamEmissionColor,
+			_ => m_DefaultEmissionColor,
+		};
+		color *= Mathf.Max(0.0f, m_EmissionIntensity);
+		color.a = 1.0f;
+		return color;
+	}
+
+#if UNITY_EDITOR
+	private void OnValidate()
+	{
+		// Inspectorの検証中にRendererを操作しないよう、通知をメインスレッドへ遅延します。
+		UnityEditor.EditorApplication.delayCall -= NotifyEmissionSettingsChanged;
+		UnityEditor.EditorApplication.delayCall += NotifyEmissionSettingsChanged;
+	}
+
+	private void NotifyEmissionSettingsChanged()
+	{
+		if (this != null)
+		{
+			EmissionSettingsChanged?.Invoke();
+		}
+	}
+
+	private void OnDisable()
+	{
+		UnityEditor.EditorApplication.delayCall -= NotifyEmissionSettingsChanged;
+	}
+#endif
 
 	/// <summary>
 	/// キャラクター種別(男女)とカラー種別に対応する本体マテリアルを取得します。

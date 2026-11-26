@@ -71,6 +71,7 @@ public class NetworkConnectManager : NetworkBehaviour
 	private readonly StringBuilder m_MemberInfoBuilder = new StringBuilder();
 	private string m_CachedHostIp = "127.0.0.1";
 	private bool m_PendingInitialSpectatorSync;
+	private bool m_IsClientConnecting;
 
 	// 接続参加者のリアルタイム同期リスト
 	private readonly NetworkList<LobbyPlayerData> m_ConnectedPlayers = new NetworkList<LobbyPlayerData>();
@@ -99,6 +100,8 @@ public class NetworkConnectManager : NetworkBehaviour
 
 	public override void OnNetworkSpawn()
 	{
+		m_IsClientConnecting = false;
+		UnsubscribePendingClientDisconnect();
 		EnsureSessionDataStore();
 
 		m_ConnectedPlayers.OnListChanged += HandlePlayersListChanged;
@@ -143,6 +146,7 @@ public class NetworkConnectManager : NetworkBehaviour
 
 	public override void OnNetworkDespawn()
 	{
+		UnsubscribePendingClientDisconnect();
 		m_ConnectedPlayers.OnListChanged -= HandlePlayersListChanged;
 
 		if (NetworkManager.Singleton != null)
@@ -159,6 +163,12 @@ public class NetworkConnectManager : NetworkBehaviour
 		}
 
 		base.OnNetworkDespawn();
+	}
+
+	public override void OnDestroy()
+	{
+		UnsubscribePendingClientDisconnect();
+		base.OnDestroy();
 	}
 
 	private void InitializeTransport()
@@ -310,9 +320,14 @@ public class NetworkConnectManager : NetworkBehaviour
 			m_UnityTransport.SetConnectionData("127.0.0.1", port, "0.0.0.0");
 		}
 
+		NetworkConnectionApprovalHandler approvalHandler =
+			NetworkConnectionApprovalHandler.EnsureAttached(NetworkManager.Singleton);
+		approvalHandler?.ConfigureForHost(SceneManager.GetActiveScene().name, m_LobbySceneName);
+
 		bool started = NetworkManager.Singleton.StartHost();
 		if (!started)
 		{
+			approvalHandler?.ClearApprovalCallback();
 			SetStatusMessage("エラー: Host起動に失敗しました");
 			ShowJoinPanelOnly();
 		}
@@ -371,9 +386,16 @@ public class NetworkConnectManager : NetworkBehaviour
 		}
 
 		SetStatusMessage(asSpectator ? $"観戦者として接続試行中: {targetIp}:{port} ..." : $"接続試行中: {targetIp}:{port} ...");
+		NetworkConnectionApprovalHandler approvalHandler =
+			NetworkConnectionApprovalHandler.EnsureAttached(NetworkManager.Singleton);
+		approvalHandler?.ConfigureForClient();
+
+		SubscribePendingClientDisconnect();
 		bool started = NetworkManager.Singleton.StartClient();
 		if (!started)
 		{
+			m_IsClientConnecting = false;
+			UnsubscribePendingClientDisconnect();
 			SetStatusMessage("エラー: Client接続開始に失敗しました");
 			ShowJoinPanelOnly();
 		}
@@ -404,13 +426,55 @@ public class NetworkConnectManager : NetworkBehaviour
 		RemovePlayer(clientId);
 	}
 
+	private void SubscribePendingClientDisconnect()
+	{
+		if (NetworkManager.Singleton == null)
+		{
+			return;
+		}
+
+		m_IsClientConnecting = true;
+		NetworkManager.Singleton.OnClientDisconnectCallback -= HandlePendingClientDisconnected;
+		NetworkManager.Singleton.OnClientDisconnectCallback += HandlePendingClientDisconnected;
+	}
+
+	private void UnsubscribePendingClientDisconnect()
+	{
+		if (NetworkManager.Singleton != null)
+		{
+			NetworkManager.Singleton.OnClientDisconnectCallback -= HandlePendingClientDisconnected;
+		}
+	}
+
+	private void HandlePendingClientDisconnected(ulong clientId)
+	{
+		if (!m_IsClientConnecting || NetworkManager.Singleton == null || NetworkManager.Singleton.IsServer)
+		{
+			return;
+		}
+
+		if (clientId != NetworkManager.Singleton.LocalClientId && clientId != NetworkManager.ServerClientId)
+		{
+			return;
+		}
+
+		string reason = NetworkManager.Singleton.DisconnectReason;
+		DisconnectClientAndReturnToJoinPanel();
+		SetStatusMessage(!string.IsNullOrEmpty(reason)
+			? reason
+			: "サーバーへ接続できませんでした。IPアドレスとホスト状態を確認してください。");
+	}
+
 	private void HandleClientDisconnectedFromServer(ulong clientId)
 	{
 		if (!IsServer && NetworkManager.Singleton != null &&
 			(clientId == NetworkManager.Singleton.LocalClientId || clientId == NetworkManager.ServerClientId))
 		{
+			string reason = NetworkManager.Singleton.DisconnectReason;
 			DisconnectClientAndReturnToJoinPanel();
-			SetStatusMessage("サーバーとの接続が切断されました。");
+			SetStatusMessage(!string.IsNullOrEmpty(reason)
+				? reason
+				: "サーバーとの接続が切断されました。");
 		}
 	}
 
@@ -606,8 +670,11 @@ public class NetworkConnectManager : NetworkBehaviour
 			{
 				var data = m_ConnectedPlayers[i];
 				data.Team = targetTeam;
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_ConnectedPlayers[i] = data;
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}
@@ -622,8 +689,11 @@ public class NetworkConnectManager : NetworkBehaviour
 			{
 				var data = m_ConnectedPlayers[i];
 				data.Team = ETeamType.None;
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_ConnectedPlayers[i] = data;
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}
@@ -702,6 +772,8 @@ public class NetworkConnectManager : NetworkBehaviour
 	/// </summary>
 	public void DisconnectClientAndReturnToJoinPanel()
 	{
+		m_IsClientConnecting = false;
+		UnsubscribePendingClientDisconnect();
 		m_PendingInitialSpectatorSync = false;
 		IsSpectatorClient = false;
 		IsPlayerHost = false;
@@ -720,13 +792,22 @@ public class NetworkConnectManager : NetworkBehaviour
 	/// </summary>
 	public void ShutdownHostAndReturnToJoinPanel()
 	{
+		m_IsClientConnecting = false;
+		UnsubscribePendingClientDisconnect();
 		m_PendingInitialSpectatorSync = false;
 		IsSpectatorClient = false;
 		IsPlayerHost = false;
 
-		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+		if (NetworkManager.Singleton != null)
 		{
-			NetworkManager.Singleton.Shutdown();
+			NetworkConnectionApprovalHandler approvalHandler =
+				NetworkManager.Singleton.GetComponent<NetworkConnectionApprovalHandler>();
+			approvalHandler?.ClearApprovalCallback();
+
+			if (NetworkManager.Singleton.IsListening)
+			{
+				NetworkManager.Singleton.Shutdown();
+			}
 		}
 
 		ShowJoinPanelOnly();

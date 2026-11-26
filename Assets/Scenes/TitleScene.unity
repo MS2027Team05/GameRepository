@@ -4697,7 +4697,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ShaderPrewarmController
   m_GraphicsStateCollection: {fileID: 0}
   m_ShaderVariantCollection: {fileID: 20000000, guid: 6fb0a5710e39b924399d6f9c2ddde145, type: 2}
-  m_VariantsPerFrame: 5
+  m_VariantsPerFrame: 1
 --- !u!4 &1741520709
 Transform:
   m_ObjectHideFlags: 0

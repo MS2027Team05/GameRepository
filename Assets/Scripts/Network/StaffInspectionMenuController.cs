@@ -41,6 +41,7 @@ public class StaffInspectionMenuController : MonoBehaviour
 	[Tooltip("インゲーム用操作の親オブジェクト。ロビーシーンでは自動で非表示化されます")]
 	[SerializeField] private GameObject m_InGameControlsRoot;
 	[SerializeField] private Toggle m_InfiniteEnergyToggle;
+	[SerializeField] private Toggle m_InfiniteTimeToggle;
 	[SerializeField] private Button m_RespawnPlayerButton;
 	[SerializeField] private TMP_Dropdown m_SceneTransitionDropdown;
 	[SerializeField] private Button m_LoadSelectedSceneButton;
@@ -174,6 +175,17 @@ public class StaffInspectionMenuController : MonoBehaviour
 		{
 			m_InfiniteEnergyToggle.SetIsOnWithoutNotify(PlayerResourceController.IsInfiniteEnergyDebugEnabled);
 		}
+
+		// 時間無制限トグルの状態を反映(ホスト/サーバーのみ操作可能)
+		if (m_InfiniteTimeToggle != null)
+		{
+			bool isServer = NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
+			m_InfiniteTimeToggle.interactable = !isLobby && isServer;
+			bool isInfiniteTime = MatchManager.Instance != null
+				? MatchManager.Instance.IsInfiniteTimeEnabled
+				: MatchManager.IsInfiniteTimeDebugEnabled;
+			m_InfiniteTimeToggle.SetIsOnWithoutNotify(isInfiniteTime);
+		}
 	}
 
 	private void SetupButtonListeners()
@@ -255,6 +267,26 @@ public class StaffInspectionMenuController : MonoBehaviour
 			m_InfiniteEnergyToggle.onValueChanged.AddListener(isOn =>
 			{
 				PlayerResourceController.IsInfiniteEnergyDebugEnabled = isOn;
+			});
+		}
+
+		if (m_InfiniteTimeToggle != null)
+		{
+			m_InfiniteTimeToggle.onValueChanged.AddListener(isOn =>
+			{
+				if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+				{
+					return;
+				}
+
+				if (MatchManager.Instance != null)
+				{
+					MatchManager.Instance.SetInfiniteTimeDebugEnabled(isOn);
+				}
+				else
+				{
+					MatchManager.IsInfiniteTimeDebugEnabled = isOn;
+				}
 			});
 		}
 

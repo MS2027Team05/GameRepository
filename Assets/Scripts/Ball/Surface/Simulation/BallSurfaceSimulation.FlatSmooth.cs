@@ -1,8 +1,17 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Flat / Smooth Edgeの隣Triangle遷移とSmooth Normal補間を担当します。
+/// Flat・Smooth Edgeを越える隣Triangle遷移とSmooth Normal補間を担当します。
 /// </summary>
+/// <remarks>
+/// 主な処理の流れ:
+/// 1. 共有Edgeを越えた位置から隣TriangleへCurrentTriangleを切り替えます。
+/// 2. 旧Surface法線から新Surface法線への回転をSurfaceVelocityへ適用します。
+/// 3. SurfaceVelocityを新しい面の接平面へ再投影します。
+/// 4. Smooth EdgeではCorner NormalをBarycentric補間し、Ball中心Offsetを滑らかに変化させます。
+///
+/// MeshのTriangle分割を越えても速度と見た目の法線が不連続にならないことを目的とします。
+/// </remarks>
 public sealed partial class BallSurfaceSimulation
 {
 	/// <summary>

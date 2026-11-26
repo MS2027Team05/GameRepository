@@ -75,6 +75,7 @@ public class LobbyManager : NetworkBehaviour
 	public int ConnectedPlayerCount { get => m_LobbyPlayers.Count; }
 	public int RequiredPlayerCount { get => m_CurrentRequiredPlayers; }
 	public bool UseLevelDesignScene { get => m_UseLevelDesignScene; }
+	public bool IsGameStarting { get => m_IsGameStarting; }
 	public string HostIpAddress { get => m_CachedHostIp; }
 
 	public string TargetSceneName
@@ -671,9 +672,11 @@ public class LobbyManager : NetworkBehaviour
 				data.Team = targetTeam;
 				// 観戦者の場合は最初からReady状態として扱う
 				data.IsReady = (targetTeam == ETeamType.Spectator);
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_LobbyPlayers[i] = data;
-
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}
@@ -716,8 +719,11 @@ public class LobbyManager : NetworkBehaviour
 					data.HighlightColor = highlightColor;
 					data.Team = ETeamType.Spectator;
 					data.IsReady = true;
+					if (SessionPlayerDataStore.Instance != null)
+					{
+						data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+					}
 					m_LobbyPlayers[i] = data;
-					SessionPlayerDataStore.Instance?.SavePlayerData(data);
 					break;
 				}
 
@@ -734,8 +740,11 @@ public class LobbyManager : NetworkBehaviour
 					data.Team = assignedTeam;
 				}
 
+				if (SessionPlayerDataStore.Instance != null)
+				{
+					data = SessionPlayerDataStore.Instance.NormalizeDefaultPlayerName(data);
+				}
 				m_LobbyPlayers[i] = data;
-				SessionPlayerDataStore.Instance?.SavePlayerData(data);
 				break;
 			}
 		}

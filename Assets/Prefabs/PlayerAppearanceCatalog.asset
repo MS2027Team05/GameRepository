@@ -66,3 +66,8 @@ MonoBehaviour:
   m_RedTeamDisplayColor: {r: 1, g: 0, b: 0, a: 1}
   m_BlueTeamDisplayColor: {r: 0, g: 0, b: 1, a: 1}
   m_DefaultTeamDisplayColor: {r: 0, g: 0, b: 0, a: 0}
+  m_UseEmissionSettings: 1
+  m_EmissionIntensity: 2
+  m_RedTeamEmissionColor: {r: 1, g: 0, b: 0, a: 0}
+  m_BlueTeamEmissionColor: {r: 0, g: 0, b: 1, a: 0}
+  m_DefaultEmissionColor: {r: 0, g: 0, b: 0, a: 0}
