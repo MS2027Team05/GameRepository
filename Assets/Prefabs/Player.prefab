@@ -1685,7 +1685,9 @@ MonoBehaviour:
   m_Animators:
   - {fileID: 6264371105760102432}
   - {fileID: 4843181947419752757}
-  m_TentacleAnimator: {fileID: 1877058774271430987}
+  m_TentacleAnimators:
+  - {fileID: 1877058774271430987}
+  - {fileID: 7281180739117758275}
   m_SurfaceMover: {fileID: 3112936510738658285}
   m_PlayerController: {fileID: 8696501033850427894}
   m_MoveSpeedThreshold: 1
