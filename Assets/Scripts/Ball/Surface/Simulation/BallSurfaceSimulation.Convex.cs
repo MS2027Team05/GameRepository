@@ -163,7 +163,15 @@ public sealed partial class BallSurfaceSimulation
 					Mathf.Sign(
 						signedAngle))
 		{
-			return RecordGeometryFailure($"OppositeAngle CurrentAngle={currentAngle:F6} SignedAngle={signedAngle:F6}");
+			// Smooth NormalからSharp Convexへ入る場合の微小な逆方向角だけを許容します。
+			// 角度を丸めず、球中心を維持して実際の角度から回転を開始します。
+			const float smoothEntryAngleTolerance = 1.0f;
+			float sourcePlaneDistance = Vector3.Dot(radialVector, normalizedSourceNormal);
+			if (!(Mathf.Abs(currentAngle) <= smoothEntryAngleTolerance) ||
+				!(sourcePlaneDistance >= m_BallRadius - m_TransitionPositionTolerance))
+			{
+				return RecordGeometryFailure($"OppositeAngle CurrentAngle={currentAngle:F6} SignedAngle={signedAngle:F6} SourcePlaneDistance={sourcePlaneDistance:F6}");
+			}
 		}
 
 		if (Mathf.Abs(
@@ -693,15 +701,16 @@ public sealed partial class BallSurfaceSimulation
 			Mathf.Abs(
 				m_ConvexSignedAngle);
 
-		float currentAngleMagnitude =
-			Mathf.Abs(
-				m_ConvexCurrentAngle);
+		// 進行方向を基準に符号付きの進捗を求め、逆方向からの進入時間も消費します。
+		float currentAngleProgress =
+			m_ConvexCurrentAngle *
+				Mathf.Sign(m_ConvexSignedAngle);
 
 		float remainingAngle =
 			Mathf.Max(
 				0.0f,
 				totalAngleMagnitude -
-					currentAngleMagnitude);
+					currentAngleProgress);
 
 		if (remainingAngle <=
 			m_MinimumCalculationValue)
