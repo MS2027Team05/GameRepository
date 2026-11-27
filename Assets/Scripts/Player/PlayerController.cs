@@ -1422,6 +1422,9 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 
 		CancelAllActiveActionsAndEffects();
 		(m_BallCarrier as PlayerBallCarrier)?.ResetActionState();
+		m_ElectricAction?.ResetCharge();
+		m_ChargeProgressUI?.ResetProgress();
+		m_LockOnProvider?.SetSearchMode(ELockOnSearchMode.None);
 
 		if (m_AimGuide is PlayerAimGuide playerAimGuide)
 		{

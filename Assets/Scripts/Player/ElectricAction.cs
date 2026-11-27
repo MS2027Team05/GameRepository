@@ -1,4 +1,4 @@
-﻿// ElectricAction.cs
+// ElectricAction.cs
 
 using System.Collections;
 using System;
@@ -167,6 +167,15 @@ public class ElectricAction : NetworkBehaviour, IElectricAction
 
 		m_NextChargeLogTime = 0.0f;
 		m_LoggedChargeFull = false;
+	}
+
+	/// <summary>
+	/// チャージ状態および蓄積されたチャージ進捗を0へ初期化します。
+	/// </summary>
+	public void ResetCharge()
+	{
+		CancelCharge();
+		m_ChargeTimer = 0.0f;
 	}
 
 	/// <summary>

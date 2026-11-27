@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -230,5 +230,14 @@ public class PlayerChargeProgress : MonoBehaviour
 		}
 
 		SetProgress(progress);
+	}
+
+	/// <summary>
+	/// 追尾パスチャージ表示モードを解除し、ゲージ進捗を0へ初期化します。
+	/// </summary>
+	public void ResetProgress()
+	{
+		m_IsPassChargeMode = false;
+		SetProgress(0.0f);
 	}
 }

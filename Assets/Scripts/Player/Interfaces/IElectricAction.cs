@@ -1,4 +1,4 @@
-﻿/// <summary>
+/// <summary>
 /// ボール非所持時の電撃チャージ・発射(ボール奪取/敵スタン)を担当するモジュールのインターフェース。
 /// </summary>
 public interface IElectricAction
@@ -33,6 +33,11 @@ public interface IElectricAction
 	/// チャージを途中キャンセルし、関連UIを非表示にします。
 	/// </summary>
 	void CancelCharge();
+
+	/// <summary>
+	/// チャージ状態および蓄積されたチャージ進捗を0へ初期化します。
+	/// </summary>
+	void ResetCharge();
 
 	/// <summary>
 	/// チャージボタン離し時に呼び出され、満タンかつ対象有効であれば電撃を発射します。
