@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -412,6 +412,7 @@ public class ResultUIController : MonoBehaviour
 		}
 
 		m_IsTransitioning = true;
+		MatchManager.ResetDebugModeFlags();
 		if (isConnected)
 		{
 			NetworkManager.Singleton.Shutdown();

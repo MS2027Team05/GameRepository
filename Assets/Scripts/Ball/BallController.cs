@@ -1,4 +1,4 @@
-﻿// BallController.cs
+// BallController.cs
 using System;
 using System.Collections;
 using Unity.Netcode;
@@ -231,7 +231,18 @@ public class BallController : NetworkBehaviour
 	{
 		if (IsServer)
 		{
+			m_HasHolder.Value = false;
+			m_CurrentHolderId.Value = 0;
+			m_CurrentHolderNetworkObjectId.Value = 0;
 			m_IsShotInFlight.Value = false;
+			m_IsPassInFlight = false;
+			m_LastPasserTeam = ETeamType.None;
+			m_LastPasserClientId = 0;
+			m_LastAssistClientId = 0;
+			m_CurrentPassChainCount = 0;
+			m_IsGoalHomingInFlight = false;
+			m_IsStealing = false;
+			ClearRepickupLock();
 			m_InitialPosition = transform.position;
 			m_InitialRotation = transform.rotation;
 			m_LastReleaseOrigin = m_InitialPosition;
@@ -333,6 +344,13 @@ public class BallController : NetworkBehaviour
 	/// </summary>
 	public override void OnNetworkDespawn()
 	{
+		if (m_ElectricStealCoroutine != null)
+		{
+			StopCoroutine(m_ElectricStealCoroutine);
+			m_ElectricStealCoroutine = null;
+		}
+		m_IsStealing = false;
+
 		m_HasHolder.OnValueChanged -=
 			HandleHolderStateChanged;
 		m_CurrentHolderNetworkObjectId.OnValueChanged -= HandleHolderObjectChanged;
@@ -797,6 +815,8 @@ public class BallController : NetworkBehaviour
 
 		m_HasHolder.Value = false;
 		m_CurrentHolderId.Value = 0;
+		m_CurrentHolderNetworkObjectId.Value = 0;
+		ClearHolderAttachment();
 
 		m_LastPasserTeam = passerTeam;
 		m_LastPasserClientId = previousHolderClientId;
@@ -907,6 +927,11 @@ public class BallController : NetworkBehaviour
 		m_CurrentHolderId.Value =
 			0;
 
+		m_CurrentHolderNetworkObjectId.Value =
+			0;
+
+		ClearHolderAttachment();
+
 		m_Rigidbody.linearVelocity =
 			shootDirection *
 			m_ShootPower;
@@ -964,6 +989,11 @@ public class BallController : NetworkBehaviour
 
 		m_CurrentHolderId.Value =
 			0;
+
+		m_CurrentHolderNetworkObjectId.Value =
+			0;
+
+		ClearHolderAttachment();
 
 		// 強制解放されたボールは、味方パスボーナスの対象外です。
 		m_IsPassInFlight = false;
@@ -1128,6 +1158,23 @@ public class BallController : NetworkBehaviour
 	}
 
 	/// <summary>
+	/// シーン遷移やプレイヤーDespawnの直前に、ボールの所持状態と親子関係を確実に解除して静止させます。
+	/// </summary>
+	public void PrepareForSceneTransition()
+	{
+		if (!IsServer || !IsSpawned)
+		{
+			return;
+		}
+
+		ResetForRestart();
+		if (m_Rigidbody != null)
+		{
+			m_Rigidbody.isKinematic = true;
+		}
+	}
+
+	/// <summary>
 	/// 場外復帰時の初期候補位置です。
 	/// </summary>
 	internal Vector3 InitialRespawnPosition => m_InitialPosition;
@@ -1204,10 +1251,10 @@ public class BallController : NetworkBehaviour
 		m_CurrentPassChainCount = 0;
 		m_IsGoalHomingInFlight = false;
 		m_CurrentHolderId.Value = 0;
+		m_CurrentHolderNetworkObjectId.Value = 0;
 		ClearHolderAttachment();
 		m_LastReleaseOrigin = respawnPosition;
 		m_WasFriendlyPassAssisted = false;
-		// Clientの所持解除通知が旧所持者を参照できるよう、所持者NetworkObjectIdは保持します。
 		m_BallPhysics?.ResetMotionState();
 		m_Rigidbody.isKinematic = false;
 		m_Rigidbody.useGravity = false;
@@ -1379,6 +1426,7 @@ public class BallController : NetworkBehaviour
 		}
 
 		m_HoldAttachment.Restore();
+		ClearHolderAttachment();
 
 		m_Rigidbody.isKinematic =
 			false;

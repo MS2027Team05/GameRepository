@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -185,12 +185,23 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	/// </summary>
 	private bool EnsureTargetCamera()
 	{
-		if (m_TargetCamera != null && m_TargetCamera.isActiveAndEnabled)
+		if (m_TargetCamera != null &&
+			m_TargetCamera.isActiveAndEnabled &&
+			m_TargetCamera.targetDisplay == 0)
 		{
 			return true;
 		}
 
-		m_TargetCamera = Camera.main;
+		Camera mainCam = Camera.main;
+		if (mainCam != null &&
+			mainCam.isActiveAndEnabled &&
+			mainCam.targetDisplay == 0)
+		{
+			m_TargetCamera = mainCam;
+			return true;
+		}
+
+		m_TargetCamera = null;
 		return false;
 	}
 
@@ -201,6 +212,13 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 
 	private void Update()
 	{
+		if (m_NetworkObject != null &&
+			m_NetworkObject.IsSpawned &&
+			!m_NetworkObject.IsOwner)
+		{
+			return;
+		}
+
 		UpdateLockOnSearchCircleSize();
 		UpdateLockOnDisplayUI();
 		UpdateLockOnMarker();
@@ -525,6 +543,9 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 	{
 		PlayerNetworkProfile[] players =
 			FindObjectsByType<PlayerNetworkProfile>(FindObjectsSortMode.None);
+		BallController activeBall = allies
+			? FindFirstObjectByType<BallController>()
+			: null;
 
 		ETeamType myTeam =
 			m_PlayerProfile != null
@@ -556,11 +577,16 @@ public class LockOnManager : MonoBehaviour, ILockOnProvider
 			}
 
 			// パス対象として味方を検索する際は、既にボールを所持している味方を除外します。
-			if (allies &&
-				profile.TryGetComponent(out PlayerBallCarrier allyCarrier) &&
-				allyCarrier.HasBall)
+			// ネットワーク同期済みのBallControllerが存在する場合はその正本で判定します。
+			if (allies)
 			{
-				continue;
+				bool isHoldingBall = activeBall != null && activeBall.IsSpawned
+					? (activeBall.HasHolder && activeBall.CurrentHolderId == profile.OwnerClientId)
+					: (profile.TryGetComponent(out PlayerBallCarrier allyCarrier) && allyCarrier.HasBall);
+				if (isHoldingBall)
+				{
+					continue;
+				}
 			}
 
 			ConsiderCandidate(

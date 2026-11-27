@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
@@ -166,6 +166,25 @@ public class MatchManager : NetworkBehaviour
 	/// ロビーのデバッグモードで有効化された全端末向けの燃料無制限フラグ。
 	/// </summary>
 	public static bool IsInfiniteEnergyLobbyDebugEnabled { get; set; }
+
+	/// <summary>
+	/// 試合終了やロビー復帰時に、全デバッグ用フラグを初期値(OFF)へ戻します。
+	/// </summary>
+	public static void ResetDebugModeFlags()
+	{
+		IsInfiniteTimeDebugEnabled = false;
+		IsInfiniteEnergyLobbyDebugEnabled = false;
+		PlayerResourceController.IsInfiniteEnergyDebugEnabled = false;
+	}
+
+	/// <summary>
+	/// 全端末で試合用デバッグフラグを初期値へ戻します。
+	/// </summary>
+	[Rpc(SendTo.Everyone)]
+	public void ResetDebugModeFlagsRpc()
+	{
+		ResetDebugModeFlags();
+	}
 
 	public EMatchState MatchState => m_MatchState.Value;
 	public int RemainingTimeSeconds => m_RemainingTimeSeconds.Value;
@@ -424,6 +443,7 @@ public class MatchManager : NetworkBehaviour
 		m_IsStartRequested = false;
 		m_GoalScoringTeam.Value = ETeamType.None;
 		m_IsGoalProcessing = false;
+		m_SceneReadyClients.Clear();
 		m_PendingGoalEffectClients.Clear();
 		m_PendingReplayClients.Clear();
 		m_IsLocalGoalEffectPending = false;
@@ -953,6 +973,15 @@ public class MatchManager : NetworkBehaviour
 			// ClientRpcが全端末へ到達してからリザルトシーンをロードします。
 			yield return new WaitForSeconds(0.15f);
 		}
+
+		// プレイヤー破棄前にボールの所持・親子関係を確実に解除します。
+		if (m_Ball != null && m_Ball.IsSpawned)
+		{
+			m_Ball.PrepareForSceneTransition();
+		}
+
+		// 試合終了ごとに全端末のデバッグモード設定を初期化します。
+		ResetDebugModeFlagsRpc();
 
 		// 動的生成されたプレイヤーNetworkObjectが次シーンへ残存しないよう一括Despawnします。
 		PlayerSpawner spawner = FindFirstObjectByType<PlayerSpawner>();

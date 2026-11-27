@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -296,6 +296,7 @@ public class LobbyManager : NetworkBehaviour
 			NetworkManager.Singleton.Shutdown();
 		}
 
+		MatchManager.ResetDebugModeFlags();
 		ReturnToTitleScene();
 	}
 
@@ -532,6 +533,7 @@ public class LobbyManager : NetworkBehaviour
 			NetworkManager.Singleton.Shutdown();
 		}
 
+		MatchManager.ResetDebugModeFlags();
 		ReturnToTitleScene();
 	}
 

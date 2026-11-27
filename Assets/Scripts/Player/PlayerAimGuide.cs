@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using DG.Tweening;
 using UnityEngine;
 
@@ -103,6 +103,11 @@ public class PlayerAimGuide : MonoBehaviour, IAimGuide
 	private void OnDestroy()
 	{
 		m_AimFloatTween?.Kill();
+		if (m_LandingMarker != null)
+		{
+			Destroy(m_LandingMarker);
+			m_LandingMarker = null;
+		}
 	}
 
 	// =========================================================

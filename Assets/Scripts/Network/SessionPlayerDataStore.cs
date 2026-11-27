@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
@@ -326,11 +326,12 @@ public class SessionPlayerDataStore : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 新規試合開始時に前回試合の表彰キャッシュのみをクリアします。
+	/// 新規試合開始時に前回試合の表彰および勝敗結果キャッシュをクリアします。
 	/// </summary>
 	public void ClearLatestMatchAwards()
 	{
 		m_LatestMatchSummaries.Clear();
+		m_LatestMatchResult = default;
 	}
 
 	/// <summary>

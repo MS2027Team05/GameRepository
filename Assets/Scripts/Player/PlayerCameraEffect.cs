@@ -1,4 +1,4 @@
-﻿using Unity.Cinemachine;
+using Unity.Cinemachine;
 using Unity.Netcode;
 using UnityEngine;
 using DG.Tweening;
@@ -187,6 +187,10 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 					m_CinemachineCamera.transform.localPosition;
 			}
 
+			// GameSceneの初期カメラ角度からの補間ずれを防ぐため、生成直後にプレイヤー追従姿勢を即時反映します。
+			ApplyCameraPoseImmediate(transform.position, true);
+			UpdateCameraCollision();
+
 			m_IsInitialized = true;
 		}
 	}
@@ -352,7 +356,8 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 		m_CameraPivot.position = Vector3.SmoothDamp(m_CameraPivot.position, transform.position, ref m_PositionVelocity, smoothTime);
 
-		if (m_PlayerController != null && !m_PlayerController.IsMatchActionEnabled)
+		bool isMatchActionEnabled = m_PlayerController == null || m_PlayerController.IsMatchActionEnabled;
+		if (!isMatchActionEnabled && !CanControlLookDuringWait())
 		{
 			return;
 		}
@@ -360,55 +365,13 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 		// 視点リセット中でなければ、通常のカメラ制御を行う
 		if (!m_IsResettingView)
 		{
-			bool isFalling = m_GravityMover != null && m_GravityMover.IsFalling;
-			bool isGrounded = m_GroundDetector == null || m_GroundDetector.IsGrounded;
-
-			if (isFalling)
+			if (isMatchActionEnabled)
 			{
-				// 飛行移動中はカメラの法線追従を行わず視界を安定化
-				m_WasFalling = true;
-				m_IsLandingAlignPending = false;
-				m_IsLandingAlignStarted = false;
-			}
-			else if (isGrounded)
-			{
-				// 空中ブレーキ後などOnLandedを経由せず接地した場合のフォールバック検知
-				if (m_WasFalling)
-				{
-					BeginLandingAlign(GetCurrentGroundOrTransformUp());
-				}
-
-				UpdateCameraNormalAlignment();
+				UpdateNormalAlignmentForMovement();
 			}
 
 			// マウス・スティック操作によるYaw(水平旋回)・Pitch(垂直仰角)の更新
-			if (m_InputReceiver != null && Cursor.lockState == CursorLockMode.Locked)
-			{
-				Vector2 look = m_InputReceiver.LookInput;
-				float slowdownMultiplier = 1.0f;
-				float assistYawDelta = 0.0f;
-				float assistPitchDelta = 0.0f;
-
-				m_AimAssist?.EvaluateAimAssist(
-					m_CinemachineCamera != null ? m_CinemachineCamera.transform : null,
-					m_CurrentUp,
-					look,
-					m_InputReceiver.MoveInput,
-					m_InputReceiver.IsUsingGamepad,
-					Time.deltaTime,
-					out slowdownMultiplier,
-					out assistYawDelta,
-					out assistPitchDelta);
-
-				// 水平旋回: 現在のUp(法線)を軸として接平面上の前方ベクトルを回転
-				float yawAngle = look.x * m_MouseSensitivity * slowdownMultiplier + assistYawDelta;
-				m_PlanarForward = (Quaternion.AngleAxis(yawAngle, m_CurrentUp) * m_PlanarForward).normalized;
-
-				// 垂直仰角: 子カメラのローカルオフセット角を加味して実効仰角を設定範囲内へクランプ
-				m_Pitch -= look.y * m_MouseSensitivity * slowdownMultiplier;
-				m_Pitch += assistPitchDelta;
-				m_Pitch = ClampPitchWithOffset(m_Pitch);
-			}
+			UpdateLookRotation(isMatchActionEnabled);
 		}
 
 		// 水平基底姿勢の決定
@@ -423,6 +386,86 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 
 		// カメラとプレイヤーの間に障害物がある場合はカメラを近づける。
 		UpdateCameraCollision();
+	}
+
+	private bool CanControlLookDuringWait()
+	{
+		if (ReplayPlayer.IsReplayActive)
+		{
+			return false;
+		}
+
+		if (MatchManager.Instance == null)
+		{
+			return true;
+		}
+
+		MatchManager.EMatchState state = MatchManager.Instance.MatchState;
+		return state == MatchManager.EMatchState.Waiting
+			|| state == MatchManager.EMatchState.PreparingRestart
+			|| state == MatchManager.EMatchState.Countdown;
+	}
+
+	private void UpdateNormalAlignmentForMovement()
+	{
+		bool isFalling = m_GravityMover != null && m_GravityMover.IsFalling;
+		bool isGrounded = m_GroundDetector == null || m_GroundDetector.IsGrounded;
+
+		if (isFalling)
+		{
+			// 飛行移動中はカメラの法線追従を行わず視界を安定化
+			m_WasFalling = true;
+			m_IsLandingAlignPending = false;
+			m_IsLandingAlignStarted = false;
+			return;
+		}
+
+		if (isGrounded)
+		{
+			// 空中ブレーキ後などOnLandedを経由せず接地した場合のフォールバック検知
+			if (m_WasFalling)
+			{
+				BeginLandingAlign(GetCurrentGroundOrTransformUp());
+			}
+
+			UpdateCameraNormalAlignment();
+		}
+	}
+
+	private void UpdateLookRotation(bool useAimAssist)
+	{
+		if (m_InputReceiver == null || Cursor.lockState != CursorLockMode.Locked)
+		{
+			return;
+		}
+
+		Vector2 look = m_InputReceiver.LookInput;
+		float slowdownMultiplier = 1.0f;
+		float assistYawDelta = 0.0f;
+		float assistPitchDelta = 0.0f;
+
+		if (useAimAssist)
+		{
+			m_AimAssist?.EvaluateAimAssist(
+				m_CinemachineCamera != null ? m_CinemachineCamera.transform : null,
+				m_CurrentUp,
+				look,
+				m_InputReceiver.MoveInput,
+				m_InputReceiver.IsUsingGamepad,
+				Time.deltaTime,
+				out slowdownMultiplier,
+				out assistYawDelta,
+				out assistPitchDelta);
+		}
+
+		// 水平旋回: 現在のUp(法線)を軸として接平面上の前方ベクトルを回転
+		float yawAngle = look.x * m_MouseSensitivity * slowdownMultiplier + assistYawDelta;
+		m_PlanarForward = (Quaternion.AngleAxis(yawAngle, m_CurrentUp) * m_PlanarForward).normalized;
+
+		// 垂直仰角: 子カメラのローカルオフセット角を加味して実効仰角を設定範囲内へクランプ
+		m_Pitch -= look.y * m_MouseSensitivity * slowdownMultiplier;
+		m_Pitch += assistPitchDelta;
+		m_Pitch = ClampPitchWithOffset(m_Pitch);
 	}
 
 	/// <summary>
@@ -813,7 +856,10 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 	/// <summary>
 	/// 以前の視点・追従速度・着地補正・FOV演出を破棄して復帰先へ即時配置します。
 	/// </summary>
-	public void ResetForRespawn(Vector3 position, Quaternion rotation)
+	/// <param name="position">復帰先のワールド座標</param>
+	/// <param name="rotation">復帰先のワールド回転</param>
+	/// <param name="preserveOrientation">待機中の視点方向をそのまま引き継ぐ場合はtrue</param>
+	public void ResetForRespawn(Vector3 position, Quaternion rotation, bool preserveOrientation = false)
 	{
 		if (m_NetworkObject != null && !m_NetworkObject.IsOwner) return;
 		m_ViewResetTween?.Kill();
@@ -824,27 +870,48 @@ public class PlayerCameraEffect : MonoBehaviour, ICameraEffect
 			m_FOVCoroutine = null;
 		}
 
+		SetPlayerTransparency(false);
 		m_PositionVelocity = Vector3.zero;
-		m_CurrentUp = rotation * Vector3.up;
-		m_PlanarForward = rotation * Vector3.forward;
-		m_LandedSurfaceNormal = m_CurrentUp;
-		m_Pitch = ClampPitchWithOffset(12.0f);
 		m_WasFalling = false;
 		m_IsLandingAlignPending = false;
 		m_IsLandingAlignStarted = false;
 		m_IsResettingView = false;
 
+		if (!preserveOrientation || m_CurrentUp.sqrMagnitude < 0.001f || m_PlanarForward.sqrMagnitude < 0.001f)
+		{
+			m_CurrentUp = rotation * Vector3.up;
+			m_PlanarForward = rotation * Vector3.forward;
+			m_LandedSurfaceNormal = m_CurrentUp;
+			m_Pitch = ClampPitchWithOffset(12.0f);
+		}
+
+		ApplyCameraPoseImmediate(position, false);
+		UpdateCameraCollision();
+	}
+
+	private void ApplyCameraPoseImmediate(Vector3 position, bool resetBrain)
+	{
 		if (m_CameraPivot != null)
 		{
-			m_CameraPivot.SetPositionAndRotation(position, rotation * Quaternion.Euler(m_Pitch, 0f, 0f));
+			Quaternion baseRotation = Quaternion.LookRotation(m_PlanarForward, m_CurrentUp);
+			m_CameraPivot.SetPositionAndRotation(position, baseRotation * Quaternion.Euler(m_Pitch, 0.0f, 0.0f));
 		}
+
 		if (m_CinemachineCamera != null)
 		{
 			m_CinemachineCamera.transform.SetLocalPositionAndRotation(m_InitialCameraLocalPosition, m_InitialCameraLocalRotation);
-			m_CinemachineCamera.Lens.FieldOfView = m_NormalFOV;
+			if (m_NormalFOV > 0.0f)
+			{
+				m_CinemachineCamera.Lens.FieldOfView = m_NormalFOV;
+			}
 			// Cinemachine内の追従補間にも以前の位置を残さず、その場で再評価します。
 			m_CinemachineCamera.PreviousStateIsValid = false;
 			m_CinemachineCamera.InternalUpdateCameraState(m_CurrentUp, -1f);
+		}
+
+		if (resetBrain && Camera.main != null && Camera.main.TryGetComponent<CinemachineBrain>(out CinemachineBrain brain))
+		{
+			brain.ResetState();
 		}
 	}
 

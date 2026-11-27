@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -66,33 +66,49 @@ public class GameSessionResetCoordinator : NetworkBehaviour
 		if (!IsServer) return;
 		m_IsResetting = true;
 
-		// 1. スポーンされた全プレイヤーキャラクターのDespawn
+		// 1. リプレイ停止とボールの所持・親子関係解除(プレイヤーDespawn前に実施)
+		if (MatchManager.Instance != null)
+		{
+			MatchManager.Instance.GetComponent<ReplayPlayer>()?.Stop();
+		}
+		BallController ball = FindFirstObjectByType<BallController>();
+		if (ball != null && ball.IsSpawned)
+		{
+			ball.PrepareForSceneTransition();
+		}
+
+		// 2. スポーンされた全プレイヤーキャラクターのDespawn
 		PlayerSpawner spawner = FindFirstObjectByType<PlayerSpawner>();
 		if (spawner != null)
 		{
 			spawner.DespawnAllPlayers();
 		}
 
-		// 2. セッションデータストア内の全プレイヤーのReadyフラグをリセット
+		// 3. セッションデータストア内の全プレイヤーのReadyフラグをリセット
 		if (SessionPlayerDataStore.Instance != null)
 		{
 			SessionPlayerDataStore.Instance.ResetAllReadyStates();
 		}
 
-		// 3. 入力モード・カーソル状態をUIモードにリセット
+		// 4. 入力モード・カーソル状態・デバッグフラグをリセット
 		ResetLocalClientInputStateRpc();
 
-		// 4. 全クライアントをLobbySceneへ同期遷移
+		// 5. 全クライアントをLobbySceneへ同期遷移
 		string targetScene = !string.IsNullOrEmpty(m_LobbySceneName) ? m_LobbySceneName : "LobbyScene";
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
 		{
 			NetworkSceneTimeoutController.LoadNetworkScene(targetScene, UnityEngine.SceneManagement.LoadSceneMode.Single);
+		}
+		else
+		{
+			m_IsResetting = false;
 		}
 	}
 
 	[Rpc(SendTo.Everyone)]
 	private void ResetLocalClientInputStateRpc()
 	{
+		MatchManager.ResetDebugModeFlags();
 		PlayerInputReceiver.SetAllPaused(false);
 		PlayerInputReceiver.SetCursorLocked(false);
 	}

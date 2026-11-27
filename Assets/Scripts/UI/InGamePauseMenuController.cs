@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -458,6 +458,7 @@ public class InGamePauseMenuController : MonoBehaviour
 
 	private void ReturnToTitleScene()
 	{
+		MatchManager.ResetDebugModeFlags();
 		string targetScene = !string.IsNullOrEmpty(m_TitleSceneName) ? m_TitleSceneName : "TitleScene";
 		SceneManager.LoadScene(targetScene);
 	}

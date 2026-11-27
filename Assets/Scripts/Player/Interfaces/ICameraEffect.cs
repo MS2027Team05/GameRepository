@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 /// <summary>
 /// カメラ演出およびカメラ基準の移動方向基底を提供するインターフェース。
@@ -21,7 +21,10 @@ public interface ICameraEffect
 	/// <summary>
 	/// 復帰先へカメラを即時配置し、視点・追従・演出の状態を初期化します。
 	/// </summary>
-	void ResetForRespawn(Vector3 position, Quaternion rotation);
+	/// <param name="position">復帰先のワールド座標</param>
+	/// <param name="rotation">復帰先のワールド回転</param>
+	/// <param name="preserveOrientation">待機中の視点方向をそのまま引き継ぐ場合はtrue</param>
+	void ResetForRespawn(Vector3 position, Quaternion rotation, bool preserveOrientation = false);
 
 	/// <summary>
 	/// 指定された接地法線に対して、上下角の特異点や反転を含まない移動用の前方・右方単位ベクトルを取得します。

@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.Collections;
 using Unity.Netcode;
@@ -192,6 +192,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			}
 
 			m_InputReceiver?.SetInputAllowed(false);
+			m_InputReceiver?.SetLookInputAllowed(false);
 
 			// 他プレイヤーのレティクルは表示しない
 			m_AimGuide?.SetConstantReticleActive(false);
@@ -208,6 +209,8 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_PlayerCameraObject.SetActive(true);
 		}
 
+		// 待機中も周囲を見渡せるよう視点入力はOwner生成時から許可し、移動・アクション入力のみ試合状態に合わせる
+		m_InputReceiver?.SetLookInputAllowed(true);
 		// コンポーネント自体を有効化するのではなく、入力を許可する
 		SetMatchActionEnabled(MatchManager.Instance == null || MatchManager.Instance.MatchState == MatchManager.EMatchState.Playing);
 
@@ -859,6 +862,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	{
 		CancelPendingMoveAction(false);
 
+		if (m_IsPassModeActive)
+		{
+			CancelPassMode();
+		}
+
 		CancelActiveSubAction();
 		m_AimGuide?.CancelGroundTakeoff();
 		m_AimGuide?.EndLandingTracking();
@@ -1319,19 +1327,19 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// <summary>
 	/// 再配置要求を識別し、対象Ownerからの完了応答を待ちます。
 	/// </summary>
-	public void PrepareForRestart(Vector3 position, Quaternion rotation)
+	public void PrepareForRestart(Vector3 position, Quaternion rotation, bool preserveCameraOrientation = false)
 	{
 		if (!IsServer || !IsSpawned) return;
 		IsReadyForRestart = false;
 		m_RestartSequence++;
-		PrepareForRestartOwnerRpc(position, rotation, m_RestartSequence);
+		PrepareForRestartOwnerRpc(position, rotation, m_RestartSequence, preserveCameraOrientation);
 	}
 
 	[Rpc(SendTo.Owner)]
-	private void PrepareForRestartOwnerRpc(Vector3 position, Quaternion rotation, uint sequence)
+	private void PrepareForRestartOwnerRpc(Vector3 position, Quaternion rotation, uint sequence, bool preserveCameraOrientation)
 	{
 		SetMatchActionEnabled(false);
-		Respawn(position, rotation);
+		Respawn(position, rotation, preserveCameraOrientation);
 		m_PlayerResource?.ResetToFull();
 		ConfirmRestartServerRpc(sequence);
 	}
@@ -1393,6 +1401,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 	/// <param name="rotation">復帰先のワールド回転</param>
 	public void Respawn(Vector3 position, Quaternion rotation)
 	{
+		Respawn(position, rotation, false);
+	}
+
+	private void Respawn(Vector3 position, Quaternion rotation, bool preserveCameraOrientation)
+	{
 		if (!IsOwner)
 		{
 			return;
@@ -1404,7 +1417,11 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			m_StunCoroutine = null;
 		}
 
+		m_IsStunnedOnFlying = false;
+		m_StunDuration = 0.0f;
+
 		CancelAllActiveActionsAndEffects();
+		(m_BallCarrier as PlayerBallCarrier)?.ResetActionState();
 
 		if (m_AimGuide is PlayerAimGuide playerAimGuide)
 		{
@@ -1425,7 +1442,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 		m_UsedAimMove = false;
 		m_SurfaceMover?.ResetMovement();
 		m_GroundDetector?.DetectGround(Vector3.zero, 0f);
-		m_CameraEffect?.ResetForRespawn(position, rotation);
+		m_CameraEffect?.ResetForRespawn(position, rotation, preserveCameraOrientation);
 		m_AnimationController?.ResetForRespawn();
 		if (!m_IsMatchActionEnabled && m_MatchRigidbody != null)
 		{
@@ -1515,6 +1532,7 @@ public class PlayerController : NetworkBehaviour, IPlayerRespawnHandler
 			{
 				m_GravityMover.OnLanded -= HandleLanded;
 			}
+			m_InputReceiver?.SetLookInputAllowed(false);
 			m_ActionHelpUI?.Hide();
 			UnbindInputEvents();
 			PlayerInputReceiver.SetCursorLocked(false);

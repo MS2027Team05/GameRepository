@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -783,6 +783,7 @@ public class NetworkConnectManager : NetworkBehaviour
 			NetworkManager.Singleton.Shutdown();
 		}
 
+		MatchManager.ResetDebugModeFlags();
 		ShowJoinPanelOnly();
 		SetStatusMessage("切断しました。待機画面に戻ります");
 	}
@@ -810,6 +811,7 @@ public class NetworkConnectManager : NetworkBehaviour
 			}
 		}
 
+		MatchManager.ResetDebugModeFlags();
 		ShowJoinPanelOnly();
 		SetStatusMessage("ホストを終了しました。待機画面に戻ります");
 	}

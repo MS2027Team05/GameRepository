@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -162,13 +162,14 @@ public class PlayerSpawner : NetworkBehaviour
 				return false;
 			}
 		}
+		bool isInitialKickoff = scoringTeam == ETeamType.None;
 		foreach (var player in m_RestartPlayers)
 		{
 			if (player.Controller != null && player.Controller.IsSpawned)
 			{
 				TryGetSpawnTransform(player.Team, player.SlotIndex, isAfterGoal && player.Team != scoringTeam,
 					out Vector3 position, out Quaternion rotation);
-				player.Controller.PrepareForRestart(position, rotation);
+				player.Controller.PrepareForRestart(position, rotation, isInitialKickoff);
 			}
 		}
 		return true;
@@ -237,6 +238,8 @@ public class PlayerSpawner : NetworkBehaviour
 			}
 		}
 		m_SpawnedPlayerObjects.Clear();
+		m_RestartPlayers.Clear();
+		IsReady = false;
 	}
 
 	public override void OnNetworkDespawn()
@@ -244,16 +247,7 @@ public class PlayerSpawner : NetworkBehaviour
 		if (IsServer)
 		{
 			// シーン終了時のクリーンアップ
-			foreach (var player in m_SpawnedPlayerObjects)
-			{
-				if (player != null)
-				{
-					Destroy(player);
-				}
-			}
-			m_SpawnedPlayerObjects.Clear();
-			m_RestartPlayers.Clear();
-			IsReady = false;
+			DespawnAllPlayers();
 		}
 	}
 }

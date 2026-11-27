@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using Unity.Netcode;
@@ -393,18 +393,48 @@ public class StaffInspectionMenuController : MonoBehaviour
 	{
 		if (string.IsNullOrEmpty(sceneName)) return;
 
+		PlayerInputReceiver.SetAllPaused(false);
+		PlayerInputReceiver.SetCursorLocked(false);
+
 		// ネットワーク接続中の場合
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
 		{
 			// ホストであり、かつタイトルシーン以外へ同期遷移する場合
 			if (NetworkManager.Singleton.IsServer && NetworkManager.Singleton.SceneManager != null && sceneName != "TitleScene")
 			{
+				BallController ball = FindFirstObjectByType<BallController>();
+				if (ball != null && ball.IsSpawned)
+				{
+					ball.PrepareForSceneTransition();
+				}
+
+				PlayerSpawner spawner = FindFirstObjectByType<PlayerSpawner>();
+				if (spawner != null)
+				{
+					spawner.DespawnAllPlayers();
+				}
+
+				SessionPlayerDataStore.Instance?.ResetAllReadyStates();
+				if (MatchManager.Instance != null && MatchManager.Instance.IsSpawned)
+				{
+					MatchManager.Instance.ResetDebugModeFlagsRpc();
+				}
+				else
+				{
+					MatchManager.ResetDebugModeFlags();
+				}
+
 				NetworkSceneTimeoutController.LoadNetworkScene(sceneName, LoadSceneMode.Single);
 				return;
 			}
 
 			// タイトル戻りまたはクライアント時は安全のため切断して遷移
+			MatchManager.ResetDebugModeFlags();
 			NetworkManager.Singleton.Shutdown();
+		}
+		else
+		{
+			MatchManager.ResetDebugModeFlags();
 		}
 
 		SceneManager.LoadScene(sceneName);
@@ -608,6 +638,10 @@ public class StaffInspectionMenuController : MonoBehaviour
 
 	private void EmergencyDisconnect()
 	{
+		PlayerInputReceiver.SetAllPaused(false);
+		PlayerInputReceiver.SetCursorLocked(false);
+		MatchManager.ResetDebugModeFlags();
+
 		if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
 		{
 			NetworkManager.Singleton.Shutdown();

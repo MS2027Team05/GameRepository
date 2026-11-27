@@ -1,4 +1,4 @@
-﻿using Unity.Netcode;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -112,6 +112,36 @@ public class PlayerBallCarrier :
 				_ => null
 			};
 		}
+	}
+
+	public override void OnNetworkSpawn()
+	{
+		ResetCarrierState();
+	}
+
+	public override void OnNetworkDespawn()
+	{
+		ResetCarrierState();
+	}
+
+	/// <summary>
+	/// ネットワーク生成・破棄時にボール所持とチャージ・取得抑制の内部状態を初期化します。
+	/// </summary>
+	public void ResetCarrierState()
+	{
+		m_HasBall = false;
+		ResetActionState();
+	}
+
+	/// <summary>
+	/// リスタートや復帰時にパスチャージ状態と再取得抑制タイマーを初期化します。
+	/// </summary>
+	public void ResetActionState()
+	{
+		m_IsPassCharging = false;
+		m_PassChargeRatio = 0.0f;
+		m_NextPickupRetryTime = 0.0f;
+		m_LocalPickupSuppressUntil = 0.0f;
 	}
 
 	/// <summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -73,6 +73,11 @@ public sealed class ReplayPlayer : MonoBehaviour
 	private Vector3 m_CameraVelocity;
 	private Vector3 m_LookAtVelocity;
 	private Vector3 m_SmoothedLookAtPoint;
+
+	private void Awake()
+	{
+		IsReplayActive = false;
+	}
 
 	private void OnDisable()
 	{

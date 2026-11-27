@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -95,8 +95,14 @@ public class PlayerInputReceiver : MonoBehaviour
 	// PlayerControllerから入力を許可されたかどうか
 	private bool m_InputAllowed = false;
 
+	// 待機中などに視点回転のみを許可されたかどうか
+	private bool m_LookInputAllowed = false;
+
 	// Input Actionの登録が済んでいるかどうか
 	private bool m_ActionsBound = false;
+
+	// 視点操作用Actionの有効化が済んでいるかどうか
+	private bool m_LookActionsBound = false;
 
 	/// <summary>
 	/// マウスカーソルのロック状態・表示状態を設定します。
@@ -167,11 +173,25 @@ public class PlayerInputReceiver : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 待機中など行動制限時でも視点操作(カメラ回転)の入力受付を切り替えます。
+	/// </summary>
+	/// <param name="allowed">視点入力を許可する場合はtrue</param>
+	public void SetLookInputAllowed(bool allowed)
+	{
+		m_LookInputAllowed = allowed;
+
+		UpdateInputState();
+	}
+
+	/// <summary>
 	/// 入力許可状態に応じてInput Actionの登録・解除を行います。
 	/// </summary>
 	private void UpdateInputState()
 	{
-		// 無効なコンポーネントまたはポーズ中は入力を開始しない
+		bool canAcceptLook = isActiveAndEnabled && !m_IsGlobalPaused && (m_InputAllowed || m_LookInputAllowed);
+		UpdateLookActionState(canAcceptLook);
+
+		// 無効なコンポーネントまたはポーズ中は行動入力を開始しない
 		if (!isActiveAndEnabled || !m_InputAllowed || m_IsGlobalPaused)
 		{
 			StopInputActions();
@@ -187,6 +207,27 @@ public class PlayerInputReceiver : MonoBehaviour
 		StartInputActions();
 	}
 
+	private void UpdateLookActionState(bool shouldEnable)
+	{
+		if (shouldEnable)
+		{
+			if (!m_LookActionsBound)
+			{
+				EnableAction(m_LookAction);
+				m_LookActionsBound = true;
+			}
+			return;
+		}
+
+		if (m_LookActionsBound)
+		{
+			DisableAction(m_LookAction);
+			m_LookActionsBound = false;
+		}
+
+		LookInput = Vector2.zero;
+	}
+
 	/// <summary>
 	/// Input Actionを有効化し、ボタンイベントを登録します。
 	/// </summary>
@@ -197,9 +238,8 @@ public class PlayerInputReceiver : MonoBehaviour
 			return;
 		}
 
-		// 移動・視点操作用Actionを有効化
+		// 移動用Actionを有効化
 		EnableAction(m_MoveAction);
-		EnableAction(m_LookAction);
 
 		// 旧フロー用ボタン操作Actionを登録
 		BindAction(m_AimToggleAction, HandleAimToggle);
@@ -243,7 +283,6 @@ public class PlayerInputReceiver : MonoBehaviour
 
 			// このクラスが有効化したActionを無効化
 			DisableAction(m_MoveAction);
-			DisableAction(m_LookAction);
 
 			DisableAction(m_AimToggleAction);
 			DisableAction(m_ConfirmAction);
@@ -259,7 +298,6 @@ public class PlayerInputReceiver : MonoBehaviour
 
 		// 入力が残らないようにリセット
 		MoveInput = Vector2.zero;
-		LookInput = Vector2.zero;
 	}
 
 	private void Update()
@@ -269,14 +307,24 @@ public class PlayerInputReceiver : MonoBehaviour
 			IsUsingGamepad = false;
 		}
 
-		// 自分が操作するPlayer以外、またはポーズ中は入力処理を行わない
-		if (!m_InputAllowed || !isActiveAndEnabled || m_IsGlobalPaused)
+		// 無効状態またはポーズ中は入力処理を行わない
+		if (!isActiveAndEnabled || m_IsGlobalPaused)
+		{
+			return;
+		}
+
+		if (m_InputAllowed || m_LookInputAllowed)
+		{
+			UpdateLookInput();
+		}
+
+		// 自分が操作するPlayerの行動入力が許可されていない場合は移動・アクション入力を行わない
+		if (!m_InputAllowed)
 		{
 			return;
 		}
 
 		UpdateMoveInput();
-		UpdateLookInput();
 
 		// InputActionReferenceが未設定の場合のキーボード/ゲームパッド標準フォールバック
 		HandleKeyboardFallback();
